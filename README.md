@@ -38,9 +38,9 @@ Prefer not to drive everything from the command line? This repo also ships a des
 
 Watch the ~4m40s demo video first to see the full workflow end-to-end:
 
-<video src="MorphAgent_UI/demo_video/MorphAgent_demo_english.mp4" controls muted width="720">
+<video src="https://github.com/ai4imaging/MorphAgent/releases/download/demo-assets/MorphAgent_demo_english.mp4" controls muted width="720">
   Your Markdown viewer can't play video inline — open it directly:
-  MorphAgent_UI/demo_video/MorphAgent_demo_english.mp4
+  https://github.com/ai4imaging/MorphAgent/releases/download/demo-assets/MorphAgent_demo_english.mp4
 </video>
 
 > If the player above doesn't render (e.g. on PyPI or some Markdown viewers), open the file directly: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.mp4`](MorphAgent_UI/demo_video/MorphAgent_demo_english.mp4) (English narration with burned-in subtitles; a matching `.srt` file is included alongside it).
