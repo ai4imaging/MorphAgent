@@ -1,0 +1,115 @@
+# Implementation Plan for `extract(img, *segmentation_masks)`
+
+---
+
+### **1. Understanding the Feature**
+#### Feature Name: tau_neurite_bead_density
+This feature measures the density of bead-like Tau inclusions along the neurite skeleton (axons and dendrites). Capturing the density of intensity peaks aligned with the neurites provides a quantitative measure of Tau fragmentation and aggregation along these cellular structures. The presence of localized peaks or beads correlates with pathological Tau mislocalization, a hallmark of disease progression in tauopathies.
+
+#### Biological/Morphological Property of Interest:
+- **Tau fragmentation and aggregation:** Measuring the number of localized intensity peaks (beaded forms of Tau) aligned with axonal and dendritic structures provides insight into the morphological changes and pathology occurring during disease progression.
+
+---
+
+### **2. Input Analysis**
+#### Inputs:
+1. **Image (`img`)**:
+   - Format: Single-channel grayscale 2D image (`uint16`), representing Tau fluorescence intensity.
+   - Resolution: Either `1536x1536` or `2048x2048` pixels.
+
+2. **Segmentation Masks (`*segmentation_masks`):
+   - Masks provided as binary images (`uint8`) with unique labels (0 for background, 1 for object regions).
+   - Relevant Masks:
+     - `mask_filament` — Highlights axons and dendrites where Tau beads are to be measured.
+
+#### Utilization:
+- **Primary Image (`img`)**:
+  - Extract Tau intensity values for feature computation.
+  - Identify localized peaks or "beads" related to pathological aggregation.
+
+- **Segmentation Masks (`mask_filament`)**:
+  - Focus analysis on the neurite skeleton regions.
+  - Skeletonize neurite structures to narrow the search to their medial lines.
+
+---
+
+### **3. Algorithm Design**
+#### Step-by-Step Approach to Compute the Feature:
+1. **Preprocessing**:
+   - Normalize the intensity range of the input image (`img`):
+     - Convert from `uint16` to float and normalize between 0 and 1 for stable computation.
+   - Apply a Gaussian filter for noise reduction while preserving localized peak structures (typical Tau bead size ≈ 200–500 nm).
+
+   If `mask_filament` is provided:
+   - Use the mask to isolate neurite regions (foreground pixels).
+   - Skeletonize the neurite mask to extract its medial axis, effectively converting regions to 1-pixel-wide lines.
+
+   If no masks are provided:
+   - Perform ridge detection or filament enhancement algorithms (e.g., Hessian-based detection) directly on the image to approximate neurite locations.
+
+---
+
+2. **Localized Peak Detection**:
+   - Analyze the normalized image intensity along the neurite skeleton:
+     - Use a 1D sliding window or peak detection algorithm (e.g., `scipy.signal.find_peaks`) along each skeleton line to identify localized intensity peaks.
+     - Threshold peaks based on intensity prominence to exclude background noise or diffuse signal.
+     - Record peak positions (x, y coordinates) and magnitudes.
+
+---
+
+3. **Density Calculation**:
+   - Count the total number of peaks detected along the skeletonized neurite structures.
+   - Calculate the density as:
+     \[
+     \text{Density} = \frac{\text{Number of Peaks}}{\text{Skeleton Length}}
+     \]
+     - Skeleton length is derived from the summation of all non-zero pixels within the skeletonized mask.
+
+---
+
+4. **Post-Processing**:
+   - Scale the computed density to adjust for variations in image resolution (normalize by pixel dimensions if necessary).
+   - If no peaks or skeleton regions are detected, return a density of `0.0`.
+
+---
+
+### **4. Edge Cases**
+#### Empty Masks:
+- If `mask_filament` is empty (maximum value = 0):
+  - Return `0.0` as no neurite structures are available for analysis.
+
+#### Unexpected Image Dimensions:
+- Check that the input image shape matches the expected format (`1536x1536` or `2048x2048`). Reshape or pad if necessary.
+
+#### Highly Diffuse Signal:
+- If intensity peaks fail to exceed the prominence threshold (due to diffuse fluorescence), explicitly return `0.0`.
+
+#### Multiple Masks:
+- Support flexible segmentation mask inputs. Evaluate only relevant masks (neurite-related compartments like `mask_filament`).
+
+---
+
+### **5. Implementation Notes**
+#### Dataset Format:
+- Use `tifffile` for loading `mask_filament` or other TIFF formats.
+- For peak detection and skeletonization, leverage popular libraries such as `scipy`, `skimage`, and `numpy`.
+
+#### Segmentation Mask Usage:
+- When a mask is provided (`mask_filament`), prioritize areas it delineates. Analysis outside the mask should be excluded.
+- Skeletonize masks via morphological thinning (`skimage.morphology.skeletonize`) to ensure proper medial axis extraction.
+
+#### Feature Scaling:
+- Since neuron lengths may vary across samples, normalize density metrics relative to skeleton length.
+
+#### Example Workflow:
+1. Load and normalize image intensity (convert to range [0, 1]).
+2. Isolate neurite areas using segmentation masks (if provided).
+3. Skeletonize neurite regions to simplify structures.
+4. Detect peaks along skeleton lines, filter based on prominence, and count beads.
+5. Divide peak count by skeleton length to yield density.
+6. Return density as the final output (single float).
+
+---
+
+### Final Output
+The `extract(img, *segmentation_masks)` function returns the **density** of Tau neurite beads, expressed as a single float value. The implementation plan ensures compatibility with input formats, handles edge cases robustly, and leverages biological and morphological insights for meaningful feature extraction.

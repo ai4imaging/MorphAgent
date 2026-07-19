@@ -1,0 +1,168 @@
+
+============================================================
+Processing sample: WT_1
+Features: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+============================================================
+WT_1: ✅ Batch scoring complete
+  vlm_tau_fibril_presence: 12.7
+  vlm_tau_pathology_stage_index: 92.4
+
+============================================================
+Processing sample: WT_2
+Features: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+============================================================
+WT_2: ✅ Batch scoring complete
+  vlm_tau_fibril_presence: 55.3
+  vlm_tau_pathology_stage_index: 78.6
+
+============================================================
+Processing sample: WT_3
+Features: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+============================================================
+WT_3: ✅ Batch scoring complete
+  vlm_tau_fibril_presence: 87.4
+  vlm_tau_pathology_stage_index: 79.8
+
+============================================================
+Processing sample: WT_4
+Features: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+============================================================
+WT_4: ✅ Batch scoring complete
+  vlm_tau_fibril_presence: 72.5
+  vlm_tau_pathology_stage_index: 85.3
+
+============================================================
+Processing sample: WT_5
+Features: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+============================================================
+WT_5: ✅ Batch scoring complete
+  vlm_tau_fibril_presence: 85.7
+  vlm_tau_pathology_stage_index: 73.5
+act, irregularly shaped aggregates, which are more consistent with pathological NFTs or dense puncta-like structures, rather than distinct fibrils. The image lacks visible thread-like patterns that extend across axons or dendritic shafts, which are the hallmark of fibrillary Tau formations. Additionally, the discrete Tau accumulations seem to be scattered, without significant linear connectivity observed between them. This is a strong indication of an advanced aggregation stage that has moved beyond fibrillary assembly. Background noise and contrast are relatively low, facilitating clear observation of the structures in the central region.
+
+#### Feature 2: vlm_tau_pathology_stage_index
+Examining the spatial distribution of Tau pathology, the image displays a high degree of aggregation primarily concentrated in large, irregular regions resembling somatic neurofibrillary tangles. These clusters are visible in the central region, the approximate location of the soma, suggesting severe Tau mislocalization and aggregation. Diffuse fluorescence and irregular patterns are associated with advanced pathology stages. There is minimal evidence of organized Tau distribution in axons, which points to significant degradation or mislocalization. No clear axonal fluorescence gradient or thin filaments are evident. Overall, the image suggests a late pathology stage with dense and compact aggregation patterns replacing dispersed or fibrillary Tau structures, as described in advanced neurodegenerative disease states. There is little ambiguity due to the high contrast and consistent fluorescence features across the image.
+
+---
+
+{"vlm_tau_fibril_presence": 12.7, "vlm_tau_pathology_stage_index": 92.4}
+
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 2048x2048
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 2048x2048 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM-Online Batch] Number of images: 1, number of features: 2, model: Vendor2/GPT-4o
+[VLM-Online Batch] Batch scoring completed (elapsed 6.75s)
+[VLM-Online Batch] vlm_tau_fibril_presence: 55.30
+[VLM-Online Batch] vlm_tau_pathology_stage_index: 78.60
+[VLM-Online Batch] Full response:
+### Analysis for Feature 1: `vlm_tau_fibril_presence`
+In the provided image, the central region is the most prominent area where structural characteristics suggest potential fibrillary Tau formations. There is a dense, bright fluorescence intensity that is concentrated and slightly elongated in the center, suggesting the accumulation of Tau aggregates. While specific thread-like fibrillary structures are not distinctly visible due to the image’s resolution and grayscale nature, there are faint indications of linear formations extending outward from the central region. The contours of potential fibrils fade closer to the edges of these aggregations, reducing certainty in their classification as distinct fibrils. Outside this central region, the fluorescence becomes diffused and lacks a clear organized thread-like appearance, indicating weaker evidence for organized elongated Tau structures.
+
+The grayscale intensity is consistent across the central region, which may obscure finer details of individual fibrils within the dense fluorescence signal. There is limited visual evidence of microtubular alignment or periodicity, likely due to resolution limits. Based on these observations, the degree of fibril presence appears moderate, with indirect evidence of fibrillary Tau structures in the central aggregation while less pronounced indications are observed elsewhere.
+
+### Analysis for Feature 2: `vlm_tau_pathology_stage_index`
+The image demonstrates strong signals indicative of advanced pathological Tau aggregation. The brightest fluorescence is localized within the central region, corresponding to somatic-like dense Tau aggregation. Other regions appear less intense and less organized, further suggesting substantial Tau mislocalization. There is a lack of a recognizable axonal gradient or organized Tau distribution along any visible axonal-like structures. Additionally, peripheral fluorescence intensity diminishes significantly, indicating possible degradation or fragmentation of axonal Tau signal.
+
+No distinct dendritic beading is observed, although patchy signals along branch-like structures may indicate early or developing pathological Tau redistribution into dendrites. The absence of extracellular Tau ghost tangles is notable, as fluorescence appears confined within cellular-like structures. Given these observations, the image presents strong morphological and spatial hallmarks of advanced Tau pathology, primarily related to somatic mislocalization and aggregation, with moderate indications of dendritic mislocalization and degradation of axonal Tau.
+
+### Final Scores
+```json
+{"vlm_tau_fibril_presence": 55.3, "vlm_tau_pathology_stage_index": 78.6}
+```
+
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 1536x1536
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 1536x1536 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM-Online Batch] Number of images: 1, number of features: 2, model: Vendor2/GPT-4o
+[VLM-Online Batch] Batch scoring completed (elapsed 7.92s)
+[VLM-Online Batch] vlm_tau_fibril_presence: 87.40
+[VLM-Online Batch] vlm_tau_pathology_stage_index: 79.80
+[VLM-Online Batch] Full response:
+### Feature Analysis
+
+#### Feature 1: `vlm_tau_fibril_presence`
+The image displays structures consistent with organized fibrillary formations. In the central and lower regions, thread-like features characterized by elongated, bright, and thread-shaped Tau-positive signals are visible. These structures appear aligned and exhibit continuity, a hallmark of fibrillary Tau. Furthermore, some areas show slight branching or overlapping, suggesting advanced Tau aggregation patterns compatible with organized fibrils. The threads have distinct boundaries and contrast against the surrounding background, making them pronounced and clear. However, other regions show diffuse fluorescence, indicating Tau presence without fibril organization. Noise is minimal, with little interference, supporting robust detection of fibrillary structures.
+
+#### Feature 2: `vlm_tau_pathology_stage_index`
+The image suggests a moderate-to-advanced state of Tau pathology. Dense fluorescence in the central areas potentially indicates somatic neurofibrillary tangles (NFTs). Thread-like and bundled structures in lower regions suggest dendritic and axonal Tau aggregates. Absence of significant empty space in somatic regions correlates with pathological mislocalization and consolidation. Additionally, Tau-associated thread-like features branching into surrounding regions imply advancing aggregates consistent with pathological processes. Minimal visible disruption in continuity hints at established Tau aggregation but not yet at severe disease progression stages. Despite strong signals and localization, a few smaller regions show diffuse Tau, potentially representing earlier pathology stages or non-aggregated Tau.
+
+### Scores
+{"vlm_tau_fibril_presence": 87.4, "vlm_tau_pathology_stage_index": 79.8}
+
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 1536x1536
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 1536x1536 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM-Online Batch] Number of images: 1, number of features: 2, model: Vendor2/GPT-4o
+[VLM-Online Batch] Batch scoring completed (elapsed 7.87s)
+[VLM-Online Batch] vlm_tau_fibril_presence: 72.50
+[VLM-Online Batch] vlm_tau_pathology_stage_index: 85.30
+[VLM-Online Batch] Full response:
+**Feature 1: vlm_tau_fibril_presence**
+
+In the provided image, fibrillary Tau structures are characterized by elongated, thread-like features that appear prominently throughout the regions of interest. These structures are primarily located in the central to the lower-left quadrant of the image. The Tau fibrils are moderately visible, with distinct elongated patterns typical of fibrillary formation. However, there are regions where these structures appear fragmented, indicating a varied stage of fibrillation. The presence of these patterns suggests a significant level of Tau aggregation. The imaging quality is generally clear, but some noise in the background slightly affects the overall visibility and confidence in the assessment of the fibrillary structures. Overall, the feature of Tau fibrillar presence is clearly expressed, although some variability is noted in the structure's integrity across the image.
+
+**Feature 2: vlm_tau_pathology_stage_index**
+
+The pathology stage index for Tau aggregation is evaluated based on visible morphological and spatial hallmarks in the image. The central region and extending toward the lower-left quadrant exhibit characteristics such as somatic NFTs and potential dendritic beading. These are indicative of advanced Tau pathology. The intensity and concentration of the aggregated structures in these regions are high, suggesting severe aggregation patterns which align with later stages of Tau pathology. Noise and low-contrast areas are minimal, allowing for clearer demarcation of pathological features. The spatial distribution of these aggregates and their density contribute to a higher pathology stage index. Overall, the image presents notable indicators of advanced pathological stages, with minimal interference from artifacts or low-contrast areas.
+
+{"vlm_tau_fibril_presence": 72.5, "vlm_tau_pathology_stage_index": 85.3}
+
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_fibril_presence', 'vlm_tau_pathology_stage_index']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 2048x2048
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 2048x2048 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM-Online Batch] Number of images: 1, number of features: 2, model: Vendor2/GPT-4o
+[VLM-Online Batch] Batch scoring completed (elapsed 6.43s)
+[VLM-Online Batch] vlm_tau_fibril_presence: 85.70
+[VLM-Online Batch] vlm_tau_pathology_stage_index: 73.50
+[VLM-Online Batch] Full response:
+### Feature Analysis
+
+#### **Feature 1: vlm_tau_fibril_presence**
+The image exhibits clear, elongated, thread-like features concentrated primarily in the central region extending toward the upper portions of the image. These fibrillary Tau structures display high fluorescence intensity, indicative of an advanced stage of aggregation. The threads appear smooth and continuous, consistent with descriptions in the knowledge sources. The regions show minimal noise, allowing for a confident identification of the feature. Some fibrils appear slightly overlapping, which could result in the merging of signals and make differentiation tricky between closely packed structures. Though the feature is prevalent, some areas along the edges of the image contain weaker, less prominent fibrillary structures. Overall, the image showcases a strong presence of fibrils concentrated in certain regions.
+
+#### **Feature 2: vlm_tau_pathology_stage_index**
+The pathology stage of Tau aggregation appears advanced, as evidenced by dense and highly organized fibrillary aggregates. Significant fluorescence intensity variations in the central cell-like region indicate a concentration of Tau aggregations in this location, potentially suggesting somatic NFTs. However, the overall distribution lacks dendritic beading or ghost tangles, which typically indicate the highest stages of Tau pathology. Additionally, there is little evidence of axonal degradation or obvious fragmentation within the fibrillary structures, suggesting the image represents a slightly lower level of Tau aggregation pathology compared to the most severe states described in the knowledge sources. There are no artifacts or noise that degrade the interpretation of the aggregation patterns.
+
+### Final Scores
+{"vlm_tau_fibril_presence": 85.7, "vlm_tau_pathology_stage_index": 73.5}
+

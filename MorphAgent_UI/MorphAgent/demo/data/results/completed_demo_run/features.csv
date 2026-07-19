@@ -1,0 +1,6 @@
+sample_id,vlm_tau_aggregation_pattern_proportion,vlm_somatic_nft_density,axon_to_soma_tau_intensity_ratio,tau_neurite_bead_density,distal_to_proximal_axon_tau_intensity_ratio,vlm_tau_fibril_presence,vlm_tau_pathology_stage_index,tau_axon_continuity_index,soma_tau_intensity_homogeneity,dendrite_tau_bead_count
+WT_1,78.4,85.7,5.744450092315674,0.0384615384615384,0.1174473389983177,12.7,92.4,1.0,0.542449414730072,23.0
+WT_2,78.5,70.2,0.0,0.0227272727272727,,55.3,78.6,0.0,0.6090307831764221,43.0
+WT_3,64.2,83.8,4.881556987762451,0.0689655172413793,0.2902013063430786,87.4,79.8,1.0,0.0,29.0
+WT_4,68.5,45.7,5.412383556365967,,,72.5,85.3,1.0,0.0,0.0
+WT_5,81.3,67.8,0.0,0.0232558139534883,,85.7,73.5,0.0,0.7181103229522705,25.0

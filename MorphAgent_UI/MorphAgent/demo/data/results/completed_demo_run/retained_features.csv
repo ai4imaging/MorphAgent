@@ -1,0 +1,6 @@
+sample_id,vlm_somatic_nft_density,vlm_tau_aggregation_pattern_proportion,dendrite_tau_bead_count,vlm_tau_fibril_presence
+WT_1,85.7,78.4,23.0,12.7
+WT_2,70.2,78.5,43.0,55.3
+WT_3,83.8,64.2,29.0,87.4
+WT_4,45.7,68.5,0.0,72.5
+WT_5,67.8,81.3,25.0,85.7

@@ -1,0 +1,85 @@
+
+============================================================
+Processing sample: WT_1
+Features: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+============================================================
+WT_1: ✅ Batch scoring complete
+  vlm_tau_aggregation_pattern_proportion: 78.4
+  vlm_somatic_nft_density: 85.7
+
+============================================================
+Processing sample: WT_2
+Features: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+============================================================
+WT_2: ✅ Batch scoring complete
+  vlm_tau_aggregation_pattern_proportion: 78.5
+  vlm_somatic_nft_density: 70.2
+
+============================================================
+Processing sample: WT_3
+Features: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+============================================================
+WT_3: ✅ Batch scoring complete
+  vlm_tau_aggregation_pattern_proportion: 64.2
+  vlm_somatic_nft_density: 83.8
+
+============================================================
+Processing sample: WT_4
+Features: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+============================================================
+WT_4: ✅ Batch scoring complete
+  vlm_tau_aggregation_pattern_proportion: 68.5
+  vlm_somatic_nft_density: 45.7
+
+============================================================
+Processing sample: WT_5
+Features: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+============================================================
+WT_5: ✅ Batch scoring complete
+  vlm_tau_aggregation_pattern_proportion: 81.3
+  vlm_somatic_nft_density: 67.8
+d_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM Repro] cache HIT (batch, key=20c734f8d2c2…)
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 1536x1536
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 1536x1536 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM Repro] cache HIT (batch, key=cc9caa21f36e…)
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 1536x1536
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 1536x1536 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM Repro] cache HIT (batch, key=95a9e3cbbdc9…)
+[VLM Batch] Processing 2 features
+[VLM Batch] Feature list: ['vlm_tau_aggregation_pattern_proportion', 'vlm_somatic_nft_density']
+[VLM Batch] Number of original image_paths: 1
+[VLM Batch] Supported formats: {'.png', '.jpeg', '.jpg'}
+[VLM Batch] Number of vlm_paths after filtering: 1
+[VLM Batch] vlm_paths after filtering: ['slice_0000.png']
+[VLM Batch] Starting batch evaluation for 2 features
+[VLM Batch] Using 1 image(s)
+[VLM] Preprocessing image: slice_0000.png, mode: L, size: 2048x2048
+[VLM] Warning: image slice_0000.png has mode L; converting to RGB
+[VLM] Resized image: slice_0000.png 2048x2048 -> 512x512
+[VLM] Verifying saved image: resized_slice_0000.png, mode: RGB, size: (512, 512)
+[VLM] Image preprocessing completed: 1 input, 1 successfully processed
+[VLM Repro] cache HIT (batch, key=895d9c3041c7…)

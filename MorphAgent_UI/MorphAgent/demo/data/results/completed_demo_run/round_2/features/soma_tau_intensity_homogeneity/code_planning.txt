@@ -1,0 +1,133 @@
+### Implementation Plan for `soma_tau_intensity_homogeneity`
+
+---
+
+#### **1. Understanding the Feature**
+
+**Feature Name**: `soma_tau_intensity_homogeneity`  
+**Biological Meaning**: This feature quantifies the homogeneity of Tau protein distribution in the somatic region of neurons. In a healthy cell, Tau protein is expected to be axon-enriched, with minimal Tau in the soma, resulting in low variability (low coefficient of variation). In pathological states, Tau aggregates mislocalize to the soma, leading to higher spatial variability in intensity distributions.  
+**Formula**: Coefficient of Variation (CV) = (Standard Deviation of Soma Intensity) / (Mean Soma Intensity)  
+**Feature Value Interpretation**: 
+- **Low CV**: Uniform Tau signal within the soma, likely healthy.  
+- **High CV**: Heterogeneous Tau signal indicating pathological aggregation.  
+
+---
+
+#### **2. Input Analysis**
+
+1. **Input Image (`img`)**:
+   - Single-channel 2D numpy array representing fluorescence signal intensity.  
+   - Shape: (2048, 2048), Dtype: `uint16`.  
+   - Represents the Tau fluorescent signal's grayscale intensity values.  
+
+2. **Segmentation Masks (`*segmentation_masks`)**:
+   - Dictionary-like input containing pre-computed binary masks defining regions of interest.
+   - Relevant Mask for This Feature: **`seg["mask_cell"]`** (whole somatic region).  
+   - Shape: (2048, 2048), Dtype: `uint8`, Values: 0 (background), 1 (somatic mask).  
+
+3. **Workflow for Inputs**:
+   - Use the image (`img`) to extract intensity values for Tau protein fluorescence.  
+   - Use the `seg["mask_cell"]` binary mask to isolate the somatic region of the image.  
+   - Compute the coefficient of variation (intensity-based heterogeneity) for the region identified by the mask.  
+
+---
+
+#### **3. Algorithm Design**
+
+##### **Step 1: Preprocessing**
+1. **Input Validation**:  
+   - Assert that `img` is a 2D numpy array and matches the expected shape/dtype.  
+   - Verify that the `seg.get("mask_cell")` mask exists and matches the image dimensions.  
+   - Raise an error if no somatic mask is provided (`None` or empty mask).  
+
+2. **Normalization (Optional)**:  
+   - Since the intensity values are within a known range (`0 - 9042`), normalization is not mandatory but can mitigate potential intensity saturation artifacts. If needed:
+     - Normalize intensity to [0, 1] by dividing by the maximum expected intensity (`9042.0`).  
+
+##### **Step 2: Main Computation Logic**
+1. **Mask Application**:  
+   - Extract the intensity values from `img` for the regions where `seg["mask_cell"] == 1`.  
+   - Masked Intensities: `masked_pixels = img[seg["mask_cell"] == 1]`.  
+
+2. **Compute Coefficient of Variation (CV)**:  
+   - Calculate the **mean intensity**: `mean_intensity = np.mean(masked_pixels)`.  
+   - Calculate the **standard deviation of intensity**: `std_intensity = np.std(masked_pixels)`.  
+   - Compute CV: `cv = std_intensity / mean_intensity`.  
+
+##### **Step 3: Post-Processing**
+1. **Handle Small Mean Edge Case**:  
+   - If the mean intensity (`mean_intensity`) is very close to zero (e.g., below a threshold like `1e-6`), the CV calculation will result in division by zero or over-amplification.  
+   - In this case, return a default value (`0.0`, indicating no measurable variation).  
+
+2. **Return the CV Value**:
+   - Ensure the result is a single float representing the Tau intensity variability within the soma.  
+
+---
+
+#### **4. Edge Cases**
+
+1. **Empty or Missing Soma Mask**:  
+   - If `seg["mask_cell"]` is `None` or has no non-zero pixels (`np.sum(seg["mask_cell"]) == 0`), return a default value (e.g., `0.0`, or `np.nan` to explicitly indicate no valid computation).  
+
+2. **Flat Intensity (No Variation)**:  
+   - If the standard deviation of somatic intensity is `0.0` (all pixel values in the soma are identical), return `0.0` as the CV.  
+
+3. **Multiple Cells in Image**:  
+   - If the mask inadvertently includes multiple somatic regions, treat them as a single area and compute the CV across all intensities in the combined region.  
+
+4. **Normalization Considerations**:  
+   - If the mean intensity is close to zero (e.g., a sparse image with almost no signal), prevent division by zero by returning `0.0`.  
+
+---
+
+#### **5. Implementation Notes**
+
+1. **Segmentation Mask Handling**:
+   - Always access segmentation masks via keys, such as `seg.get("mask_cell")`, to avoid KeyErrors.  
+   - Confirm the mask dimensions match the input image (`img.shape`).  
+
+2. **Numerical Stability**:
+   - When computing the CV, handle cases with negligible mean intensity to avoid over-amplified outputs or division by zero errors.  
+
+3. **Library Importation**:
+   - Use only specific, lightweight libraries necessary for numerical and image processing (e.g., `numpy`).  
+
+4. **Performance Optimization**:
+   - Use boolean masking (`img[mask == 1]`) instead of loops for pixel extraction to ensure computational efficiency on large (2048x2048) images.  
+
+5. **Future Extensibility**:
+   - If additional masks are used in the future, ensure modularity of the function to accept these additional inputs without significant changes.  
+
+---
+
+### **6. Detailed Algorithm Workflow**
+
+**Input**: `img` (2D numpy array), `seg` (dictionary containing segmentation masks)  
+**Output**: A single float representing the coefficient of variation of Tau intensity in the somatic region.  
+
+1. Validate inputs:
+   - Check `img` type, shape, and dtype.
+   - Verify that `seg["mask_cell"]` exists and is non-empty.
+
+2. Extract somatic region:
+   - Apply `seg["mask_cell"]` as a binary mask to `img`.
+   - Extract all pixel values from `img` where `seg["mask_cell"] == 1`.
+
+3. Compute intensity statistics:
+   - Calculate the mean and standard deviation of the masked pixel intensities.
+
+4. Compute coefficient of variation (CV):
+   - Divide the standard deviation by the mean intensity.
+   - Handle edge cases (e.g., mean intensity close to zero).
+
+5. Return CV:
+   - Output the calculated CV as a float.  
+
+---
+
+#### Example Return Values
+- **Edge case (empty mask)**: `0.0`  
+- **Completely uniform soma intensity**: `0.0`  
+- **Pathological soma distribution with high intensity variability**: Float value, e.g., `1.25`
+
+By following this structured plan, the `extract` function can be implemented to compute the `soma_tau_intensity_homogeneity` feature in a robust and efficient manner.

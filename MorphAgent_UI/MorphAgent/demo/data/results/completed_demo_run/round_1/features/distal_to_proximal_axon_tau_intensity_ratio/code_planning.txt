@@ -1,0 +1,149 @@
+Here's the detailed implementation plan for the `extract(img, *segmentation_masks)` function based on the requirements and information provided.
+
+---
+
+## **Implementation Plan for `extract(img, *segmentation_masks)`**
+
+### **1. Understanding the Feature**
+- **Feature Name:** `distal_to_proximal_axon_tau_intensity_ratio`
+- **Measurement Goal:** This feature calculates the **ratio between the fluorescence intensity of Tau protein in the distal axonal regions and the proximal axonal regions**. 
+- **Biological Context:** Tau aggregation typically starts in distal regions of axons before progressing proximally near the soma. By extracting this ratio, we aim to capture early pathological redistribution (distal depletion or aggregation) of Tau in axons, which is a hallmark of neurodegenerative processes like Alzheimer’s disease.
+- **Mathematical Definition:**
+  - Distal region: Terminal portion of the axon, furthest from the soma.
+  - Proximal region: Axonal region nearest the soma.
+  - **Ratio = Mean Intensity (Distal Region) / Mean Intensity (Proximal Region)**
+
+---
+
+### **2. Input Analysis**
+#### **Inputs:**
+1. **Image (Required):**
+   - **Shape:** `(2048, 2048)` (2D grayscale MIP image).
+   - **Dtype:** `uint16`.
+   - **Meaning:** Represents fluorescence intensities of Tau protein across different compartments of neurons.
+2. **Segmentation Masks (Optional):**
+   - **Purpose:** To define relevant biological regions for intensity measurements.
+   - **Available Masks:**
+     - `seg["mask_filament"]`: Represents axonal segmentation (primary mask for feature extraction).
+     - `seg["mask_cell"]`: Defines the whole cell region (used to locate the soma).
+     - `seg["mask_nucleus"]`: Defines the nucleus (core region of the soma).
+   - **Value Format:** Binary (0 = background, 1 = region of interest).
+
+#### **Key Masks Used:**
+1. **`mask_cell`:** Defines the soma. Needed to identify the soma center and locate the proximal end of the axon.
+2. **`mask_filament`:** Focuses on Tau-positive axonal regions. The axon’s proximity (distal or proximal) will be evaluated relative to the soma.
+
+#### **Requirements:**
+- Computation is for a single cell per image.
+- Masks may directly correspond to features of interest (e.g., axons through `mask_filament` and soma through `mask_cell/nucleus`).
+- Dimensions of masks and `img` must match.
+
+---
+
+### **3. Algorithm Design**
+The feature extraction will involve the following steps:
+
+#### **3.1 Preprocessing**
+- **Input validation:**
+  - Ensure `img` and all provided masks have the same dimensions.
+  - Ensure `img` has `uint16` data type (convert to `float32` for processing).
+  - If segmentation masks are missing (e.g., empty `segmentation_masks` or `mask_droplet` has no foreground objects), raise a warning or return `NaN`.
+
+- **Normalize the image:**
+  - Scale `img` pixel intensities to range `[0.0, 1.0]` for numerical stability:
+    - `img_normalized = img / np.max(img)`.
+
+#### **3.2 Soma Detection**
+1. **Find the Soma Center:**
+   - Use the nucleus mask (`mask_nucleus`) if available; otherwise, fall back to the cell mask (`mask_cell`).
+   - Compute the centroid of the binary mask as the soma center:
+     - `centroid = (cy, cx), where cx = mean(x-coords), cy = mean(y-coords)`.
+   - **Edge Case:** If `mask_nucleus` and `mask_cell` are empty, return `NaN`.
+
+2. **Define Proximal/Distal Axonal Regions Based on Soma Center:**
+   - Use the axon mask (`mask_filament`) and compute the Euclidean distance of each axonal pixel from the soma center.
+   - Threshold distances:
+     - **Proximal Region:** Pixels in the `mask_filament` where distance ≤ 30% of the total axonal length.
+     - **Distal Region:** Pixels in the `mask_filament` where distance ≥ 70% of the total axonal length.
+
+#### **3.3 Intensity Calculation**
+1. **Extract Axonal Pixel Intensities from the Image:**
+   - Mask the input image `img` with the distal and proximal regions of the axon:
+     - `distal_intensities = img[distal_region_mask]`
+     - `proximal_intensities = img[proximal_region_mask]`.
+
+2. **Compute Mean Intensities for Each Region:**
+   - Calculate the average intensity for the distal and proximal axon regions:
+     - `mean_distal = np.mean(distal_intensities)`
+     - `mean_proximal = np.mean(proximal_intensities)`.
+
+#### **3.4 Calculate the Ratio**
+- Compute the final metric as:
+  - `ratio = mean_distal / mean_proximal`.
+- **Edge Case Handling:**
+  - If `mean_proximal` is `0` or too close to zero, set `ratio = NaN` (avoid division by zero).
+  - If either region contains no pixels (e.g., due to erroneous/missing segmentation), set `ratio = NaN`.
+
+#### **3.5 Post-Processing**
+- **Result Aggregation:**
+  - Output the computed ratio as a single float value.
+- **Scaling or Transformations:**
+  - Ensure no additional scaling is applied to the output (already normalized during preprocessing).
+
+---
+
+### **4. Edge Cases**
+1. **Empty or Missing Masks:**
+   - If `mask_cell` or `mask_filament` is missing or has no foreground pixels, return `NaN` (not enough information to compute the ratio).
+   - If `img` contains no fluorescence signal (all zeros), return `NaN`.
+
+2. **Small Axonal Regions:**
+   - If the proximal or distal region of the axon contains no pixels, return `NaN`.
+
+3. **Division by Zero:**
+   - If `mean_proximal = 0`, return `NaN` since the ratio cannot be computed.
+
+4. **Unexpected Dimensions:**
+   - If `img` is not 2D or dimensions of `img` and masks do not match, raise a `ValueError` with an appropriate error message.
+
+---
+
+### **5. Implementation Notes**
+- **Library Dependencies:**
+  - Use `numpy` for numerical operations (e.g., masking, mean calculations).
+  - Use `scipy.ndimage` for centroid calculation (if centroid functions are needed).
+  - Use `tifffile` for `.tif` image I/O, if needed (details not required here).
+- **Segmentation Mask Constraints:**
+  - Binary masks are assumed, as described in the dataset details.
+- **Performance Considerations:**
+  - Preprocess and validate masks before further computation to avoid unnecessary calculations on invalid inputs.
+- **Biological Assumptions:**
+  - The soma is the reference point for defining proximal and distal axonal regions.
+  - Axonal segmentation (`mask_filament`) accurately represents Tau-stained axons.
+
+---
+
+### **Pseudocode Summary**
+```plaintext
+1. Validate inputs (img and segmentation masks).
+2. Normalize `img` to [0.0, 1.0].
+3. Compute soma center from `mask_nucleus` or `mask_cell` (fallback if one is missing).
+4. Compute distances of axonal (`mask_filament`) pixels to soma center.
+   - Define proximal region (≤30% distance).
+   - Define distal region (≥70% distance).
+5. Extract and compute mean fluorescence intensities for distal and proximal regions.
+6. Calculate ratio = mean_distal / mean_proximal.
+7. Handle edge cases:
+   - Empty masks → NaN.
+   - Division by zero → NaN.
+   - Missing pixels in proximal/distal regions → NaN.
+8. Return the ratio as a single float value.
+```
+
+---
+
+### **Output**
+- A single float value representing the `distal_to_proximal_axon_tau_intensity_ratio`.
+- Return `NaN` for invalid inputs or edge cases.
+
+This structured plan ensures robust feature extraction while considering biological, mathematical, and dataset-specific constraints.
