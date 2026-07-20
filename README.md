@@ -36,11 +36,11 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 Prefer not to drive everything from the command line? This repo also ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
 
-Watch the ~4m40s demo video first to see the full workflow end-to-end (click the thumbnail to play):
+Watch the ~4m40s demo video first to see the full workflow end-to-end:
 
-[![Watch the MorphAgent UI demo video](MorphAgent_UI/demo_video/poster.png)](https://github.com/ai4imaging/MorphAgent/blob/main/MorphAgent_UI/demo_video/MorphAgent_demo_english.mp4)
+https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 
-> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt). GitHub's markdown sanitizer strips `<video>` tags unless their `src` points at a `github.com/user-attachments/assets/...` URL (only obtainable by dragging the file into a comment box in the browser), so a clickable poster linking to the file's blob page — which plays inline via GitHub's own file viewer — is the most reliable way to embed it here.
+> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
 
 ### Try it
 
