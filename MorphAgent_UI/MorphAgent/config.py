@@ -50,6 +50,22 @@ DEFAULT_VLM_MODEL = os.getenv("VLM_MODEL", "gpt-4o")
 # a dict like {"User-Agent": "MorphAgent/1.0"} if needed, otherwise None.
 DEFAULT_LLM_HEADERS: Optional[Dict[str, str]] = None
 DEFAULT_VLM_HEADERS: Optional[Dict[str, str]] = None
+
+# --- Deep Research model: writes a literature-grounded report in ONE call ----
+# There is NO local deep-research model in this build. The auto deep-research
+# step makes a single call to an OpenAI-compatible endpoint. Point it at a
+# web-search / research-capable model for best results (e.g. Perplexity
+# "sonar" / "sonar-deep-research", OpenAI "gpt-4o-search-preview", or any
+# strong chat model). Falls back to the main LLM if left unset.
+DEFAULT_DEEP_RESEARCH_BASE_URL = os.getenv("DEEP_RESEARCH_BASE_URL", DEFAULT_LLM_BASE_URL)
+DEFAULT_DEEP_RESEARCH_API_KEY = os.getenv("DEEP_RESEARCH_API_KEY", DEFAULT_LLM_API_KEY)
+DEFAULT_DEEP_RESEARCH_MODEL = os.getenv("DEEP_RESEARCH_MODEL", DEFAULT_LLM_MODEL)
+
+# --- Literature retrieval (PubMed / Europe PMC) ------------------------------
+# NCBI is polite-access friendly; providing an email (and optionally a free
+# NCBI API key) raises rate limits. No key is strictly required.
+DEFAULT_NCBI_EMAIL = os.getenv("NCBI_EMAIL", "")
+DEFAULT_NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
 # ============================================================================
 
 
@@ -708,6 +724,24 @@ class MorphAgentConfig:
     # Knowledge Base Settings
     vector_db_path: Optional[str] = os.getenv("VECTOR_DB_PATH", "./knowledge/vector_db")
     expert_examples_path: Optional[str] = os.getenv("EXPERT_EXAMPLES_PATH", "./knowledge/expert_examples")
+
+    # Auto Deep Research (single API call -> markdown report in the
+    # deep_research/ folder). See DEFAULT_DEEP_RESEARCH_* at the top of the file.
+    deep_research_base_url: Optional[str] = DEFAULT_DEEP_RESEARCH_BASE_URL
+    deep_research_api_key: Optional[str] = DEFAULT_DEEP_RESEARCH_API_KEY
+    deep_research_model: str = DEFAULT_DEEP_RESEARCH_MODEL
+    deep_research_max_tokens: int = int(os.getenv("DEEP_RESEARCH_MAX_TOKENS", "8000"))
+
+    # Auto Literature Retrieval (PubMed / Europe PMC -> PDFs into the RAG folder)
+    ncbi_email: str = DEFAULT_NCBI_EMAIL
+    ncbi_api_key: str = DEFAULT_NCBI_API_KEY
+    pubmed_max_results: int = int(os.getenv("PUBMED_MAX_RESULTS", "8"))
+    pubmed_min_year: int = int(os.getenv("PUBMED_MIN_YEAR", "0"))
+    pubmed_open_access_only: bool = bool(os.getenv("PUBMED_OPEN_ACCESS_ONLY", "True").lower() == "true")
+
+    # PaddleX device used to parse PDFs ("cpu" is the safe default in the public
+    # build; set "gpu:0" if you installed paddlepaddle-gpu).
+    paddlex_device: str = os.getenv("PADDLEX_DEVICE", "cpu")
     
     # Prompt Templates
     prompt_templates_dir: Path = Path(__file__).parent / "knowledge" / "prompts"

@@ -170,7 +170,14 @@ Key facts to check:
   (2D/3D/multi-channel/z-stack), what each channel is, naming conventions.
 - Optional knowledge folders live under the **project root** (the parent that
   contains `dataset/`): `expert_knowledge/`, `deep_research/`, `RAG/`. All
-  optional; `.md/.txt/.xml` need no PaddleX, only `.pdf` does.
+  optional. PaddleX (CPU) is installed by the unified env and parses PDFs
+  automatically; `.md/.txt/.xml` are read directly and never need PaddleX.
+  You can also let MorphAgent **generate** these contents:
+  - `--auto-deep-research` — one API call to `DEEP_RESEARCH_MODEL` writes a
+    markdown report into `deep_research/`.
+  - `--auto-literature-retrieval` — searches PubMed/Europe PMC and downloads
+    open-access PDFs into `RAG/` (needs outbound internet; a proxy via
+    `HTTPS_PROXY` works).
 
 Verify the data is discoverable:
 
@@ -237,10 +244,14 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
   export SEGMENTATION_CONDA_ENV=morphagent_allen
   ```
   See `segmentation_allen/README_SEGMENTATION.md`.
-- **Extras** (`envs/requirements-optional.txt`): PaddleX (layout-aware PDF parsing
-  for deep-research/RAG PDFs) and local Qwen3-VL. Install only if needed:
-  `pip install -r envs/requirements-optional.txt` (PaddleX also needs
-  `paddlepaddle` or `paddlepaddle-gpu`).
+- **PaddleX PDF parsing**: already in the unified env (CPU). For GPU parsing:
+  `pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0`
+  then `export PADDLEX_DEVICE=gpu:0`.
+- **Local Qwen3-VL** (advanced, optional): `pip install -r envs/requirements-optional.txt`
+  then `--vlm-api-provider qwen`. Requires a suitable GPU.
+- **Auto Deep Research / Literature Retrieval**: `--auto-deep-research` and
+  `--auto-literature-retrieval` (see README). Configure `DEEP_RESEARCH_*` /
+  `NCBI_EMAIL` in `.env` or `config.py`.
 
 ## 6. Troubleshooting / known pitfalls
 
@@ -253,8 +264,12 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
   VLM endpoint must accept image inputs (multimodal).
 - **0 samples found** → data layout wrong; each sample must be its own subdirectory
   under `data_root`.
-- **PDF knowledge ignored** → PaddleX not installed; convert reports to `.md/.txt`
-  or install the optional extras.
+- **PDF knowledge ignored / PaddleX init fails** → make sure `paddlex[ocr]` and
+  `paddlepaddle` are installed (they are in `environment.yml`). Convert reports
+  to `.md/.txt` if you want to skip PaddleX entirely.
+- **Literature download failed but search worked** → network restriction on the
+  server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a
+  machine with internet (`HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **Segmentation runs in the wrong/missing env** → set `SEGMENTATION_CONDA_ENV` to
   the env that has Cellpose-SAM (or `morphagent_allen` for the Allen backend).
 

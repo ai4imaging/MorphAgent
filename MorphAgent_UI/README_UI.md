@@ -230,7 +230,7 @@ Install `requirements-segmentation-optional.txt` first. GPU drivers and the PyTo
 
 ### RAG PDF parsing warns that PaddleX is missing
 
-The bundled demo already includes a precomputed RAG cache, so normal use of **Use bundled Tau demo** does not need PaddleX. Only when switching to new PDF corpora and re-parsing should you consult `requirements-extra-optional.txt`.
+The bundled demo already includes a precomputed RAG cache, so normal use of **Use bundled Tau demo** does not need PaddleX. The full environment (`environment-full.yml` / `requirements-full.txt`) installs PaddleX (CPU) by default for new PDF corpora, `--auto-literature-retrieval`, and PDF deep-research sources. GPU PDF parsing still uses the swap notes in `requirements-extra-optional.txt`.
 
 ### UI fails to open or Qt plugin errors
 

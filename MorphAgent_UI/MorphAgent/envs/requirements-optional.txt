@@ -10,13 +10,12 @@
 # missing.
 # =============================================================================
 
-# --- Deep Research / RAG: layout-aware PDF parsing --------------------------
-# Only needed if your knowledge sources are PDFs. Markdown / .txt reports are
-# read directly without PaddleX. `paddlepaddle` (CPU) or `paddlepaddle-gpu`
-# (CUDA) is required by paddlex; install the one that matches your machine.
-#   pip install paddlepaddle          # CPU
-#   pip install paddlepaddle-gpu      # GPU (see PaddlePaddle install docs)
-paddlex==3.3.10
+# --- GPU PDF parsing (optional): PaddleX on GPU ----------------------------
+# The unified environment already installs PaddleX with CPU paddlepaddle, which
+# works out of the box. For faster PDF parsing on a CUDA machine, swap in the
+# GPU wheel and set PADDLEX_DEVICE=gpu:0:
+#   pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0
+# (see the PaddlePaddle install docs for the wheel matching your CUDA version)
 
 # --- Local VLM (advanced): self-hosted Qwen3-VL instead of an API VLM -------
 # The default/recommended VLM path is an OpenAI-compatible multimodal API

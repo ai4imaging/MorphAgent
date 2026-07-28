@@ -5,16 +5,14 @@ legacy environment for the Allen segmentation backend.
 
 | File | Env name | Python | Purpose |
 |------|----------|--------|---------|
-| `environment.yml` | `morphagent` | 3.10 | **Main env** — agent (LangChain/LangGraph/OpenAI client) + sandbox scientific stack + Cellpose-SAM segmentation |
+| `environment.yml` | `morphagent` | 3.10 | **Main env** — agent (LangChain/LangGraph/OpenAI client) + sandbox scientific stack + Cellpose-SAM + PaddleX (CPU PDF parsing) + PubMed retrieval |
 | `requirements.txt` | — | 3.10 | pip mirror of `environment.yml` for venv/pyenv/uv users |
-| `requirements-ui.txt` | — | 3.10 | Focused standalone Qt graphical workflow |
-| `requirements-optional.txt` | — | 3.10 | Optional extras: PaddleX (PDF parsing) and local Qwen3-VL |
+| `requirements-optional.txt` | — | 3.10 | Optional extras: GPU paddlepaddle + local Qwen3-VL |
 | `environment_allen.yml` | `morphagent_allen` | 3.6 | **Optional/legacy** — Allen `aicssegmentation` backend only |
 
 There is **no local LLM/VLM** in this build: every model call goes through an
 OpenAI-compatible HTTP API. Configure keys/URLs in `../config.py` or via the
-environment variables listed in `../.env.example`. `socksio` is included so
-the OpenAI/httpx client can honor a configured SOCKS proxy.
+environment variables listed in `../.env.example`.
 
 ## 1. Unified environment (recommended)
 
@@ -43,29 +41,15 @@ Quick sanity check after install:
 
 ```bash
 python - <<'PY'
-import langchain, langgraph, openai, cellpose, torch
-import numpy, pandas, skimage, cv2, tifffile, mahotas, bs4
+import langchain_core, langgraph, openai, cellpose, torch
+import numpy, pandas, skimage, cv2, tifffile, mahotas, bs4, requests
+import paddlex, paddle
 print("torch CUDA available:", torch.cuda.is_available())
 print("cellpose:", cellpose.version)
+print("paddlex OK")
 print("OK")
 PY
 ```
-
-### Graphical workflow (optional, recommended)
-
-Install the focused Qt interface on top of the unified environment:
-
-```bash
-conda activate morphagent
-pip install -e ".[ui]"
-python launch_ui.py  # automatically reads ../.env
-```
-
-`requirements-ui.txt` lists the standalone UI dependencies. This default does
-not install or show napari. If interactive layer/canvas inspection is needed,
-install `pip install -e ".[napari]"` and launch with
-`python launch_ui.py --with-napari`; the editable package also registers
-`morphagent_ui/napari.yaml` with napari's plugin engine.
 
 ## 2. Optional extras
 
@@ -74,20 +58,16 @@ Install on top of the `morphagent` env only if you need them:
 ```bash
 conda activate morphagent
 pip install -r envs/requirements-optional.txt
-# PaddleX also needs a paddle backend (pick one):
-pip install paddlepaddle        # CPU
-# pip install paddlepaddle-gpu   # GPU
 ```
 
-- **PaddleX** — layout-aware PDF parsing for Deep Research / RAG. Not needed if
-  your knowledge sources are Markdown/`.txt` (those are read directly), or when
-  running the bundled teacher demo with its precomputed `.rag_cache` digest.
+- **GPU PDF parsing** — the unified env ships CPU `paddlepaddle`. For faster
+  PDF parsing on a CUDA machine:
+  ```bash
+  pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0
+  export PADDLEX_DEVICE=gpu:0
+  ```
 - **Local Qwen3-VL** — only if you want to run a VLM locally
   (`--vlm-api-provider qwen`) instead of an API VLM. Requires a suitable GPU.
-
-The bundled teacher reference demo also reuses existing segmentation masks, so
-it does not require Cellpose or a local GPU during that run. Keep the full
-environment for new datasets that still need automatic segmentation.
 
 ## 3. Allen segmentation (optional / legacy)
 
