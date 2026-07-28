@@ -22,6 +22,7 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 - [Environment & Installation](#environment--installation)
 - [Configuration (API & Models)](#configuration-api--models)
 - [Input Data Format (Important)](#input-data-format-important)
+- [Graphical UI (fast path)](#graphical-ui-fast-path)
 - [Quick Start](#quick-start)
 - [Output](#output)
 - [Auto Segmentation (auto_segmentation)](#auto-segmentation-auto_segmentation)
@@ -50,6 +51,8 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 ```
 MorphAgent/
 ├── main.py                  # Main entry point (processes the whole dataset in batch)
+├── launch_ui.py             # focused Qt launcher; optional napari mode
+├── morphagent_ui/           # UI state, controller, theme, screens, and optional napari manifest
 ├── config.py                # Global configuration (USER CONFIGURATION block at the top)
 ├── graph.py / state.py      # LangGraph pipeline and state
 ├── utils_helpers.py         # Dataset indexing / image path lookup
@@ -96,6 +99,9 @@ PY
 # 3) (Optional) extra features such as PDF parsing / local VLM
 #   pip install -r envs/requirements-optional.txt
 
+# 3b) (Optional, recommended for desktop use) MorphAgent UI
+pip install -e ".[ui]"
+
 # 4) (Optional/legacy) Allen segmentation environment
 conda env create -f envs/environment_allen.yml # creates morphagent_allen
 conda activate morphagent_allen
@@ -116,7 +122,7 @@ There are two ways (you **must explicitly specify the model name to use**):
 
 ```bash
 cp .env.example .env      # edit .env and fill in your values
-source .env               # or export manually
+source .env               # only needed for direct `python main.py` CLI runs
 
 export LLM_BASE_URL="https://api.openai.com/v1"
 export LLM_API_KEY="sk-..."
@@ -237,7 +243,48 @@ Notes: single cell per image; pixel size ~0.65 um.
 
 - These are all **optional** and can be turned off with `--disable-expert-knowledge` / `--disable-deep-research` / `--disable-rag`.
 - You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)).
-- `.pdf` parsing uses PaddleX, which is **installed by the unified environment (CPU)** and works out of the box; `.md/.txt/.xml` sources are read directly without PaddleX.
+- PaddleX (CPU) is installed by the unified environment for PDF parsing; `.md/.txt/.xml` are read directly and never need PaddleX.
+
+---
+
+## Graphical UI (fast path)
+
+The focused Qt workspace wraps the existing `main.py` pipeline without duplicating its scientific logic. It has five destinations—Home, Configure, Run, Features, and Evidence—with API setup merged into Configure. Home can load a completed run for result-only debugging without starting the pipeline. Features uses an equal-width table/detail layout; Evidence uses an equal-width review layout with a three-column feature selector and a compact name/description summary beside curated measurements, validation, provenance, and image previews. The default evidence preview opens the first curated source rather than prioritizing an image. The MorphAgent window opens maximized by default and contains no empty napari canvas or layer-control panel.
+
+![MorphAgent graphical home](docs/assets/morphagent-ui-home.png)
+
+```bash
+conda activate morphagent
+pip install -e ".[ui]"             # first UI launch only
+python launch_ui.py                 # automatically reads the repository .env
+```
+
+If you specifically need napari layers and its microscopy canvas, install and request that mode explicitly:
+
+```bash
+pip install -e ".[napari]"
+python launch_ui.py --with-napari
+```
+
+The repository includes the teacher-provided Tau-neuron reference workflow under
+[`demo/`](demo/). Its five samples already contain images, VLM slices, and five
+segmentation masks per sample; its precomputed RAG digest also avoids reparsing
+the bundled PDFs. The shortest verified path is:
+
+1. Open **Configure** and select **Use bundled Tau demo**.
+2. Confirm the Tau aggregation question, then complete **Model API**. One checked option reuses the same OpenAI-compatible connection for image scoring.
+3. Select the analysis route and optional preparation/knowledge sources, then press **Run MorphAgent**. The teacher demo remains fixed at two rounds, five candidates per round, and target ten features.
+4. Follow **Inspect → Prepare → Plan → Quantify → Validate → Export**. Completed files remain in the run directory after cancellation or failure.
+5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, plan/manifest provenance, segmentation context, and shared image previews. Generated scripts, runtime logs, caches, and unrelated files are deliberately excluded from the evidence tree.
+
+During UI/result debugging, choose **Load a previous run** on Home and select the specific completed `run_ui_*` results folder. MorphAgent loads Features and Evidence directly without launching `main.py`, making API calls, or rerunning segmentation and feature extraction.
+
+To use another dataset, select its project root or `dataset/` directory, scan it,
+and write a new biological question instead of loading the reference demo.
+
+The **Model API** section reads and safely updates the repository-local `.env`, which is excluded by `.gitignore`. Saved keys are never displayed again, copied into commands, written to run manifests, or printed in logs; leaving a key field blank preserves the existing value. No `source` or terminal exports are required for UI launches. Low-frequency controls such as candidate count, rounds, route ratio, workers, and concurrency also live in `.env` instead of occupying a separate Settings page. Keep `LLM_MAX_TOKENS` and `MERGE_MAX_TOKENS` within the selected provider's limits; the reference gateway was verified at `16384`. For generated-code and segmentation safeguards, resume semantics, and output details, see [docs/UI_GUIDE.md](docs/UI_GUIDE.md).
+
+See the [reference demo guide](demo/README.md) or run the [reference notebook](demo/morphagent_demo.ipynb) for the same configuration without the graphical interface.
 
 ---
 
@@ -383,12 +430,13 @@ read directly and never need PaddleX.
 | `--llm-model` / `--vlm-online-model` | none | Override the model name |
 | `--enable-segmentation` / `--disable-segmentation` | enabled | Auto-segmentation toggle |
 | `--segmentation-skip-if-present` | enabled | Skip segmentation if masks already exist (your own masks take priority) |
+| `--segmentation-run-even-if-present` | off | Rerun Cellpose for every sample and overwrite its generated mask trio |
 | `--enable-* / --disable-*` (expert-knowledge / deep-research / rag) | enabled | Toggles for each knowledge source |
 | `--auto-deep-research` + `--deep-research-query` | off | Generate a deep-research report (one API call) into `deep_research/` before digesting |
 | `--auto-literature-retrieval` + `--pubmed-query` | off | Download open-access PubMed PDFs into `RAG/` before digesting |
 | `--pubmed-max-results` / `--pubmed-min-year` / `--pubmed-include-non-oa` | 8 / 0 / off | Tune the PubMed search & download |
 | `--paddlex-device` | `cpu` | Device for PaddleX PDF parsing (`cpu` or `gpu:0`) |
-| `--reproduce` | off | Deterministic mode (temperature=0 + VLM caching) |
+| `--reproduce` | off in raw CLI; on in UI | Deterministic mode (temperature=0 + VLM caching) |
 | `--code-parallel-workers` | 1 | Number of parallel processes for running merged code across all samples |
 | `--vlm-online-concurrency` | 1 | Number of concurrent threads for the online VLM API |
 
