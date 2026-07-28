@@ -7,12 +7,14 @@ legacy environment for the Allen segmentation backend.
 |------|----------|--------|---------|
 | `environment.yml` | `morphagent` | 3.10 | **Main env** — agent (LangChain/LangGraph/OpenAI client) + sandbox scientific stack + Cellpose-SAM + PaddleX (CPU PDF parsing) + PubMed retrieval |
 | `requirements.txt` | — | 3.10 | pip mirror of `environment.yml` for venv/pyenv/uv users |
+| `requirements-ui.txt` | — | 3.10 | Focused standalone Qt graphical workflow |
 | `requirements-optional.txt` | — | 3.10 | Optional extras: GPU paddlepaddle + local Qwen3-VL |
 | `environment_allen.yml` | `morphagent_allen` | 3.6 | **Optional/legacy** — Allen `aicssegmentation` backend only |
 
 There is **no local LLM/VLM** in this build: every model call goes through an
 OpenAI-compatible HTTP API. Configure keys/URLs in `../config.py` or via the
-environment variables listed in `../.env.example`.
+environment variables listed in `../.env.example`. `socksio` is included so
+the OpenAI/httpx client can honor a configured SOCKS proxy.
 
 ## 1. Unified environment (recommended)
 
@@ -51,6 +53,22 @@ print("OK")
 PY
 ```
 
+### Graphical workflow (optional, recommended)
+
+Install the focused Qt interface on top of the unified environment:
+
+```bash
+conda activate morphagent
+pip install -e ".[ui]"
+python launch_ui.py  # automatically reads ../.env
+```
+
+`requirements-ui.txt` lists the standalone UI dependencies. This default does
+not install or show napari. If interactive layer/canvas inspection is needed,
+install `pip install -e ".[napari]"` and launch with
+`python launch_ui.py --with-napari`; the editable package also registers
+`morphagent_ui/napari.yaml` with napari's plugin engine.
+
 ## 2. Optional extras
 
 Install on top of the `morphagent` env only if you need them:
@@ -66,8 +84,18 @@ pip install -r envs/requirements-optional.txt
   pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0
   export PADDLEX_DEVICE=gpu:0
   ```
+- **PaddleX model download stuck / HuggingFace unreachable** — first-run layout
+  models are large. Prefer Baidu BOS when HF hangs:
+  ```bash
+  export PADDLE_PDX_MODEL_SOURCE=bos
+  ```
+  Other values: `huggingface` (default), `modelscope`, `aistudio`.
 - **Local Qwen3-VL** — only if you want to run a VLM locally
   (`--vlm-api-provider qwen`) instead of an API VLM. Requires a suitable GPU.
+
+The bundled teacher reference demo also reuses existing segmentation masks, so
+it does not require Cellpose or a local GPU during that run. Keep the full
+environment for new datasets that still need automatic segmentation.
 
 ## 3. Allen segmentation (optional / legacy)
 

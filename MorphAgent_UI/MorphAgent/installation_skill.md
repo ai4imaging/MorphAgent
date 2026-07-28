@@ -265,8 +265,10 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
 - **0 samples found** → data layout wrong; each sample must be its own subdirectory
   under `data_root`.
 - **PDF knowledge ignored / PaddleX init fails** → make sure `paddlex[ocr]` and
-  `paddlepaddle` are installed (they are in `environment.yml`). Convert reports
-  to `.md/.txt` if you want to skip PaddleX entirely.
+  `paddlepaddle` are installed (they are in `environment.yml`). First-run model
+  downloads can hang on HuggingFace; prefer Baidu BOS:
+  `export PADDLE_PDX_MODEL_SOURCE=bos`. Convert reports to `.md/.txt` if you want
+  to skip PaddleX entirely.
 - **Literature download failed but search worked** → network restriction on the
   server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a
   machine with internet (`HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
