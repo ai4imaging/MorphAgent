@@ -6,8 +6,8 @@
 #     python -m venv .venv && source .venv/bin/activate
 #     pip install -r envs/requirements.txt
 #
-# Optional extras (local Qwen3-VL, PaddleX PDF parsing) live in
-# requirements-optional.txt.
+# The only optional extra (local Qwen3-VL VLM) lives in
+# requirements-optional.txt. PaddleX (for PDF parsing) is included below.
 # =============================================================================
 
 # --- Agent orchestration / LLM client ---------------------------------------
@@ -27,6 +27,11 @@ tenacity==9.1.2
 requests==2.32.5
 beautifulsoup4==4.14.3
 lxml==6.0.2
+
+# --- PDF parsing for RAG + Deep Research (PaddleX, CPU by default) -----------
+# For GPU parsing install paddlepaddle-gpu==3.0.0 instead and set PADDLEX_DEVICE=gpu:0.
+paddlepaddle==3.0.0
+paddlex[ocr]==3.3.10
 
 # --- Core scientific / imaging stack (agent + sandbox) ----------------------
 numpy==2.2.6

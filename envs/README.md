@@ -5,9 +5,9 @@ legacy environment for the Allen segmentation backend.
 
 | File | Env name | Python | Purpose |
 |------|----------|--------|---------|
-| `environment.yml` | `morphagent` | 3.10 | **Main env** — agent (LangChain/LangGraph/OpenAI client) + sandbox scientific stack + Cellpose-SAM segmentation |
+| `environment.yml` | `morphagent` | 3.10 | **Main env** — agent (LangChain/LangGraph/OpenAI client) + sandbox scientific stack + Cellpose-SAM + PaddleX (CPU PDF parsing) + PubMed retrieval |
 | `requirements.txt` | — | 3.10 | pip mirror of `environment.yml` for venv/pyenv/uv users |
-| `requirements-optional.txt` | — | 3.10 | Optional extras: PaddleX (PDF parsing) and local Qwen3-VL |
+| `requirements-optional.txt` | — | 3.10 | Optional extras: GPU paddlepaddle + local Qwen3-VL |
 | `environment_allen.yml` | `morphagent_allen` | 3.6 | **Optional/legacy** — Allen `aicssegmentation` backend only |
 
 There is **no local LLM/VLM** in this build: every model call goes through an
@@ -41,10 +41,12 @@ Quick sanity check after install:
 
 ```bash
 python - <<'PY'
-import langchain, langgraph, openai, cellpose, torch
-import numpy, pandas, skimage, cv2, tifffile, mahotas, bs4
+import langchain_core, langgraph, openai, cellpose, torch
+import numpy, pandas, skimage, cv2, tifffile, mahotas, bs4, requests
+import paddlex, paddle
 print("torch CUDA available:", torch.cuda.is_available())
 print("cellpose:", cellpose.version)
+print("paddlex OK")
 print("OK")
 PY
 ```
@@ -56,13 +58,20 @@ Install on top of the `morphagent` env only if you need them:
 ```bash
 conda activate morphagent
 pip install -r envs/requirements-optional.txt
-# PaddleX also needs a paddle backend (pick one):
-pip install paddlepaddle        # CPU
-# pip install paddlepaddle-gpu   # GPU
 ```
 
-- **PaddleX** — layout-aware PDF parsing for Deep Research / RAG. Not needed if
-  your knowledge sources are Markdown/`.txt` (those are read directly).
+- **GPU PDF parsing** — the unified env ships CPU `paddlepaddle`. For faster
+  PDF parsing on a CUDA machine:
+  ```bash
+  pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0
+  export PADDLEX_DEVICE=gpu:0
+  ```
+- **PaddleX model download stuck / HuggingFace unreachable** — first-run layout
+  models are large. Prefer Baidu BOS when HF hangs:
+  ```bash
+  export PADDLE_PDX_MODEL_SOURCE=bos
+  ```
+  Other values: `huggingface` (default), `modelscope`, `aistudio`.
 - **Local Qwen3-VL** — only if you want to run a VLM locally
   (`--vlm-api-provider qwen`) instead of an API VLM. Requires a suitable GPU.
 

@@ -1348,7 +1348,27 @@ Examples:
     parser.add_argument("--disable-deep-research", action="store_false", dest="enable_deep_research", help="Disable Deep Research extraction")
     parser.add_argument("--enable-rag", action="store_true", default=True, help="Enable RAG knowledge extraction (enabled by default)")
     parser.add_argument("--disable-rag", action="store_false", dest="enable_rag", help="Disable RAG knowledge extraction")
-    parser.add_argument("--paddlex-device", type=str, default="gpu:0", help="Device used by PaddleX (gpu:0, cpu, etc.)")
+    parser.add_argument("--paddlex-device", type=str, default=None,
+                        help="Device used by PaddleX to parse PDFs (cpu, gpu:0, ...). Defaults to config.paddlex_device (cpu).")
+
+    # --- Auto Deep Research (single API call -> markdown report) --------------
+    parser.add_argument("--auto-deep-research", action="store_true", default=False,
+                        help="Before extraction, generate a deep-research report with ONE call to the deep-research model "
+                             "(config.deep_research_model) and save it into the deep_research/ folder.")
+    parser.add_argument("--deep-research-query", type=str, default=None,
+                        help="Keywords/topic for --auto-deep-research (defaults to the user query).")
+
+    # --- Auto Literature Retrieval (PubMed / Europe PMC -> RAG PDFs) ----------
+    parser.add_argument("--auto-literature-retrieval", action="store_true", default=False,
+                        help="Before RAG extraction, search PubMed/Europe PMC and download open-access PDFs into the RAG/ folder.")
+    parser.add_argument("--pubmed-query", type=str, default=None,
+                        help="Keywords for --auto-literature-retrieval (defaults to the user query).")
+    parser.add_argument("--pubmed-max-results", type=int, default=None,
+                        help="Max number of papers to download (defaults to config.pubmed_max_results).")
+    parser.add_argument("--pubmed-min-year", type=int, default=None,
+                        help="Only retrieve papers published in/after this year (defaults to config.pubmed_min_year).")
+    parser.add_argument("--pubmed-include-non-oa", action="store_true", default=False,
+                        help="Include non-open-access candidates in the search (PDF download may still fail for those).")
     parser.add_argument("--metadata-path", type=str, default=None, help="Path to the metadata CSV file (optional; used for metadata-aware validation when present)")
     parser.add_argument("--features-per-iteration", type=int, default=None, help="Number of features extracted per round (defaults to the value read from config.py, default 10)")
     parser.add_argument("--target-feature-count", type=int, default=None, help="Target total number of features (defaults to the value read from config.py, default 1000)")
@@ -1579,11 +1599,26 @@ Examples:
             f.write(expert_knowledge)
         print(f"  Expert knowledge saved: {expert_knowledge_path}")
     
+    # Resolve the PaddleX device (CLI overrides config; config default is cpu).
+    paddlex_device = args.paddlex_device or settings.paddlex_device
+
+    # Step 2.15: Auto Deep Research — generate a report with ONE API call and
+    # drop it into the deep_research/ folder, so the extraction step below picks
+    # it up. No local deep-research model is deployed.
+    if getattr(args, "auto_deep_research", False):
+        from knowledge.deep_research_agent import generate_deep_research_report
+        dr_query = args.deep_research_query or args.user_query
+        dr_dir = project_root / "deep_research"
+        try:
+            generate_deep_research_report(dr_query, dr_dir, dataset_description=dataset_description)
+        except Exception as e:
+            print(f"  [Deep Research] Auto report generation failed (continuing): {e}")
+
     # Step 2.2: Extract Deep Research
     deep_research = extract_deep_research(
         project_root,
         enable_deep_research=args.enable_deep_research,
-        device=args.paddlex_device
+        device=paddlex_device
     )
     
     # Save Deep Research
@@ -1593,11 +1628,32 @@ Examples:
             f.write(deep_research)
         print(f"  Deep Research saved: {deep_research_path}")
     
+    # Step 2.25: Auto Literature Retrieval — search PubMed/Europe PMC and
+    # download open-access PDFs into the RAG/ folder so extract_rag_knowledge
+    # (PaddleX -> LLM summary) can consume them.
+    if getattr(args, "auto_literature_retrieval", False) and args.enable_rag:
+        from knowledge.pubmed_fetcher import fetch_pubmed_literature
+        lit_query = args.pubmed_query or args.user_query
+        rag_dir = project_root / "RAG"
+        max_results = args.pubmed_max_results if args.pubmed_max_results is not None else settings.pubmed_max_results
+        min_year = args.pubmed_min_year if args.pubmed_min_year is not None else settings.pubmed_min_year
+        try:
+            fetch_pubmed_literature(
+                lit_query, rag_dir,
+                max_results=max_results,
+                min_year=min_year,
+                open_access_only=not args.pubmed_include_non_oa,
+                email=settings.ncbi_email,
+                api_key=settings.ncbi_api_key,
+            )
+        except Exception as e:
+            print(f"  [Literature Retrieval] Failed (continuing with any existing PDFs): {e}")
+
     # Step 2.3: Extract RAG knowledge
     rag_knowledge = extract_rag_knowledge(
         project_root,
         enable_rag=args.enable_rag,
-        device=args.paddlex_device
+        device=paddlex_device
     )
     
     # Save RAG knowledge

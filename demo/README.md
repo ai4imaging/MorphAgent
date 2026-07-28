@@ -35,7 +35,18 @@ demo/
 ## Requirements
 
 - The `morphagent` conda environment (see `../envs/environment.yml`).
-- A working **LLM** and **VLM** API (OpenAI-compatible). Configure `LLM_*` /
-  `VLM_*` environment variables or edit `../config.py` before running.
+  It already includes PaddleX (CPU) for PDF parsing.
+- A working **LLM** and **VLM** API (OpenAI-compatible). Fill them in the
+  notebook's API configuration cell (or set `LLM_*` / `VLM_*` env vars /
+  edit `../config.py`) before running.
+
+## Going further (outside this demo)
+
+- `--auto-deep-research` — one API call to `DEEP_RESEARCH_MODEL` writes a
+  markdown report into `deep_research/` (no local deep-research model).
+- `--auto-literature-retrieval` — searches PubMed/Europe PMC and downloads
+  open-access PDFs into `RAG/`, then parses them with PaddleX. Needs outbound
+  internet (a proxy via `HTTPS_PROXY` works); on restricted servers just drop
+  PDFs into `RAG/` manually.
 
 See the top-level `README.md` and `installation_skill.md` for full details.

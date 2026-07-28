@@ -1243,22 +1243,22 @@ Please analyze the image and provide your evaluation."""
             return _parse_critic_response(generated_text)
                 
         except Exception as e:
-            print(f"      ⚠️  Critic evaluation error: {e}")
+            print(f"      ⚠️  Critic evaluation error (VLM request failed); skipping — NOT counted as a pass: {e}")
             import traceback
             traceback.print_exc()
-            # On error, pass by default so the main flow is not affected
-            return True, ""
+            # Skip critic on infrastructure / request failures so we do not
+            # falsely print "Critic evaluation passed", and do not burn
+            # regenerate cycles on a broken VLM call.
+            return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
             
     except ImportError:
         print(f"      ⚠️  VLM client is not available; skipping critic evaluation")
         return True, ""
     except Exception as e:
-        print(f"      ⚠️  Critic evaluation failed: {e}")
+        print(f"      ⚠️  Critic evaluation failed (setup error); skipping — NOT counted as a pass: {e}")
         import traceback
         traceback.print_exc()
-        # On error, pass by default so the main flow is not affected
-        return True, ""
-
+        return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
 
 def run_code_generation_test_only(
     feature: Dict[str, Any],
@@ -1534,11 +1534,14 @@ def run_code_generation_test_only(
                         else:
                             # Last attempt; accept this code even if the critic does not pass (at least the code runs)
                             print(f"    ⚠️  Reached maximum retry count; accepting this code even though the critic did not pass")
-                    
-                    # Test passed and critic passed; return the code path
-                    print(f"    ✅ Test passed and critic evaluation passed")
-                    return extract_py_path, code_result
-        
+                            return extract_py_path, code_result
+
+                    # Test passed; only claim critic passed when it actually evaluated (not skipped on VLM error)
+                    if isinstance(critic_feedback, str) and critic_feedback.startswith("[CRITIC_SKIPPED_VLM_ERROR]"):
+                        print(f"    ✅ Test passed (critic skipped due to VLM error)")
+                    else:
+                        print(f"    ✅ Test passed and critic evaluation passed")
+                    return extract_py_path, code_result        
         # If there are no samples, also return the code path (although it cannot be tested)
         return extract_py_path, code_result
     

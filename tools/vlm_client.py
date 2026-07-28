@@ -1083,21 +1083,45 @@ class OnlineVLMClient(VLMClient):
             print(f"[VLM-Online] Initialized the online client: base_url={self.base_url}, model={self.model}")
 
     def _images_to_content(self, image_paths: List[str]) -> List[Dict[str, Any]]:
-        """Read local images as OpenAI content blocks in base64 data-URL form."""
+        """Convert local images to valid PNG data URLs for the online API.
+
+        Do not infer the MIME type from the filename.  Scientific images are
+        commonly TIFF files, and ``_preprocess_images`` may return the original
+        file when it does not need resizing.  Labelling those TIFF bytes as
+        ``image/png`` makes OpenAI-compatible endpoints reject the request with
+        ``invalid_image_format``.
+        """
         import base64
+        import io
+
         content = []
+        errors = []
         for p in image_paths:
             try:
-                with open(p, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                suffix = Path(p).suffix.lower().lstrip(".")
-                mime = "jpeg" if suffix in ("jpg", "jpeg") else "png"
+                with Image.open(p) as img:
+                    # PNG supports RGB/RGBA/L, which covers the modes normally
+                    # produced by preprocessing. Convert uncommon scientific
+                    # modes (I;16, F, CMYK, palette, etc.) deterministically.
+                    if img.mode not in ("RGB", "RGBA", "L"):
+                        img = img.convert("RGB")
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="PNG")
+
+                image_bytes = buffer.getvalue()
+                if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+                    raise ValueError("PNG encoding did not produce a valid signature")
+
+                b64 = base64.b64encode(image_bytes).decode("ascii")
                 content.append({
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/{mime};base64,{b64}"},
+                    "image_url": {"url": f"data:image/png;base64,{b64}"},
                 })
-            except Exception:
-                continue
+            except Exception as exc:
+                errors.append(f"{p}: {exc}")
+
+        if not content:
+            details = "; ".join(errors) or "no image paths were provided"
+            raise ValueError(f"Unable to prepare any valid image for the VLM: {details}")
         return content
 
     def _chat_with_retry(self, content: List[Dict[str, Any]], log_file: Optional[Path] = None) -> str:

@@ -17,7 +17,6 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 ## Table of Contents
 
-- [Graphical User Interface (UI)](#graphical-user-interface-morphagent-ui)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
 - [Environment & Installation](#environment--installation)
@@ -32,34 +31,6 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 ---
 
-## Graphical User Interface (MorphAgent UI)
-
-Prefer not to drive everything from the command line? This repo also ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
-
-Watch the ~4m40s demo video first to see the full workflow end-to-end:
-
-https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
-
-> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
-
-### Try it
-
-```bash
-cd MorphAgent_UI
-bash scripts/setup_macos_linux.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
-bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
-```
-
-Highlights:
-
-- **Bundled demo dataset** — click **Use bundled Tau demo** to run the full pipeline on 5 sample images without preparing your own data first;
-- **Load a previous run** — instantly browse a completed run's `Features` and `Evidence` pages, no API key required;
-- **In-app API configuration** — fill in Base URL / API key / model on the Configure page; it writes straight to `MorphAgent/.env`, no manual file editing needed.
-
-Full install/usage instructions, system requirements, and troubleshooting live in [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
-
----
-
 ## Key Features
 
 | Capability | Description | Dependencies |
@@ -67,8 +38,8 @@ Full install/usage instructions, system requirements, and troubleshooting live i
 | Code feature extraction | The LLM generates/repairs an `extract(img, seg)` function and runs it in batch | LLM API + sandbox conda environment |
 | VLM feature scoring | A multimodal model scores images feature by feature on a continuous scale | Multimodal API (e.g. GPT-4o) |
 | auto_segmentation | Generates masks with Cellpose-SAM (default) or Allen aicssegmentation | GPU (Cellpose) / CPU (Allen) |
-| auto_deep_research | Reads research reports under `deep_research/` (.md/.txt/.pdf) → LLM digests → injects into planning | LLM API (PDF requires PaddleX) |
-| auto_literature_retrieval (RAG) | Reads literature under `RAG/` (.xml/.pdf) → LLM digests → injects into planning | LLM API (PDF requires PaddleX) |
+| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF uses PaddleX) |
+| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → PaddleX → LLM digests → injects into planning | Internet + PaddleX (CPU) + LLM API |
 | expert_knowledge | Reads expert materials under `expert_knowledge/` → LLM digests | LLM API |
 | Deterministic validation | Unsupervised / supervised (metadata) feature filtering with multi-round deduplication | None |
 
@@ -265,7 +236,8 @@ Notes: single cell per image; pixel size ~0.65 um.
 | `RAG/` | Literature corpus (PMC `.xml`; `.pdf` also supported), placed flat at the top level of this directory | The LLM digests them in batch into literature knowledge and injects it into planning (with hash caching) |
 
 - These are all **optional** and can be turned off with `--disable-expert-knowledge` / `--disable-deep-research` / `--disable-rag`.
-- `.pdf` parsing requires PaddleX (heavy, GPU); if you use `.md/.txt/.xml`, **PaddleX is not needed**.
+- You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)).
+- `.pdf` parsing uses PaddleX, which is **installed by the unified environment (CPU)** and works out of the box; `.md/.txt/.xml` sources are read directly without PaddleX.
 
 ---
 
@@ -341,12 +313,56 @@ Place the generated masks into each sample's `segmentation/`, and the main pipel
 
 ## Auto Deep Research & Literature Retrieval
 
-At **runtime**, these two capabilities manifest as "read a local knowledge folder → LLM digests → inject into feature planning":
+Both capabilities are **fully autonomous** in this build — no local model or heavy
+subsystem is deployed. Each is a single, cheap step wired into the pipeline:
 
-- **auto_deep_research**: save your research reports (produced by Gemini/other deep research tools) as `.md`/`.txt` into `project_root/deep_research/`, and they are digested automatically at runtime.
-- **auto_literature_retrieval (RAG)**: place PMC literature `.xml` (or `.pdf`) flat into `project_root/RAG/`, and they are digested and cached automatically at runtime.
+### auto_deep_research — one API call → report → digest
 
-> The offline "online deep research agent" and "PubMed batch download" are heavy standalone subsystems and are not included in this general-purpose build; this build focuses on **digesting knowledge files you have already prepared**.
+Add `--auto-deep-research` and MorphAgent makes **one call** to a deep-research
+model (`DEEP_RESEARCH_MODEL`, falls back to your LLM) to write a
+literature-grounded markdown report into `project_root/deep_research/`. The
+existing digest step then reads that markdown (no PaddleX needed) and injects it
+into feature planning.
+
+```bash
+python main.py "quantify Tau aggregation morphology" \
+  --data-root /path/to/project --auto-deep-research \
+  --deep-research-query "Tau protein aggregation image morphology neurons"
+```
+
+For best results point `DEEP_RESEARCH_MODEL` at a web-search / research-capable
+model (e.g. Perplexity `sonar-deep-research`, OpenAI `gpt-4o-search-preview`);
+any strong chat model also works. You can still drop your own `.md`/`.txt`/`.pdf`
+reports into `deep_research/` instead of (or in addition to) generating one.
+
+### auto_literature_retrieval — keyword → PubMed PDFs → PaddleX → digest
+
+Add `--auto-literature-retrieval` and MorphAgent searches PubMed / Europe PMC for
+your keywords, downloads **open-access PDFs** into `project_root/RAG/`, parses
+them with **PaddleX**, and injects the digested knowledge (with hash caching).
+
+```bash
+python main.py "quantify Tau aggregation morphology" \
+  --data-root /path/to/project --auto-literature-retrieval \
+  --pubmed-query "Tau aggregation fluorescence microscopy neuron" \
+  --pubmed-max-results 8
+```
+
+No API key is required for retrieval (set `NCBI_EMAIL` to raise rate limits).
+You can also just place your own `.pdf` / PMC `.xml` files into `RAG/` and skip
+`--auto-literature-retrieval`.
+
+> Network note: retrieval needs outbound internet access to NCBI/EBI. On
+> restricted servers (no outbound HTTP/FTP, or region-blocked) the download may
+> fail even though search succeeds — run it on a machine with internet (a proxy
+> via `HTTPS_PROXY` works) or add PDFs to `RAG/` manually.
+
+### PaddleX (PDF parsing)
+
+PaddleX (CPU) is installed by the unified environment, so PDF sources for both
+RAG and deep-research work out of the box. Set `PADDLEX_DEVICE=gpu:0` (and
+install `paddlepaddle-gpu`) for faster GPU parsing. Markdown/text/XML sources are
+read directly and never need PaddleX.
 
 ---
 
@@ -368,6 +384,10 @@ At **runtime**, these two capabilities manifest as "read a local knowledge folde
 | `--enable-segmentation` / `--disable-segmentation` | enabled | Auto-segmentation toggle |
 | `--segmentation-skip-if-present` | enabled | Skip segmentation if masks already exist (your own masks take priority) |
 | `--enable-* / --disable-*` (expert-knowledge / deep-research / rag) | enabled | Toggles for each knowledge source |
+| `--auto-deep-research` + `--deep-research-query` | off | Generate a deep-research report (one API call) into `deep_research/` before digesting |
+| `--auto-literature-retrieval` + `--pubmed-query` | off | Download open-access PubMed PDFs into `RAG/` before digesting |
+| `--pubmed-max-results` / `--pubmed-min-year` / `--pubmed-include-non-oa` | 8 / 0 / off | Tune the PubMed search & download |
+| `--paddlex-device` | `cpu` | Device for PaddleX PDF parsing (`cpu` or `gpu:0`) |
 | `--reproduce` | off | Deterministic mode (temperature=0 + VLM caching) |
 | `--code-parallel-workers` | 1 | Number of parallel processes for running merged code across all samples |
 | `--vlm-online-concurrency` | 1 | Number of concurrent threads for the online VLM API |
@@ -380,5 +400,6 @@ At **runtime**, these two capabilities manifest as "read a local knowledge folde
 
 - **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU; but **Cellpose-SAM segmentation requires a GPU**. Without a GPU, you can disable segmentation (`--disable-segmentation`) or use your own masks / Allen (CPU) instead.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
-- **Don't want to install PaddleX?** Use `.md/.txt` for deep_research and `.xml` for RAG, and PaddleX is not needed.
+- **PaddleX / PDF parsing?** PaddleX (CPU) is installed by the unified environment and works out of the box; for GPU parsing install `paddlepaddle-gpu==3.0.0` and set `PADDLEX_DEVICE=gpu:0`. If you only use `.md/.txt` deep_research and `.xml` RAG, PaddleX is never invoked.
+- **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
