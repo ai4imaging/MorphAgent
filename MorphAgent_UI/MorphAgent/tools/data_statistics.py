@@ -142,8 +142,9 @@ def collect_data_statistics(
                 continue
 
             try:
-                import tifffile
-                seg_mask = tifffile.imread(str(seg_path_obj))
+                from tools.image_io import load_image_array
+
+                seg_mask = load_image_array(seg_path_obj)
                 seg_array = np.asarray(seg_mask)
                 n_unique = len(np.unique(seg_array))
 

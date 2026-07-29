@@ -231,6 +231,11 @@ def main():
                         help="Output directory (default: ./allen_seg_output)")
     parser.add_argument("-c", "--channels", type=int, nargs="+", default=CHANNEL_INDICES,
                         help="Channel indices [DAPI ACTIN TUBULIN] (0-based); omit to auto-infer")
+    parser.add_argument(
+        "--save-visualization",
+        action="store_true",
+        help="Also write segmentation_visualization.png (off by default; masks only)",
+    )
     args = parser.parse_args()
 
     IMAGE_PATH = Path(args.image).resolve()
@@ -248,7 +253,7 @@ def main():
     nucleus_bw = segment_nucleus(channels["dapi"])
     cytoplasm_bw = segment_cytoplasm(channels["actin"], nucleus_bw)
 
-    # Save TIFF
+    # Save TIFF masks only by default (no preview PNG in segmentation/).
     nucleus_out = OUTPUT_DIR / "nucleus_segmentation.tiff"
     cytoplasm_out = OUTPUT_DIR / "cytoplasm_segmentation.tiff"
     for p in (nucleus_out, cytoplasm_out):
@@ -261,8 +266,13 @@ def main():
     print(f"\n  Nucleus: {nucleus_out}")
     print(f"  Cytoplasm: {cytoplasm_out}")
 
-    vis_path = OUTPUT_DIR / "segmentation_visualization.png"
-    visualize_results(rgb, nucleus_bw, cytoplasm_bw, vis_path)
+    if args.save_visualization:
+        vis_path = OUTPUT_DIR / "segmentation_visualization.png"
+        visualize_results(rgb, nucleus_bw, cytoplasm_bw, vis_path)
+    else:
+        leftover_vis = OUTPUT_DIR / "segmentation_visualization.png"
+        if leftover_vis.exists():
+            leftover_vis.unlink()
 
     print("\n" + "=" * 60)
     print(f"Segmentation complete, results directory: {OUTPUT_DIR}")
