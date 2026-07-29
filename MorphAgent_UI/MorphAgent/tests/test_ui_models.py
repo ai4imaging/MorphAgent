@@ -68,15 +68,15 @@ class RunConfigTests(unittest.TestCase):
     def test_only_repository_grounded_preset_is_exposed(self) -> None:
         self.assertEqual(list(RunPreset), [RunPreset.PILOT])
 
-    def test_pilot_preset_matches_teacher_reference_demo(self) -> None:
+    def test_pilot_preset_matches_demo_scale(self) -> None:
         config = RunConfig()
 
         config.apply_preset(RunPreset.PILOT)
 
         self.assertEqual(config.method, "both")
         self.assertEqual(config.features_per_iteration, 5)
-        self.assertEqual(config.target_feature_count, 10)
-        self.assertEqual(config.num_rounds, 2)
+        self.assertEqual(config.target_feature_count, 5)
+        self.assertEqual(config.num_rounds, 1)
 
     def test_low_frequency_run_defaults_can_come_from_environment(self) -> None:
         values = {
@@ -102,8 +102,8 @@ class RunConfigTests(unittest.TestCase):
 
             config.apply_preset(RunPreset.PILOT)
             self.assertEqual(config.features_per_iteration, 5)
-            self.assertEqual(config.target_feature_count, 10)
-            self.assertEqual(config.num_rounds, 2)
+            self.assertEqual(config.target_feature_count, 5)
+            self.assertEqual(config.num_rounds, 1)
         finally:
             for name, value in previous.items():
                 if value is None:
@@ -138,8 +138,9 @@ class RunConfigTests(unittest.TestCase):
             self.assertIn("Tau protein aggregation", config.query)
             self.assertEqual(config.method, "both")
             self.assertEqual(config.features_per_iteration, 5)
-            self.assertEqual(config.target_feature_count, 10)
-            self.assertEqual(config.num_rounds, 2)
+            self.assertEqual(config.target_feature_count, 5)
+            self.assertEqual(config.num_rounds, 1)
+            self.assertEqual(config.dataset_source, "demo")
             self.assertTrue(config.enable_expert_knowledge)
             self.assertTrue(config.enable_deep_research)
             self.assertTrue(config.enable_rag)
@@ -147,6 +148,42 @@ class RunConfigTests(unittest.TestCase):
             self.assertTrue(config.segmentation_skip_if_present)
             self.assertTrue(cache_path.is_file())
             self.assertIn("cached knowledge", cache_path.read_text(encoding="utf-8"))
+            command = config.build_command()
+            self.assertNotIn("--auto-deep-research", command)
+            self.assertNotIn("--auto-literature-retrieval", command)
+            env = config.pipeline_environment()
+            self.assertEqual(env["CODE_MAX_RETRIES"], "3")
+            self.assertEqual(env["SEGMENTATION_BACKEND"], "allen")
+
+    def test_custom_dataset_passes_auto_knowledge_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            config = RunConfig(
+                data_root=str(root),
+                query="Profile cells",
+                python_executable=sys.executable,
+                dataset_source="custom",
+                enable_deep_research=True,
+                enable_rag=True,
+            )
+            command = config.build_command()
+            self.assertIn("--auto-deep-research", command)
+            self.assertIn("--auto-literature-retrieval", command)
+            self.assertIn("--pubmed-max-results", command)
+            self.assertIn("10", command)
+
+    def test_sample_count_warning_for_small_datasets(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            summary = self._ready_dataset(root)
+            config = RunConfig(
+                data_root=str(root),
+                query="Profile cells",
+                python_executable=sys.executable,
+                enable_segmentation=False,
+            )
+            issues = config.validate(summary, {"LLM_API_KEY": "x"})
+            self.assertIn("sample_count_low", {issue.code for issue in issues})
 
     def test_preflight_blocks_missing_key_and_accepts_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -169,6 +206,7 @@ class RunConfigTests(unittest.TestCase):
                 python_executable=sys.executable,
                 method="code",
                 enable_deep_research=False,
+                enable_rag=False,
                 enable_segmentation=False,
                 reproduce=True,
             )
@@ -178,8 +216,11 @@ class RunConfigTests(unittest.TestCase):
                 [sys.executable, "-u", str(Path(config.repository_root) / "main.py"), config.query],
             )
             self.assertIn("--disable-deep-research", command)
+            self.assertIn("--disable-rag", command)
             self.assertIn("--disable-segmentation", command)
             self.assertIn("--reproduce", command)
+            self.assertNotIn("--auto-deep-research", command)
+            self.assertNotIn("--auto-literature-retrieval", command)
             manifest = config.manifest()
             serialized = json.dumps(manifest)
             self.assertNotIn("API_KEY", serialized.replace("API keys", ""))

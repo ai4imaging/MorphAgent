@@ -266,16 +266,16 @@ pip install -e ".[napari]"
 python launch_ui.py --with-napari
 ```
 
-The repository includes the teacher-provided Tau-neuron reference workflow under
-[`demo/`](demo/). Its five samples already contain images, VLM slices, and five
-segmentation masks per sample; its precomputed RAG digest also avoids reparsing
-the bundled PDFs. The shortest verified path is:
+The repository includes the Tau-neuron reference workflow under
+[`demo/`](demo/). Its **10 samples** (`WT_1`–`WT_10`) already contain images,
+VLM slices, and segmentation masks per sample; its precomputed RAG digest also
+avoids reparsing the bundled PDFs. The shortest verified path is:
 
-1. Open **Configure** and select **Use bundled Tau demo**.
-2. Confirm the Tau aggregation question, then complete **Model API**. One checked option reuses the same OpenAI-compatible connection for image scoring.
-3. Select the analysis route and optional preparation/knowledge sources, then press **Run MorphAgent**. The teacher demo remains fixed at two rounds, five candidates per round, and target ten features.
-4. Follow **Inspect → Prepare → Plan → Quantify → Validate → Export**. Completed files remain in the run directory after cancellation or failure.
-5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, plan/manifest provenance, segmentation context, and shared image previews. Generated scripts, runtime logs, caches, and unrelated files are deliberately excluded from the evidence tree.
+1. Open **Configure** and select **Load demo dataset**.
+2. Confirm the Tau aggregation question, then complete **Model API**. Leave **Use the same connection for image scoring** unchecked unless LLM and VLM share one endpoint.
+3. Select the analysis route and knowledge sources, then press **Run MorphAgent**. Demo scale is **1 round × 5 candidates · target 5** (open **Config** for advanced knobs). Masks are reused when present; missing masks use Allen when available.
+4. Follow **Live run**: Inspect → Prepare → Plan → Quantify → Validate → Export. Completed files remain in the run directory after cancellation or failure.
+5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, and provenance. Shared run-level preview folders are not shown as per-feature images.
 
 During UI/result debugging, choose **Load a previous run** on Home and select the specific completed `run_ui_*` results folder. MorphAgent loads Features and Evidence directly without launching `main.py`, making API calls, or rerunning segmentation and feature extraction.
 

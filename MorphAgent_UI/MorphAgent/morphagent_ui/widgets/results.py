@@ -607,10 +607,9 @@ class EvidencePage(QWidget):
     def _artifact_group(path: Path) -> str:
         name = path.name.lower()
         suffix = path.suffix.lower()
-        lowered_parts = {part.lower() for part in path.parts}
         if name in {"features.csv", "retained_features.csv"}:
             return "measurements"
-        if suffix in IMAGE_PREVIEW_SUFFIXES or "first_sample_visualization" in lowered_parts or "segmentation" in name:
+        if suffix in IMAGE_PREVIEW_SUFFIXES or "segmentation" in name:
             return "images"
         if name == "feature_registry.json" or name == "round_results.json" or name.startswith("validation_"):
             return "validation"
@@ -642,6 +641,10 @@ class EvidencePage(QWidget):
                 continue
 
             is_image = suffix in IMAGE_PREVIEW_SUFFIXES
+            # Run-level shared previews must not appear as per-feature evidence.
+            lowered_parts = {part.lower() for part in path.parts}
+            if is_image and "first_sample_visualization" in lowered_parts:
+                continue
             is_global_context = name in {"segmentation_summary.json", "ui_run_manifest.json"}
             is_feature_source = False
             if card is not None:

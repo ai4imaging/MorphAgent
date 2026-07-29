@@ -6,10 +6,11 @@ import os
 from pathlib import Path
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QColor
+from qtpy.QtGui import QColor, QCursor
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -21,12 +22,13 @@ from qtpy.QtWidgets import (
     QRadioButton,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from ..models import DatasetSummary, RunConfig, Severity, ValidationIssue, scan_dataset
+from ..models import DatasetSummary, RunConfig, Severity, ValidationIssue, looks_like_vlm_model, scan_dataset
 from ..environment import read_model_environment, save_model_environment
 from ..theme import COLORS
 from .common import Card, PageHeader, PathPicker
@@ -38,10 +40,7 @@ METHOD_LABELS = {
     "vlm": "VLM only",
 }
 
-MASK_PREPARATION_LABELS = {
-    "reuse": "Reuse existing masks",
-    "recreate": "Regenerate Cellpose masks",
-}
+FREE_API_URL = "https://platform.xiaomimimo.com/"
 
 
 class ConfigurePage(QWidget):
@@ -110,15 +109,28 @@ class ConfigurePage(QWidget):
         layout.setSpacing(12)
         layout.addWidget(self._section_title("1 · Data"))
 
-        help_text = QLabel("Start with the bundled Tau dataset, or choose a folder containing one subfolder per sample.")
+        help_text = QLabel(
+            "Load the demo dataset, or choose your own dataset folder "
+            "(one subfolder per sample — see README_UI.md for the layout)."
+        )
         help_text.setProperty("role", "muted")
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
 
-        self.load_demo_button = QPushButton("Use bundled Tau demo")
+        demo_row = QHBoxLayout()
+        demo_row.setSpacing(10)
+        self.demo_guide = QLabel("👉")
+        self.demo_guide.setToolTip("Start here for a ready-to-run dataset")
+        self.demo_guide.setStyleSheet("font-size: 22px;")
+        self.load_demo_button = QPushButton("Load demo dataset")
         self.load_demo_button.setProperty("choiceAction", True)
-        self.load_demo_button.setToolTip("Load the five teacher-demo samples, question, masks, and knowledge sources.")
-        layout.addWidget(self.load_demo_button, 0)
+        self.load_demo_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.load_demo_button.setToolTip(
+            "Load the demo samples, biological question, existing masks, and prepared knowledge sources."
+        )
+        demo_row.addWidget(self.demo_guide, 0, Qt.AlignVCenter)
+        demo_row.addWidget(self.load_demo_button, 1)
+        layout.addLayout(demo_row)
 
         own_data = QLabel("OR CHOOSE YOUR DATASET")
         own_data.setProperty("role", "eyebrowMuted")
@@ -174,9 +186,9 @@ class ConfigurePage(QWidget):
         layout.setSpacing(13)
         layout.addWidget(self._section_title("4 · Analysis"))
 
-        scale_summary = QLabel("Teacher demo scale · 2 rounds × 5 candidates · target 10")
-        scale_summary.setProperty("role", "scaleSummary")
-        layout.addWidget(scale_summary)
+        self.scale_summary = QLabel("Demo scale · 1 round × 5 candidates · target 5")
+        self.scale_summary.setProperty("role", "scaleSummary")
+        layout.addWidget(self.scale_summary)
 
         route_label = QLabel("Analysis route · choose one")
         route_label.setProperty("role", "fieldLabel")
@@ -184,17 +196,10 @@ class ConfigurePage(QWidget):
         self.method_group, self.method_buttons, method_row = self._make_choice_row(METHOD_LABELS)
         layout.addLayout(method_row)
 
-        preparation_label = QLabel("Mask preparation · choose one")
-        preparation_label.setProperty("role", "fieldLabel")
-        layout.addWidget(preparation_label)
-        self.mask_group, self.mask_buttons, mask_row = self._make_choice_row(MASK_PREPARATION_LABELS)
-        self.mask_buttons["reuse"].setToolTip(
-            "Keep masks already present and run Cellpose only for samples without masks."
-        )
-        self.mask_buttons["recreate"].setToolTip(
-            "Run Cellpose for every sample and overwrite cyto.tif, nuclei.tif, and cytoplasm.tif."
-        )
-        layout.addLayout(mask_row)
+        # Mask preparation is internal: reuse existing masks when present,
+        # otherwise Allen runs automatically. Compatibility aliases for tests.
+        self.mask_group = QButtonGroup(self)
+        self.mask_buttons: dict[str, QRadioButton] = {}
 
         knowledge_label = QLabel("Knowledge sources · multiple choice")
         knowledge_label.setProperty("role", "fieldLabel")
@@ -210,6 +215,46 @@ class ConfigurePage(QWidget):
             checkbox.setMinimumHeight(46)
             knowledge.addWidget(checkbox, 1)
         layout.addLayout(knowledge)
+
+        config_row = QHBoxLayout()
+        self.advanced_toggle = QPushButton("Config")
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setChecked(False)
+        self.advanced_toggle.setProperty("choiceAction", True)
+        self.advanced_toggle.setCursor(QCursor(Qt.PointingHandCursor))
+        self.advanced_toggle.setToolTip("Show advanced analysis parameters")
+        config_row.addWidget(self.advanced_toggle, 0, Qt.AlignLeft)
+        config_row.addStretch(1)
+        layout.addLayout(config_row)
+
+        self.advanced_panel = QWidget()
+        advanced = QFormLayout(self.advanced_panel)
+        advanced.setContentsMargins(0, 4, 0, 0)
+        advanced.setHorizontalSpacing(16)
+        advanced.setVerticalSpacing(8)
+        self.temperature_spin = QDoubleSpinBox()
+        self.temperature_spin.setRange(0.0, 2.0)
+        self.temperature_spin.setSingleStep(0.1)
+        self.temperature_spin.setDecimals(2)
+        self.rounds_spin = QSpinBox()
+        self.rounds_spin.setRange(1, 20)
+        self.candidates_spin = QSpinBox()
+        self.candidates_spin.setRange(1, 50)
+        self.target_spin = QSpinBox()
+        self.target_spin.setRange(1, 500)
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(1, 32)
+        self.vlm_concurrency_spin = QSpinBox()
+        self.vlm_concurrency_spin.setRange(1, 32)
+        advanced.addRow("Temperature", self.temperature_spin)
+        advanced.addRow("Rounds", self.rounds_spin)
+        advanced.addRow("Candidates per round", self.candidates_spin)
+        advanced.addRow("Target feature count", self.target_spin)
+        advanced.addRow("Code workers", self.workers_spin)
+        advanced.addRow("VLM concurrency", self.vlm_concurrency_spin)
+        self.advanced_panel.hide()
+        layout.addWidget(self.advanced_panel)
+
         self.content_layout.addWidget(card)
 
     def _build_model_api_section(self) -> None:
@@ -227,13 +272,21 @@ class ConfigurePage(QWidget):
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
 
+        free_api = QLabel(
+            f'<a href="{FREE_API_URL}">Free OpenAI-compatible APIs available here</a>'
+        )
+        free_api.setOpenExternalLinks(True)
+        free_api.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        free_api.setProperty("role", "muted")
+        layout.addWidget(free_api)
+
         self.llm_form = QFormLayout()
         self.llm_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.llm_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.llm_form.setHorizontalSpacing(16)
         self.llm_form.setVerticalSpacing(9)
         self.llm_base_url_edit = QLineEdit()
-        self.llm_base_url_edit.setPlaceholderText("https://api.example.com/v1")
+        self.llm_base_url_edit.setPlaceholderText("https://api.openai.com/v1")
         self.llm_api_key_edit = QLineEdit()
         self.llm_api_key_edit.setEchoMode(QLineEdit.Password)
         self.llm_model_edit = QLineEdit()
@@ -242,12 +295,6 @@ class ConfigurePage(QWidget):
         self.llm_form.addRow("API key", self.llm_api_key_edit)
         self.llm_form.addRow("Model", self.llm_model_edit)
         layout.addLayout(self.llm_form)
-
-        self.reuse_llm_for_vlm = QCheckBox("Use the same connection for image scoring")
-        self.reuse_llm_for_vlm.setChecked(True)
-        self.reuse_llm_for_vlm.setProperty("choiceTile", True)
-        self.reuse_llm_for_vlm.setMinimumHeight(46)
-        layout.addWidget(self.reuse_llm_for_vlm)
 
         self.vlm_connection_fields = QWidget()
         self.vlm_form = QFormLayout(self.vlm_connection_fields)
@@ -267,6 +314,12 @@ class ConfigurePage(QWidget):
         self.vlm_form.addRow("VLM model", self.vlm_model_edit)
         layout.addWidget(self.vlm_connection_fields)
 
+        self.reuse_llm_for_vlm = QCheckBox("Use the same connection for image scoring")
+        self.reuse_llm_for_vlm.setChecked(False)
+        self.reuse_llm_for_vlm.setProperty("choiceTile", True)
+        self.reuse_llm_for_vlm.setMinimumHeight(46)
+        layout.addWidget(self.reuse_llm_for_vlm)
+
         save_row = QHBoxLayout()
         self.api_status_label = QLabel("Model API configuration has not been checked yet.")
         self.api_status_label.setProperty("role", "muted")
@@ -279,8 +332,6 @@ class ConfigurePage(QWidget):
         self.content_layout.addWidget(card)
 
     def _build_ready_section(self) -> None:
-        # Validation remains active, but the first-run surface ends with one
-        # unmistakable action instead of another large explanatory panel.
         self.readiness_list = QListWidget(self)
         self.readiness_list.setObjectName("Readiness")
         self.readiness_list.hide()
@@ -307,20 +358,57 @@ class ConfigurePage(QWidget):
         self.query_edit.textChanged.connect(self._fields_changed)
         for value, button in self.method_buttons.items():
             button.toggled.connect(lambda checked, selected=value: self._method_changed(selected) if checked else None)
-        for button in self.mask_buttons.values():
-            button.toggled.connect(self._fields_changed)
         for widget in (
             self.expert_check,
             self.deep_check,
             self.rag_check,
         ):
             widget.toggled.connect(self._fields_changed)
+        self.advanced_toggle.toggled.connect(self._toggle_advanced)
+        for spin in (
+            self.temperature_spin,
+            self.rounds_spin,
+            self.candidates_spin,
+            self.target_spin,
+            self.workers_spin,
+            self.vlm_concurrency_spin,
+        ):
+            spin.valueChanged.connect(self._fields_changed)
         self.run_button.clicked.connect(self._request_run)
         self.reuse_llm_for_vlm.toggled.connect(self._toggle_vlm_fields)
+        self.llm_model_edit.textChanged.connect(self._update_vlm_route_availability)
+        self.vlm_model_edit.textChanged.connect(self._update_vlm_route_availability)
         self.save_api_button.clicked.connect(self._save_api_settings)
+
+    def _toggle_advanced(self, checked: bool) -> None:
+        self.advanced_panel.setVisible(checked)
+        self.advanced_toggle.setText("Hide config" if checked else "Config")
 
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
+        self._update_vlm_route_availability()
+
+    def _scoring_model_name(self) -> str:
+        if self.reuse_llm_for_vlm.isChecked():
+            return self.llm_model_edit.text().strip()
+        return self.vlm_model_edit.text().strip() or self.llm_model_edit.text().strip()
+
+    def _update_vlm_route_availability(self, *_args) -> None:
+        model = self._scoring_model_name()
+        uncertain = bool(model) and not looks_like_vlm_model(model)
+        for value in ("both", "vlm"):
+            button = self.method_buttons[value]
+            button.setEnabled(not uncertain)
+            if uncertain:
+                button.setToolTip(
+                    f"Model '{model}' may not support images. Use a multimodal VLM or Code only."
+                )
+            else:
+                button.setToolTip("")
+        if uncertain and self.method_buttons["vlm"].isChecked():
+            self.method_buttons["code"].setChecked(True)
+        elif uncertain and self.method_buttons["both"].isChecked():
+            self.method_buttons["code"].setChecked(True)
 
     def load_api_settings(self) -> None:
         values = read_model_environment(self.config.repository_root)
@@ -344,23 +432,16 @@ class ConfigurePage(QWidget):
             "API key already saved · leave blank to keep it" if llm_key_ready else "Enter API key"
         )
 
-        reuse = (
-            not vlm_base
-            or (
-                vlm_base == llm_base
-                and (not vlm_model or vlm_model == llm_model)
-                and (not vlm_key or vlm_key == llm_key)
-            )
-        )
-        self.reuse_llm_for_vlm.setChecked(reuse)
-        self.vlm_base_url_edit.setText(vlm_base or llm_base)
-        self.vlm_model_edit.setText(vlm_model or llm_model)
+        # Plan default: same-connection stays unchecked so VLM fields remain visible.
+        self.reuse_llm_for_vlm.setChecked(False)
+        self.vlm_base_url_edit.setText(vlm_base)
+        self.vlm_model_edit.setText(vlm_model)
         self.vlm_api_key_edit.clear()
         self.vlm_api_key_edit.setPlaceholderText(
             "VLM API key already saved · leave blank to keep it" if vlm_key_ready else "Enter VLM API key"
         )
-        self._toggle_vlm_fields(reuse)
-        self._set_api_status(llm_key_ready, vlm_key_ready or (reuse and llm_key_ready))
+        self._toggle_vlm_fields(False)
+        self._set_api_status(llm_key_ready, vlm_key_ready)
 
     def _set_api_status(self, llm_ready: bool, vlm_ready: bool, saved: bool = False) -> None:
         if llm_ready and vlm_ready:
@@ -427,7 +508,7 @@ class ConfigurePage(QWidget):
         try:
             self.config.apply_reference_demo()
         except (OSError, ValueError, ImportError) as exc:
-            QMessageBox.critical(self, "Reference demo unavailable", str(exc))
+            QMessageBox.critical(self, "Demo dataset unavailable", str(exc))
             return
         self.load_from_config()
         self.dataset_summary = scan_dataset(self.config.data_root)
@@ -439,16 +520,29 @@ class ConfigurePage(QWidget):
         self.dataset_picker.setText(self.config.data_root)
         self.query_edit.setPlainText(self.config.query)
         self.method_buttons.get(self.config.method, self.method_buttons["both"]).setChecked(True)
-        # Reproducibility is a fixed UI policy, not another decision the user
-        # has to make on the streamlined first-run path.
         self.config.reproduce = True
         self.config.enable_segmentation = True
-        mask_mode = "reuse" if self.config.segmentation_skip_if_present else "recreate"
-        self.mask_buttons[mask_mode].setChecked(True)
+        self.config.segmentation_skip_if_present = True
         self.expert_check.setChecked(self.config.enable_expert_knowledge)
         self.deep_check.setChecked(self.config.enable_deep_research)
         self.rag_check.setChecked(self.config.enable_rag)
+        self.temperature_spin.setValue(float(self.config.temperature))
+        self.rounds_spin.setValue(int(self.config.num_rounds))
+        self.candidates_spin.setValue(int(self.config.features_per_iteration))
+        self.target_spin.setValue(int(self.config.target_feature_count))
+        self.workers_spin.setValue(int(self.config.code_parallel_workers))
+        self.vlm_concurrency_spin.setValue(int(self.config.vlm_online_concurrency))
+        self._refresh_scale_summary()
         self._loading = False
+        self._update_vlm_route_availability()
+
+    def _refresh_scale_summary(self) -> None:
+        source = "Demo" if self.config.dataset_source == "demo" else "Custom"
+        self.scale_summary.setText(
+            f"{source} scale · {self.config.num_rounds} round"
+            f"{'s' if self.config.num_rounds != 1 else ''} × "
+            f"{self.config.features_per_iteration} candidates · target {self.config.target_feature_count}"
+        )
 
     def _dataset_path_changed(self, value: str = "") -> None:
         if self._loading:
@@ -457,10 +551,16 @@ class ConfigurePage(QWidget):
         if path is not None and path.is_dir():
             self.dataset_summary = scan_dataset(path)
             self._detect_dataset_context(path)
+            demo_root = Path(self.config.repository_root).expanduser().resolve() / "demo" / "data"
+            try:
+                self.config.dataset_source = "demo" if path.resolve() == demo_root else "custom"
+            except OSError:
+                self.config.dataset_source = "custom"
         else:
             self.dataset_summary = None
             self.config.description_path = ""
             self.config.metadata_path = ""
+            self.config.dataset_source = "custom"
         self._fields_changed()
 
     def _detect_dataset_context(self, root: Path) -> None:
@@ -499,10 +599,22 @@ class ConfigurePage(QWidget):
         self.config.method = self._selected_method()
         self.config.reproduce = True
         self.config.enable_segmentation = True
-        self.config.segmentation_skip_if_present = self.mask_buttons["reuse"].isChecked()
+        self.config.segmentation_skip_if_present = True
         self.config.enable_expert_knowledge = self.expert_check.isChecked()
         self.config.enable_deep_research = self.deep_check.isChecked()
         self.config.enable_rag = self.rag_check.isChecked()
+        self.config.temperature = float(self.temperature_spin.value())
+        self.config.num_rounds = int(self.rounds_spin.value())
+        self.config.features_per_iteration = int(self.candidates_spin.value())
+        self.config.target_feature_count = int(self.target_spin.value())
+        self.config.code_parallel_workers = int(self.workers_spin.value())
+        self.config.vlm_online_concurrency = int(self.vlm_concurrency_spin.value())
+        self.config.llm_model = self.llm_model_edit.text().strip()
+        if self.reuse_llm_for_vlm.isChecked():
+            self.config.vlm_online_model = self.config.llm_model
+        else:
+            self.config.vlm_online_model = self.vlm_model_edit.text().strip()
+        self._refresh_scale_summary()
 
     def _fields_changed(self, *_args) -> None:
         if self._loading:
@@ -555,6 +667,9 @@ class ConfigurePage(QWidget):
                 parts.append(f"{summary.mask_count} masks")
             if summary.empty_samples:
                 parts.append(f"{len(summary.empty_samples)} samples need attention")
+                role = "warning"
+            elif summary.sample_count < 5:
+                parts.append("recommend ≥5 samples")
                 role = "warning"
             else:
                 role = "success"

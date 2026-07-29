@@ -106,9 +106,9 @@ class WidgetSmokeTests(unittest.TestCase):
         for section in ("1 · Data", "2 · Biological question", "3 · Model API", "4 · Analysis"):
             self.assertIn(section, labels)
         self.assertNotIn("4 · Ready to run", labels)
-        self.assertIn("Teacher demo scale · 2 rounds × 5 candidates · target 10", labels)
+        self.assertIn("Custom scale · 1 round × 5 candidates · target 5", labels)
         self.assertIn("Analysis route · choose one", labels)
-        self.assertIn("Mask preparation · choose one", labels)
+        self.assertNotIn("Mask preparation · choose one", labels)
         self.assertNotIn("Preparation · multiple choice", labels)
         self.assertNotIn("Reproducible results", {checkbox.text() for checkbox in page.findChildren(QCheckBox)})
         self.assertIn("Knowledge sources · multiple choice", labels)
@@ -118,15 +118,8 @@ class WidgetSmokeTests(unittest.TestCase):
         step_headers = [frame for frame in page.findChildren(QFrame) if frame.property("stepHeader")]
         self.assertEqual(step_headers, [])
 
-        self.assertEqual(set(page.mask_buttons), {"reuse", "recreate"})
-        self.assertEqual(
-            {button.text() for button in page.mask_buttons.values()},
-            {
-                "Reuse existing masks",
-                "Regenerate Cellpose masks",
-            },
-        )
-        for button in (*page.method_buttons.values(), *page.mask_buttons.values()):
+        self.assertEqual(page.mask_buttons, {})
+        for button in page.method_buttons.values():
             self.assertIsInstance(button, QRadioButton)
             self.assertTrue(button.property("choiceTile"))
             self.assertGreaterEqual(button.minimumHeight(), 42)
@@ -142,10 +135,13 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertGreaterEqual(checkbox.minimumHeight(), 46)
         self.assertFalse(hasattr(page, "segment_check"))
         self.assertFalse(hasattr(page, "reproduce_check"))
-        self.assertTrue(page.mask_buttons["reuse"].isChecked())
         self.assertTrue(widget.config.enable_segmentation)
         self.assertTrue(widget.config.segmentation_skip_if_present)
         self.assertTrue(widget.config.reproduce)
+        self.assertFalse(page.reuse_llm_for_vlm.isChecked())
+        self.assertTrue(hasattr(page, "advanced_toggle"))
+        self.assertEqual(page.advanced_toggle.text(), "Config")
+        self.assertFalse(page.advanced_panel.isVisible())
 
         widget.config.reproduce = False
         page.load_from_config()
@@ -153,27 +149,23 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertIn("--reproduce", widget.config.build_command())
 
         self.assertTrue(page.load_demo_button.property("choiceAction"))
-        self.assertEqual(page.load_demo_button.text(), "Use bundled Tau demo")
+        self.assertEqual(page.load_demo_button.text(), "Load demo dataset")
+        self.assertEqual(page.demo_guide.text(), "👉")
         self.assertEqual(page.dataset_picker.button.text(), "Browse…")
         self.assertTrue(page.run_button.property("runCta"))
         self.assertFalse(hasattr(page, "scan_button"))
         widget.close()
 
-    def test_mask_preparation_choices_map_to_real_segmentation_flags(self) -> None:
+    def test_mask_preparation_is_internal_skip_if_present(self) -> None:
         widget = MorphAgentWidget()
         page = widget.configure_page
 
-        page.mask_buttons["recreate"].click()
-        self.app.processEvents()
-        self.assertTrue(widget.config.enable_segmentation)
-        self.assertFalse(widget.config.segmentation_skip_if_present)
-        self.assertIn("--segmentation-run-even-if-present", widget.config.build_command())
-
-        page.mask_buttons["reuse"].click()
+        page._sync_config()
         self.app.processEvents()
         self.assertTrue(widget.config.enable_segmentation)
         self.assertTrue(widget.config.segmentation_skip_if_present)
         self.assertIn("--segmentation-skip-if-present", widget.config.build_command())
+        self.assertNotIn("--segmentation-run-even-if-present", widget.config.build_command())
         widget.close()
 
     def test_configure_saves_masked_model_api_to_repository_env(self) -> None:
@@ -212,9 +204,14 @@ class WidgetSmokeTests(unittest.TestCase):
                 self.assertEqual(page.llm_api_key_edit.echoMode(), QLineEdit.Password)
                 self.assertEqual(page.llm_api_key_edit.text(), "")
                 self.assertIn("already saved", page.llm_api_key_edit.placeholderText().lower())
-                self.assertTrue(page.reuse_llm_for_vlm.isChecked())
-                self.assertTrue(page.vlm_connection_fields.isHidden())
+                # Default is unchecked; VLM fields stay visible even when values match LLM.
+                self.assertFalse(page.reuse_llm_for_vlm.isChecked())
+                self.assertFalse(page.vlm_connection_fields.isHidden())
                 self.assertNotIn("existing-secret", page.api_status_label.text())
+
+                page.reuse_llm_for_vlm.setChecked(True)
+                self.app.processEvents()
+                self.assertTrue(page.vlm_connection_fields.isHidden())
 
                 page.llm_base_url_edit.setText("https://new.example/v1")
                 page.llm_model_edit.setText("new-model")
@@ -540,7 +537,7 @@ class WidgetSmokeTests(unittest.TestCase):
                 for group in [evidence.artifact_tree.topLevelItem(index)]
                 for child in range(group.childCount())
             }
-            self.assertIn(image_path, listed_paths)
+            self.assertNotIn(image_path, listed_paths)
             self.assertIn(root / "segmentation_summary.json", listed_paths)
             self.assertIn(manifest, listed_paths)
             self.assertIn(root / "features.csv", listed_paths)
@@ -577,18 +574,14 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertTrue(other_button.isChecked())
             self.assertEqual(evidence._selected_artifact(), root / "features.csv")
             self.assertIs(evidence.preview_stack.currentWidget(), evidence.text_preview)
-
-            image_item = next(
-                group.child(child)
+            # Shared first_sample_visualization images stay out of per-feature evidence.
+            listed_after = {
+                Path(group.child(child).data(0, Qt.UserRole))
                 for index in range(evidence.artifact_tree.topLevelItemCount())
                 for group in [evidence.artifact_tree.topLevelItem(index)]
                 for child in range(group.childCount())
-                if Path(group.child(child).data(0, Qt.UserRole)) == image_path
-            )
-            evidence.artifact_tree.setCurrentItem(image_item)
-            self.app.processEvents()
-            self.assertIs(evidence.preview_stack.currentWidget(), evidence.image_preview)
-            self.assertFalse(evidence._preview_pixmap.isNull())
+            }
+            self.assertNotIn(image_path, listed_after)
             widget.close()
 
     def test_ready_configuration_enables_launch(self) -> None:
@@ -649,8 +642,12 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertEqual(page.dataset_picker.text(), str((demo / "data").resolve()))
             self.assertIn("Tau protein aggregation", page.query_edit.toPlainText())
             self.assertEqual(widget.config.features_per_iteration, 5)
-            self.assertEqual(widget.config.target_feature_count, 10)
-            self.assertEqual(widget.config.num_rounds, 2)
+            self.assertEqual(widget.config.target_feature_count, 5)
+            self.assertEqual(widget.config.num_rounds, 1)
+            self.assertEqual(widget.config.dataset_source, "demo")
+            command = widget.config.build_command()
+            self.assertNotIn("--auto-deep-research", command)
+            self.assertNotIn("--auto-literature-retrieval", command)
             widget.close()
 
     def test_custom_dataset_auto_detects_context_and_clears_demo_paths(self) -> None:

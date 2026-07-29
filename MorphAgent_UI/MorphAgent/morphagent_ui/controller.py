@@ -27,7 +27,7 @@ class StageSpec:
 
 STAGES = (
     StageSpec("inspect", "Inspect", "Understand samples and biological context", 8),
-    StageSpec("prepare", "Prepare", "Reuse or create masks and VLM-ready views", 24),
+    StageSpec("prepare", "Prepare", "Reuse masks or create them with Allen when missing", 24),
     StageSpec("plan", "Plan", "Propose biologically grounded feature cards", 40),
     StageSpec("quantify", "Quantify", "Run generated code and/or semantic scoring", 60),
     StageSpec("validate", "Validate", "Screen variation, redundancy, and evidence", 82),
@@ -148,9 +148,12 @@ class PipelineWorker(QThread):
         try:
             with log_path.open("a", encoding="utf-8", buffering=1) as log_handle:
                 log_handle.write(f"[{datetime.now().isoformat(timespec='seconds')}] UI launch\n")
+                env = os.environ.copy()
+                env.update(self.config.pipeline_environment())
                 self._process = subprocess.Popen(
                     self.config.build_command(),
                     cwd=self.config.repository_root,
+                    env=env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,

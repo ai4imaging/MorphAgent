@@ -120,11 +120,37 @@ class RunPreset(str, Enum):
 
     @property
     def title(self) -> str:
-        return "Teacher demo · both routes"
+        return "Demo · both routes"
 
     @property
     def description(self) -> str:
-        return "Teacher reference · 2 rounds × 5 candidates · target 10"
+        return "Demo scale · 1 round × 5 candidates · target 5"
+
+
+_VLM_MODEL_HINTS = (
+    "gpt-4o",
+    "gpt-4.1",
+    "4v",
+    "vision",
+    "vl-",
+    "-vl",
+    "qwen-vl",
+    "qwen2-vl",
+    "qwen2.5-vl",
+    "gemini",
+    "claude-3",
+    "claude-sonnet-4",
+    "claude-opus-4",
+    "llava",
+    "internvl",
+)
+
+
+def looks_like_vlm_model(model_name: str) -> bool:
+    lowered = (model_name or "").strip().lower()
+    if not lowered:
+        return False
+    return any(token in lowered for token in _VLM_MODEL_HINTS)
 
 
 @dataclass
@@ -136,8 +162,8 @@ class RunConfig:
     metadata_path: str = ""
     method: str = "both"
     features_per_iteration: int = field(default_factory=lambda: _environment_int("FEATURES_PER_ITERATION", 5))
-    target_feature_count: int = field(default_factory=lambda: _environment_int("TARGET_FEATURE_COUNT", 10))
-    num_rounds: int = field(default_factory=lambda: _environment_int("NUM_ROUNDS", 2))
+    target_feature_count: int = field(default_factory=lambda: _environment_int("TARGET_FEATURE_COUNT", 5))
+    num_rounds: int = field(default_factory=lambda: _environment_int("NUM_ROUNDS", 1))
     enable_expert_knowledge: bool = True
     enable_deep_research: bool = True
     enable_rag: bool = True
@@ -158,6 +184,8 @@ class RunConfig:
     vlm_api_provider: str = "online"
     llm_model: str = ""
     vlm_online_model: str = ""
+    dataset_source: str = "custom"  # "demo" | "custom"
+    pubmed_max_results: int = 10
     python_executable: str = field(default_factory=lambda: sys.executable)
     repository_root: str = field(default_factory=lambda: str(Path(__file__).resolve().parents[1]))
 
@@ -165,12 +193,12 @@ class RunConfig:
         RunPreset(preset)
         self.method = "both"
         self.features_per_iteration = 5
-        self.target_feature_count = 10
-        self.num_rounds = 2
+        self.target_feature_count = 5
+        self.num_rounds = 1
         self.reproduce = True
 
     def apply_reference_demo(self) -> Path:
-        """Load the bundled teacher demo and seed its precomputed RAG cache."""
+        """Load the demo dataset and seed its precomputed RAG cache."""
 
         repository = Path(self.repository_root).expanduser().resolve()
         demo = repository / "demo"
@@ -182,12 +210,12 @@ class RunConfig:
         required = (project_root, dataset, description, rag_dir, precomputed)
         missing = [str(path) for path in required if not path.exists()]
         if missing:
-            raise FileNotFoundError("Reference demo is incomplete: " + ", ".join(missing))
+            raise FileNotFoundError("Demo dataset is incomplete: " + ", ".join(missing))
 
         pdf_files = sorted(rag_dir.glob("*.pdf"))
         xml_files = sorted(rag_dir.glob("*.xml"))
         if not pdf_files and not xml_files:
-            raise FileNotFoundError(f"Reference demo RAG folder has no PDF/XML files: {rag_dir}")
+            raise FileNotFoundError(f"Demo RAG folder has no PDF/XML files: {rag_dir}")
 
         # Import only for this explicit action so routine UI preflight remains
         # dependency-light.
@@ -220,6 +248,7 @@ class RunConfig:
             "aggregation and neuronal structure in these images"
         )
         self.apply_preset(RunPreset.PILOT)
+        self.dataset_source = "demo"
         self.enable_expert_knowledge = True
         self.enable_deep_research = True
         self.enable_rag = True
@@ -267,6 +296,13 @@ class RunConfig:
                 issues.append(ValidationIssue(Severity.BLOCKER, "vlm_sources_missing", "The VLM route has no image source.", "Add primary images or a non-mask image subfolder."))
             elif self.method in {"vlm", "both"} and dataset.vlm_native_count < dataset.vlm_source_count:
                 issues.append(ValidationIssue(Severity.INFO, "vlm_preparation", "Some VLM inputs need PNG/JPEG slice preparation.", "MorphAgent prepares compatible 2D views during the first round."))
+            if dataset.sample_count > 0 and dataset.sample_count < 5:
+                issues.append(ValidationIssue(
+                    Severity.WARNING,
+                    "sample_count_low",
+                    f"Only {dataset.sample_count} samples were found (recommend ≥5).",
+                    "Small datasets can fail validation due to insufficient unique values. Add more samples when possible.",
+                ))
 
         if not self.query.strip():
             issues.append(ValidationIssue(Severity.BLOCKER, "query_missing", "Describe the biological question.", "State the phenotype, object, or comparison you want to profile."))
@@ -305,6 +341,15 @@ class RunConfig:
         if self.method in {"vlm", "both"} and self.vlm_api_provider.lower() == "qwen":
             issues.append(ValidationIssue(Severity.WARNING, "local_vlm", "Local Qwen requires a supported CUDA GPU and extra packages.", "Confirm the local model and device in the repository configuration."))
 
+        scoring_model = (self.vlm_online_model or env.get("VLM_MODEL", "") or self.llm_model or env.get("LLM_MODEL", "")).strip()
+        if self.method in {"vlm", "both"} and scoring_model and not looks_like_vlm_model(scoring_model):
+            issues.append(ValidationIssue(
+                Severity.WARNING,
+                "vlm_model_uncertain",
+                f"Model '{scoring_model}' may not support image input.",
+                "Use a multimodal VLM, or switch the analysis route to Code only.",
+            ))
+
         if self.resume:
             if not self.results_dir.strip():
                 issues.append(ValidationIssue(Severity.BLOCKER, "resume_results_missing", "Resume requires an existing results directory."))
@@ -317,7 +362,12 @@ class RunConfig:
         if self.method in {"code", "both"}:
             issues.append(ValidationIssue(Severity.WARNING, "generated_code", "Generated feature code executes in the configured Conda environment.", "Use trusted data and review the audit/code artifacts after the run."))
         if self.enable_segmentation and dataset is not None and dataset.mask_count < dataset.sample_count:
-            issues.append(ValidationIssue(Severity.WARNING, "segmentation_needed", "Some samples need Cellpose-SAM masks.", "A supported GPU is recommended; preparation writes masks into sample folders."))
+            issues.append(ValidationIssue(
+                Severity.WARNING,
+                "segmentation_needed",
+                "Some samples have no masks yet; Allen segmentation will run when available.",
+                "Install the optional morphagent_allen environment, or add masks under each sample's segmentation/ folder.",
+            ))
         if self.data_root.strip():
             issues.append(ValidationIssue(Severity.INFO, "input_writes", "Preparation may add slices/ and segmentation/ artifacts to the dataset.", "Work on a backed-up or writable dataset."))
         return issues
@@ -360,7 +410,21 @@ class RunConfig:
             if not enabled:
                 command.append(disable_flag)
         command.append("--enable-segmentation" if self.enable_segmentation else "--disable-segmentation")
-        command.append("--segmentation-skip-if-present" if self.segmentation_skip_if_present else "--segmentation-run-even-if-present")
+        # Masks are always reused when present; missing masks use Allen internally.
+        command.append("--segmentation-skip-if-present")
+
+        # Demo path digests prepared knowledge folders only. Custom datasets may
+        # optionally auto-generate deep research / pull PubMed literature.
+        if self.dataset_source != "demo":
+            if self.enable_deep_research:
+                command.append("--auto-deep-research")
+            if self.enable_rag:
+                command.extend([
+                    "--auto-literature-retrieval",
+                    "--pubmed-max-results",
+                    str(max(1, int(self.pubmed_max_results))),
+                ])
+
         if self.reproduce:
             command.extend(["--reproduce", "--reproduce-seed", str(self.reproduce_seed)])
         if self.resume:
@@ -368,6 +432,19 @@ class RunConfig:
         if self.multigpu:
             command.append("--multigpu")
         return command
+
+    def pipeline_environment(self) -> dict[str, str]:
+        """Extra env vars injected when the UI launches main.py."""
+
+        return {
+            "CODE_MAX_RETRIES": "3",
+            "SEGMENTATION_BACKEND": "allen",
+            "SEGMENTATION_CONDA_ENV": os.getenv("SEGMENTATION_CONDA_ENV", "morphagent_allen"),
+            "NUM_ROUNDS": str(self.num_rounds),
+            "FEATURES_PER_ITERATION": str(self.features_per_iteration),
+            "TARGET_FEATURE_COUNT": str(self.target_feature_count),
+            "PUBMED_MAX_RESULTS": str(self.pubmed_max_results),
+        }
 
     def command_preview(self) -> str:
         return shlex.join(self.build_command())

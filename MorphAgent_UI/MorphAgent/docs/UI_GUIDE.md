@@ -32,26 +32,23 @@ Required entries in the repository-local `.env`:
 ## Fastest safe first run
 
 1. Open **Configure**.
-2. Select **Load reference demo** to reproduce the bundled teacher workflow. It loads the five Tau-neuron samples, the supplied biological question, all three knowledge sources, existing masks, and the cached RAG summary.
+2. Select **Load demo dataset** to reproduce the bundled workflow. It loads the ten Tau-neuron samples (`WT_1`–`WT_10`), the supplied biological question, all three knowledge sources, existing masks, and the cached RAG summary. Demo digests prepared knowledge folders only (no auto PubMed / auto deep-research API).
 3. For a different dataset, choose either:
    - a project root containing `dataset/`, `expert_knowledge/`, `deep_research/`, or `RAG/`; or
    - the dataset directory directly.
-4. Select **Scan dataset**. The UI reports:
-   - direct sample folders;
-   - primary images available to generated code;
-   - the image source that the VLM route would prefer;
-   - existing masks under each sample's `segmentation/` directory;
-   - empty or unusable sample folders.
+   Custom datasets with Deep research / Literature checked may pass `--auto-deep-research` and `--auto-literature-retrieval --pubmed-max-results 10`. Failures are logged without aborting the run.
+4. The dataset summary reports sample counts, primary images, VLM sources, and masks. Fewer than 5 samples shows a warning (recommend ≥5) but does not block Run.
 5. Write the biological question. A strong prompt names the target object, phenotype/comparison, and spatial or resolution context.
-6. Under **Mask preparation**, choose **Reuse existing masks** for the bundled demo or supplied masks; missing masks are created automatically. Choose **Regenerate Cellpose masks** only when the standard Cellpose mask trio should be recomputed for every sample and existing generated files may be overwritten; this generally requires a supported GPU.
-7. Keep **Reference demo · both routes** for the bundled demo (two rounds × five candidates, target ten features) unless the question clearly requires only executable measurements or only semantic scoring.
+6. Masks are always reused when present. Missing masks use Allen (`morphagent_allen`) when available; otherwise segmentation is skipped for that sample.
+7. Keep **Code + VLM** for the demo (**1 round × 5 candidates · target 5**). Open **Config** for temperature, rounds, candidates, workers, and VLM concurrency.
    The UI always enables reproducible mode, so the generated command uses deterministic model settings and the fixed reproducibility seed without presenting another setup choice.
-8. Resolve all red **BLOCK** checks. Yellow **CHECK** items disclose runtime/cost/safety decisions but do not prevent launch.
-9. Inspect the exact command preview and select **Run complete workflow**.
+8. Under **Model API**, fill LLM fields first, then VLM fields. **Use the same connection for image scoring** is unchecked by default.
+9. Resolve all red **BLOCK** checks. Yellow **CHECK** items disclose runtime/cost/safety decisions but do not prevent launch.
+10. Inspect the exact command preview and select **Run MorphAgent**.
 
 The UI chooses a timestamped `results/run_ui_YYYYMMDD_HHMMSS/` directory and writes `ui_run_manifest.json` before launching the pipeline.
 
-## Six observable stages
+## Live run stages
 
 | UI stage | Existing pipeline boundary | User-visible evidence |
 |---|---|---|
@@ -72,11 +69,11 @@ The **Features** workspace keeps the searchable feature table on the left and th
 2. `round_N/feature_plan.json` for biological interpretation, visual signature, channel/mask needs, operators, statistics, and route rationale;
 3. `retained_features.csv` or `features.csv` headers when richer audit files are unavailable.
 
-The separate **Evidence** workspace uses two equal-width columns. The left column presents searchable, three-column feature-name buttons without horizontal scrolling; below them it repeats only the selected feature name and short biological description. Structured design fields remain on **Features**. The right column shows only evidence needed to understand the selected value and provenance: the selected matrix column, registry/validation decision, feature plan and round record, run manifest, segmentation summary, and available image context. Generated scripts, runtime logs, knowledge caches, and unrelated artifacts are excluded. Changing a feature selects and previews its first curated source instead of automatically jumping to an image.
+The separate **Evidence** workspace uses two equal-width columns. The left column presents searchable, three-column feature-name buttons without horizontal scrolling; below them it repeats only the selected feature name and short biological description. Structured design fields remain on **Features**. The right column shows only evidence needed to understand the selected value and provenance: the selected matrix column, registry/validation decision, feature plan and round record, run manifest, and segmentation summary. Shared run-level folders such as `first_sample_visualization/` are **not** attached under every feature as if they were per-feature images. Generated scripts, runtime logs, knowledge caches, and unrelated artifacts are excluded.
 
 For result-only debugging, **Load a previous run** on Home opens an existing run folder directly in Features and Evidence. This path never starts the pipeline or makes model calls.
 
-The teacher demo produces shared first-sample overview images but no per-feature overlay. Evidence displays those images as run-level context and explicitly avoids calling them feature-specific heatmaps. VLM values remain semantic assessments, not calibrated physical measurements. Files can still be opened with the operating system, and supported images can be added as napari layers in `--with-napari` mode.
+VLM values remain semantic assessments, not calibrated physical measurements. Files can still be opened with the operating system, and supported images can be added as napari layers in `--with-napari` mode.
 
 ## Resume and cancellation
 
@@ -88,8 +85,8 @@ The teacher demo produces shared first-sample overview images but no per-feature
 
 - Generated feature code runs with the current user's permissions inside the configured Conda environment; that is dependency isolation, not an operating-system security sandbox. Use trusted inputs and review generated code/audit files.
 - Preparation may create `slices/` and `segmentation/` under sample directories. Use writable, backed-up data.
-- Automatic Cellpose-SAM preparation generally needs a supported GPU. Existing user masks can be reused.
-- VLM work can be much more expensive than planning. Start with the bundled five-sample, ten-candidate reference workflow. Increase rounds, samples, or concurrency only by intentionally editing the documented low-frequency values in `.env`.
+- Missing masks default to Allen segmentation when `morphagent_allen` is installed; otherwise those samples skip segmentation gracefully.
+- VLM work can be much more expensive than planning. Start with the bundled ten-sample, one-round demo scale. Increase rounds, samples, or concurrency only via **Config** or documented low-frequency values in `.env`.
 - A green process completion state means the CLI exited successfully; use **Features** and **Evidence** to audit invalid, dropped, or failed individual features and their run artifacts.
 - A scientific end-to-end run still requires a complete MorphAgent environment, valid model endpoints/keys, a supported dataset, and sufficient compute. UI-only tests cannot establish biological validity.
 

@@ -11,7 +11,7 @@ MorphAgent_handoff_20260719/
 │   ├── main.py                         # Full backend pipeline entry point
 │   ├── morphagent_ui/                  # Home/Configure/Run/Features/Evidence
 │   ├── envs/                           # Original repo dependency files
-│   ├── demo/data/                      # 5 Tau demo samples and knowledge materials
+│   ├── demo/data/                      # 10 Tau demo samples and knowledge materials
 │   └── demo/data/results/
 │       └── completed_demo_run/         # Completed results, ready to load and inspect
 ├── dependencies/                       # Dependency manifests organized by purpose
@@ -32,8 +32,8 @@ For a first review, the recipient should follow this order:
 1. Play `demo_video/MorphAgent_demo_english.mp4` first to see the full workflow.
 2. Install the “UI + bundled demo” dependencies.
 3. Launch the UI, choose **Load a previous run**, load the completed results, and inspect Features and Evidence.
-4. On the Configure page, enter your own API credentials, then run the full pipeline with **Use bundled Tau demo**.
-5. Install Cellpose/PyTorch segmentation dependencies only if you need to regenerate segmentation masks.
+4. On the Configure page, enter your own API credentials, then run the full pipeline with **Load demo dataset**.
+5. Install the optional Allen (`morphagent_allen`) environment only if you need automatic masks for custom data without existing segmentation/.
 
 This lets you verify the UI and result views first, then external APIs, and only then the longer full computation path.
 
@@ -43,7 +43,7 @@ This lets you verify the UI and result views first, then external APIs, and only
 - Miniforge, Mambaforge, Miniconda, or Anaconda recommended.
 - Python 3.10; the install scripts create a dedicated environment named `morphagent`.
 - UI + bundled demo: at least 8 GB RAM and 5 GB free disk recommended; GPU not required.
-- Regenerating Cellpose masks: NVIDIA GPU recommended; CPU works but is much slower.
+- Custom data without masks: optional Allen environment (`morphagent_allen`); if missing, segmentation is skipped gracefully.
 - A full new experiment needs a reachable OpenAI Chat Completions–compatible API.
 - Models used for the Code + VLM route must support both text and image input; if the model does not support images, use Code only or configure a separate VLM.
 
@@ -98,40 +98,45 @@ python scripts/verify_install.py --ui-smoke
 python MorphAgent/launch_ui.py
 ```
 
-`requirements-demo-ui.txt` is the recommended dependency set for handoff review: it runs the UI, LLM/VLM API routes, the Tau demo with existing masks, Features, and Evidence, without downloading the larger Cellpose/PyTorch segmentation stack.
+`requirements-demo-ui.txt` is the recommended dependency set for handoff review: it runs the UI, LLM/VLM API routes, the Tau demo with existing masks, Features, and Evidence, without downloading segmentation stacks.
 
-## 5. Optional: Full Segmentation Support
+## 5. Optional: Segmentation for custom data
 
-If you need **Regenerate Cellpose masks** in Configure, install on top of the base environment:
-
-```bash
-conda activate morphagent
-python -m pip install -r dependencies/requirements-segmentation-optional.txt
-python scripts/verify_install.py --ui-smoke
-```
-
-Or use the full environment provided by the repo:
+Masks under each sample’s `segmentation/` folder are always reused when present. When masks are missing, the UI pipeline defaults to **Allen** (`SEGMENTATION_BACKEND=allen`, conda env `morphagent_allen`). If that environment is not installed, segmentation is skipped for those samples and the run continues.
 
 ```bash
-conda env create -f dependencies/environment-full.yml
-conda activate morphagent
-python -m pip install -e MorphAgent
+conda env create -f dependencies/environment-allen-optional.yml
 ```
 
-Allen `aicssegmentation` is a legacy, separate optional backend. Refer to `dependencies/environment-allen-optional.yml` only when explicitly needed. It is not required for the bundled Tau demo.
+Cellpose/PyTorch remains available as an alternate backend (`SEGMENTATION_BACKEND=cellpose`) via `dependencies/requirements-segmentation-optional.txt` when you explicitly need it.
+
+## 5b. Dataset folder layout
+
+```text
+project_or_data_root/
+  dataset/                 # or place sample folders directly at the root
+    sample_a/
+      image.tif            # primary image
+      slices/              # optional VLM-ready views
+      segmentation/        # optional masks (reused when present)
+    sample_b/
+      ...
+  expert_knowledge/        # optional
+  deep_research/           # optional prepared reports
+  RAG/                     # optional literature PDFs/XML
+```
+
+Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation uniqueness) but does not block Run.
 
 ## 6. First Launch and API Configuration
 
 The window maximizes automatically on launch.
 
 1. On the home page, click **Start a discovery run**.
-2. Under **1 · Data**, click **Use bundled Tau demo**.
-3. The system fills in 5 samples, the data description, and a default biological question.
-4. Under **3 · Model API**, fill in:
-   - Base URL: template prefilled with `https://api.gpugeek.com/v1`; change this if you switch providers to their OpenAI-compatible endpoint.
-   - API key: the recipient’s own key.
-   - Model: template prefilled with `Vendor2/GPT-4o`; when switching providers, use the exact model name required by that provider.
-5. If the same model supports image input, keep **Use the same connection for image scoring**.
+2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue).
+3. The system fills in the demo samples (WT_1–WT_10), the data description, and a default biological question.
+4. Under **3 · Model API**, fill in LLM Base URL, key, and model first; then optional VLM fields. Free OpenAI-compatible APIs tip: [Xiaomi MiMo platform](https://platform.xiaomimimo.com/).
+5. **Use the same connection for image scoring** is unchecked by default (independent VLM fields stay visible). Check it only when LLM and VLM share one endpoint.
 6. Click **Save API configuration**. Settings are stored only on the local machine in `MorphAgent/.env`.
 
 Do not forward the generated `.env` to others. For a second handoff, delete `MorphAgent/.env` and keep only `.env.example`.
@@ -142,15 +147,24 @@ The install scripts create a local `.env` from `.env.example` on the recipient�
 
 Recommended settings:
 
-- Data: Use bundled Tau demo
+- Data: **Load demo dataset**
 - Biological question: use the auto-filled Tau aggregation question
 - Analysis route: Code + VLM
-- Mask preparation: Reuse existing masks
-- Knowledge sources: select Expert notes, Deep research, and Literature / RAG
-- Fixed scale: 2 rounds × 5 candidates, target 10
-- Reproducibility: fixed on by the UI; no user choice required
+- Knowledge sources: Expert notes, Deep research, Literature / RAG (demo digests prepared folders only — no auto PubMed / auto deep-research API)
+- Scale: **1 round × 5 candidates · target 5** (advanced **Config** panel for temperature, rounds, workers)
+- Masks: internal reuse when present; Allen only if missing (demo already has masks)
+- Reproducibility: fixed on by the UI
 
-After clicking **Run MorphAgent** in the lower right, the Run page shows:
+**Demo vs custom knowledge paths**
+
+| Source | Deep research | Literature / RAG |
+|--------|---------------|------------------|
+| Load demo dataset | Digest `demo/data/deep_research/` only | Precomputed RAG cache + local `RAG/` |
+| Your own dataset | `--auto-deep-research` when checked | `--auto-literature-retrieval --pubmed-max-results 10` when checked |
+
+Auto steps log failures and continue so a knowledge fetch miss does not abort the whole run.
+
+After clicking **Run MorphAgent** in the lower right, the Run page shows **Live run** with:
 
 ```text
 Inspect → Prepare → Plan → Quantify → Validate → Export
@@ -165,7 +179,7 @@ MorphAgent/demo/data/results/run_ui_YYYYMMDD_HHMMSS/
 After the run finishes:
 
 - **Features**: inspect feature cards, Code/VLM routes, status, and validation scores.
-- **Evidence**: select a feature and inspect related measurements, validation, sources, and image context.
+- **Evidence**: select a feature and inspect related measurements, validation, and sources (shared run-level preview folders are not attached as per-feature images).
 
 ## 8. Inspect Existing Results Without Rerunning
 
@@ -194,7 +208,7 @@ python scripts/verify_install.py --ui-smoke
 The self-check confirms:
 
 - Core Python/Qt modules can be imported;
-- All 5 demo samples, originals, VLM slices, and masks are present;
+- All 10 demo samples, originals, VLM slices, and masks are present;
 - The completed run can be parsed into 10 feature cards;
 - Home/Configure/Run/Features/Evidence can initialize in offscreen mode;
 - Whether the optional Torch/Cellpose segmentation components are installed.
@@ -214,7 +228,7 @@ Default tests cover only the current main program and Qt UI. `segmentation_allen
 
 ### Run button is disabled
 
-Usually one of Data, Biological question, or API is incomplete. Click **Use bundled Tau demo** first, then save Model API.
+Usually one of Data, Biological question, or API is incomplete. Click **Load demo dataset** first, then save Model API.
 
 ### API returns 404
 
@@ -224,13 +238,13 @@ Check whether Base URL is missing `/v1`, and confirm the model name matches the 
 
 The current model may not support image input. Configure a separate multimodal VLM, or temporarily choose **Code only**.
 
-### Failure after selecting Regenerate Cellpose masks
+### Failure when Allen segmentation is missing
 
-Install `requirements-segmentation-optional.txt` first. GPU drivers and the PyTorch build must match the recipient machine; that is why segmentation components are not shipped as offline binaries.
+Install `dependencies/environment-allen-optional.yml` if custom samples have no masks. Without it, those samples skip segmentation and the run continues.
 
 ### RAG PDF parsing warns that PaddleX is missing
 
-The bundled demo already includes a precomputed RAG cache, so normal use of **Use bundled Tau demo** does not need PaddleX. The full environment (`environment-full.yml` / `requirements-full.txt`) installs PaddleX (CPU) by default for new PDF corpora, `--auto-literature-retrieval`, and PDF deep-research sources. GPU PDF parsing still uses the swap notes in `requirements-extra-optional.txt`.
+The bundled demo already includes a precomputed RAG cache, so normal use of **Load demo dataset** does not need PaddleX. Custom datasets with Literature / RAG checked may call PubMed + PaddleX (`--auto-literature-retrieval`). GPU PDF parsing still uses the swap notes in `requirements-extra-optional.txt`.
 
 ### UI fails to open or Qt plugin errors
 
@@ -248,9 +262,11 @@ On Linux headless servers you can only run `--ui-smoke` offscreen checks; an int
 - `.env` is the shared model configuration source for both UI and CLI.
 - The backend runs as a separate subprocess; merged stdout/stderr is shown live and written to `ui_console.log`.
 - Each run uses a separate results directory; artifacts are kept on failure or cancel.
-- The bundled demo reuses existing masks by default, so Cellpose is not triggered.
+- The bundled demo reuses existing masks by default, so Allen/Cellpose are not triggered.
+- Demo knowledge digests prepared folders only; custom data can auto deep-research / PubMed (max 10).
 - The precomputed RAG cache avoids PDF parsing on the first demo run.
 - Reproducibility is fixed on, with random seed 42.
+- Code ReAct retries default to `CODE_MAX_RETRIES=3`.
 - The home page can load completed results directly for quick Features/Evidence review.
 
 ## 12. Delivery Security Notes

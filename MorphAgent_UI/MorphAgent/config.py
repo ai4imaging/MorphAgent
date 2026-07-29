@@ -704,9 +704,9 @@ class MorphAgentConfig:
     # Segmentation Settings (Optional). The default auto-segmentation backend is
     # Cellpose-SAM, run inside `segmentation_conda_env`. In the unified public
     # environment this is the same env that runs the agent ("morphagent").
-    segmentation_backend: str = "cellpose"  # "cellpose" (Cellpose-SAM) or "allen"
+    segmentation_backend: str = os.getenv("SEGMENTATION_BACKEND", "allen")  # "allen" or "cellpose"
     cellpose_model: str = "cyto2"  # Cellpose model name
-    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", os.getenv("CONDA_ENV", "morphagent"))
+    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", os.getenv("CONDA_ENV", "morphagent_allen"))
     
     # Data Settings. Point this at your dataset with `--data-root`; the default
     # is a `data/` folder next to this file (see README for the expected layout).
@@ -749,7 +749,7 @@ class MorphAgentConfig:
     # Code Execution Settings
     code_sandbox_timeout: int = int(os.getenv("CODE_SANDBOX_TIMEOUT", "300"))  # Code execution timeout (seconds)
     code_max_memory: int = int(os.getenv("CODE_MAX_MEMORY", "2"))  # GB
-    code_max_retries: int = int(os.getenv("CODE_MAX_RETRIES", "5"))  # Maximum number of retries (default 5)
+    code_max_retries: int = int(os.getenv("CODE_MAX_RETRIES", "3"))  # Maximum number of retries (default 3)
     code_error_rate_threshold: float = float(os.getenv("CODE_ERROR_RATE_THRESHOLD", "0.5"))  # Error rate threshold (50%)
     code_temperature: float = float(os.getenv("CODE_TEMPERATURE", "0.3"))  # Temperature for code generation (default 0.3, increases diversity)
     enable_critic_agent: bool = bool(os.getenv("ENABLE_CRITIC_AGENT", "True").lower() == "true")  # Whether to enable the VLM critic agent to evaluate code (enabled by default)

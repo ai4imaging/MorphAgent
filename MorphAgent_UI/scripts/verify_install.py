@@ -47,7 +47,7 @@ def import_required_modules() -> None:
 def check_demo() -> None:
     require((DATASET / "dataset_index.txt").is_file(), "dataset_index.txt is missing")
     samples = sorted(path for path in DATASET.iterdir() if path.is_dir() and not path.name.startswith("."))
-    require(len(samples) == 5, f"Expected 5 demo samples, found {len(samples)}")
+    require(len(samples) == 10, f"Expected 10 demo samples, found {len(samples)}")
     for sample in samples:
         require((sample / "image.tif").is_file(), f"Missing image.tif: {sample.name}")
         require(any((sample / "slices").glob("*.png")), f"Missing VLM slice: {sample.name}")

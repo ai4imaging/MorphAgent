@@ -63,8 +63,8 @@ class RunPage(QWidget):
         outer.setSpacing(14)
         outer.addWidget(PageHeader(
             "Live run",
-            "One workflow, six observable stages",
-            "The scientific pipeline runs unchanged in a background process. Logs and completed artifacts remain available if you cancel.",
+            "Live run",
+            "The scientific pipeline runs in a background process. Logs and completed artifacts remain available if you cancel.",
         ))
 
         status_card = Card()

@@ -1,8 +1,8 @@
 # MorphAgent Demo
 
-A tiny, self-contained example that runs the **full MorphAgent pipeline** on 5
-neuron microscopy samples for **2 rounds × 5 features**. Open the notebook and
-run the cells top to bottom:
+A tiny, self-contained example that runs the **full MorphAgent pipeline** on
+**10** neuron microscopy samples (`WT_1`–`WT_10`) for **1 round × 5 features**.
+Open the notebook and run the cells top to bottom:
 
 ```bash
 conda activate morphagent          # the unified env from envs/environment.yml
@@ -15,7 +15,7 @@ jupyter lab                        # open demo/morphagent_demo.ipynb
 demo/
 ├── morphagent_demo.ipynb     # step-by-step runnable notebook
 ├── data/                     # project root passed to --data-root
-│   ├── dataset/              # 5 samples: image.tif + slices/ + segmentation/
+│   ├── dataset/              # 10 samples: image.tif + slices/ + segmentation/
 │   ├── expert_knowledge/     # notes + example image (summarized by the LLM)
 │   ├── deep_research/         # report.md (plain text — no PaddleX needed)
 │   └── RAG/                   # a few example PDFs
@@ -23,30 +23,50 @@ demo/
 └── results/                  # created when you run the notebook
 ```
 
+## Dataset layout (also for custom data)
+
+Each sample is one folder under `dataset/`:
+
+```
+dataset/
+  WT_1/
+    image.tif            # primary image (code route)
+    slices/              # optional VLM-ready views
+    segmentation/        # optional masks; reused when present
+  WT_2/
+    ...
+```
+
+Recommend **≥5 samples** (enough unique values for validation). Fewer than 5
+triggers a UI warning but does not block Run.
+
 ## Why it runs cheaply and offline (no GPU / no PaddleX)
 
 - **Segmentation is reused.** Every sample already ships masks under
-  `segmentation/`, so the pipeline marks them `skipped_user_seg` and never calls
-  Cellpose-SAM. No GPU required.
+  `segmentation/`, so the pipeline marks them `skipped_user_seg` and never
+  needs Allen or Cellpose. No GPU required.
 - **deep_research** is provided as `report.md` (read directly by the LLM).
-- **RAG** is served from a pre-seeded cache (the notebook writes it) so raw PDF
-  parsing with PaddleX is skipped.
+  Loading the demo dataset does **not** pass `--auto-deep-research`.
+- **RAG** is served from a pre-seeded cache so raw PDF parsing with PaddleX is
+  skipped. The demo path does **not** pass `--auto-literature-retrieval`.
 
 ## Requirements
 
 - The `morphagent` conda environment (see `../envs/environment.yml`).
-  It already includes PaddleX (CPU) for PDF parsing.
+  It already includes PaddleX (CPU) for PDF parsing on custom corpora.
 - A working **LLM** and **VLM** API (OpenAI-compatible). Fill them in the
   notebook's API configuration cell (or set `LLM_*` / `VLM_*` env vars /
   edit `../config.py`) before running.
 
-## Going further (outside this demo)
+## Custom datasets (outside this demo)
 
-- `--auto-deep-research` — one API call to `DEEP_RESEARCH_MODEL` writes a
-  markdown report into `deep_research/` (no local deep-research model).
-- `--auto-literature-retrieval` — searches PubMed/Europe PMC and downloads
-  open-access PDFs into `RAG/`, then parses them with PaddleX. Needs outbound
-  internet (a proxy via `HTTPS_PROXY` works); on restricted servers just drop
-  PDFs into `RAG/` manually.
+When you choose your own folder in the UI (not Load demo dataset):
+
+- **Deep research** checked → `--auto-deep-research` (uses the LLM API).
+- **Literature / RAG** checked → `--auto-literature-retrieval --pubmed-max-results 10`
+  (PubMed → PaddleX). Failures are logged and the run continues with whatever
+  local knowledge files already exist.
+- Missing masks → Allen via `morphagent_allen` when available; otherwise the
+  sample is skipped gracefully (install optional Allen env only if needed).
 
 See the top-level `README.md` and `installation_skill.md` for full details.
