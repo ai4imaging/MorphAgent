@@ -34,18 +34,35 @@ CHANNEL_INDICES = None  # e.g. [2, 0, 1] means channel2=DAPI, 0=Actin, 1=Tubulin
 
 def load_tif_image(image_path, channel_indices=None):
     """
-    Load a TIFF and return (Z,Y,X) for each channel plus a composite image for visualization.
+    Load a TIFF/PNG/JPEG (etc.) and return (Z,Y,X) for each channel plus a composite for viz.
     For single-channel input, dapi and actin use the same channel.
     """
+    image_path = Path(image_path)
     print(f"Loading: {image_path}")
-    data = tifffile.imread(str(image_path))
+    suffix = image_path.suffix.lower()
+    data = None
+    if suffix in {".tif", ".tiff"}:
+        try:
+            data = tifffile.imread(str(image_path))
+        except Exception as exc:
+            print(f"  tifffile failed ({exc}); trying PIL…")
+    if data is None:
+        from PIL import Image
+        arr = np.asarray(Image.open(str(image_path)))
+        # Drop alpha if present
+        if arr.ndim == 3 and arr.shape[-1] == 4:
+            arr = arr[..., :3]
+        data = arr
 
     # Normalize to (C, Z, Y, X)
     if data.ndim == 2:
         data = data[np.newaxis, np.newaxis, ...]  # (1, 1, Y, X)
     elif data.ndim == 3:
-        # (Z, Y, X) or (C, Y, X) — prefer single-plane multi-channel when C small
-        if data.shape[0] <= 4 and data.shape[0] < min(data.shape[1], data.shape[2]):
+        # (Z, Y, X), (C, Y, X), or (Y, X, C)
+        if data.shape[-1] in (1, 2, 3, 4) and data.shape[-1] < min(data.shape[0], data.shape[1]):
+            data = np.moveaxis(data, -1, 0)  # (C, Y, X)
+            data = data[:, np.newaxis, ...]  # (C, 1, Y, X)
+        elif data.shape[0] <= 4 and data.shape[0] < min(data.shape[1], data.shape[2]):
             data = data[:, np.newaxis, ...]  # (C, 1, Y, X)
         else:
             data = data[np.newaxis, ...]  # (1, Z, Y, X)
@@ -224,9 +241,9 @@ def visualize_results(original_rgb, nucleus_bw, cytoplasm_bw, output_path):
 def main():
     import argparse
     parser = argparse.ArgumentParser(
-        description="Allen Cell Segmenter — nucleus + cytoplasm masks from a TIFF."
+        description="Allen Cell Segmenter — nucleus + cytoplasm masks from TIFF/PNG/JPEG."
     )
-    parser.add_argument("image", type=str, help="Input TIFF path")
+    parser.add_argument("image", type=str, help="Input image path (TIFF/PNG/JPEG/…)")
     parser.add_argument("-o", "--output-dir", type=str, default="allen_seg_output",
                         help="Output directory (default: ./allen_seg_output)")
     parser.add_argument("-c", "--channels", type=int, nargs="+", default=CHANNEL_INDICES,

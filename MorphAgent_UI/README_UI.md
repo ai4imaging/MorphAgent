@@ -89,8 +89,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_ui.ps1
 Without the scripts:
 
 ```bash
-conda create -n morphagent python=3.10 pip -y
+conda create -n morphagent -c conda-forge python=3.10 pip numpy "pyqt=5" qtpy -y
 conda activate morphagent
+# Core Qt / numpy also come from conda-forge in scripts/setup.sh and setup_windows.ps1.
 python -m pip install -r dependencies/requirements-demo-ui.txt
 python -m pip install -e MorphAgent
 python scripts/verify_install.py --ui-smoke
@@ -134,7 +135,7 @@ The window maximizes automatically on launch.
 1. On the home page, click **Start a discovery run**.
 2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue), or browse to a folder that contains `dataset/<sample>/*.tif`.
 3. The system fills in the demo samples (WT_1–WT_10), the data description, and a default biological question.
-4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Xiaomi MiMo platform](https://platform.xiaomimimo.com/).
+4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Free AI APIs 2026](https://aicosthub.com/guides/free-ai-apis-2026).
 5. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
 6. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
 
@@ -231,7 +232,7 @@ Usually one of Data, Biological question, or API is incomplete. Click **Load dem
 
 ### API returns 404
 
-Check whether Base URL is missing `/v1`, and confirm the model name matches the provider console exactly.
+If Base URL is missing `/v1`, MorphAgent now retries once after appending `/v1`. Still confirm the model name matches the provider console exactly.
 
 ### Code route works, but VLM route fails
 

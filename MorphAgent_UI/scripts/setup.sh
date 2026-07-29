@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# MorphAgent UI setup (macOS / Linux).
+# Creates `morphagent` with Qt + scientific stack, then optional `morphagent_allen`.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +11,7 @@ ALLEN_ENV_NAME="${MORPHAGENT_ALLEN_ENV_NAME:-morphagent_allen}"
 ALLEN_YML="${REPOSITORY}/envs/environment_allen.yml"
 ALLEN_YML_ALT="${HANDOFF_ROOT}/dependencies/environment-allen-optional.yml"
 ALLEN_REQ="${REPOSITORY}/envs/requirements-allen.txt"
+REQ_FILE="${HANDOFF_ROOT}/dependencies/requirements-demo-ui.txt"
 INSTALL_ALLEN="${MORPHAGENT_INSTALL_ALLEN:-1}"
 
 if ! command -v conda >/dev/null 2>&1; then
@@ -16,28 +19,78 @@ if ! command -v conda >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ ! -f "${REQ_FILE}" ]]; then
+  echo "ERROR: missing requirements file: ${REQ_FILE}" >&2
+  exit 1
+fi
+
 CONDA_BASE="$(conda info --base)"
 # shellcheck source=/dev/null
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 
-if conda env list | awk '{print $1}' | grep -Fxq "${ENV_NAME}"; then
+env_exists() {
+  conda env list | awk '{print $1}' | grep -Fxq "$1"
+}
+
+# Core GUI + numeric stack via conda-forge (reliable Qt binaries; pip pins follow).
+install_core_conda_packages() {
+  local env="$1"
+  echo "Installing core conda packages into ${env} (PyQt5 / numpy / scipy / …)…"
+  conda install -y -n "${env}" -c conda-forge \
+    "python=3.10" \
+    "pip>=24" \
+    "numpy>=1.26,<3" \
+    "scipy>=1.11" \
+    "pandas>=2.0" \
+    "pyqt=5" \
+    "qtpy>=2.4" \
+    "pillow>=10" \
+    "matplotlib>=3.8" \
+    "scikit-image>=0.22" \
+    "scikit-learn>=1.3" \
+    "tifffile>=2023" \
+    "pyyaml>=6" \
+    "tqdm" \
+    "h5py" \
+    "networkx" \
+    "imageio" \
+    "requests" \
+    "lxml"
+}
+
+if env_exists "${ENV_NAME}"; then
   echo "Using existing conda environment: ${ENV_NAME}"
 else
-  conda create -y -n "${ENV_NAME}" python=3.10 pip
+  echo "Creating conda environment: ${ENV_NAME}"
+  conda create -y -n "${ENV_NAME}" -c conda-forge python=3.10 pip
 fi
 
+install_core_conda_packages "${ENV_NAME}"
+
+echo "Installing pip packages from requirements-demo-ui.txt…"
 conda run -n "${ENV_NAME}" python -m pip install --upgrade pip
-conda run -n "${ENV_NAME}" python -m pip install -r "${HANDOFF_ROOT}/dependencies/requirements-demo-ui.txt"
+conda run -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}"
 conda run -n "${ENV_NAME}" python -m pip install -e "${REPOSITORY}"
+
+# Ensure PyQt is importable even if pip/conda competed on the binding name.
+if ! conda run -n "${ENV_NAME}" python -c "import PyQt5, qtpy, numpy" >/dev/null 2>&1; then
+  echo "[WARN] PyQt5/numpy import failed after pip; reinstalling pyqt/numpy from conda-forge…" >&2
+  install_core_conda_packages "${ENV_NAME}"
+  conda run -n "${ENV_NAME}" python -c "import PyQt5, qtpy, numpy; print('[OK]', 'PyQt5', PyQt5.QtCore.PYQT_VERSION_STR, 'numpy', numpy.__version__)"
+fi
+
 if [[ ! -f "${REPOSITORY}/.env" ]]; then
-  cp "${REPOSITORY}/.env.example" "${REPOSITORY}/.env"
-  chmod 600 "${REPOSITORY}/.env"
+  if [[ -f "${REPOSITORY}/.env.example" ]]; then
+    cp "${REPOSITORY}/.env.example" "${REPOSITORY}/.env"
+    chmod 600 "${REPOSITORY}/.env" || true
+  else
+    echo "[WARN] ${REPOSITORY}/.env.example missing; skipped creating .env" >&2
+  fi
 fi
 
 # --- Allen classic segmentation (optional; soft-fail with WARNING) ------------
 # Apple Silicon: Python 3.6 only via CONDA_SUBDIR=osx-64 (Rosetta).
 # TIFF driver uses tifffile + aicssegmentation (no aicsimageio / aicspylibczi).
-# Failure must NOT abort the main morphagent install.
 setup_allen_env() {
   local yml="${ALLEN_YML}"
   if [[ ! -f "${yml}" ]]; then
@@ -55,7 +108,7 @@ setup_allen_env() {
   local arch
   arch="$(uname -m)"
 
-  if conda env list | awk '{print $1}' | grep -Fxq "${ALLEN_ENV_NAME}"; then
+  if env_exists "${ALLEN_ENV_NAME}"; then
     echo "Using existing conda environment: ${ALLEN_ENV_NAME}"
   else
     echo "Creating Allen segmentation environment: ${ALLEN_ENV_NAME}"
@@ -97,7 +150,9 @@ else
   echo "[INFO] Skipping Allen env (MORPHAGENT_INSTALL_ALLEN=0)."
 fi
 
-conda run -n "${ENV_NAME}" python "${HANDOFF_ROOT}/scripts/verify_install.py" --ui-smoke
+echo "Running install verification (UI smoke, offscreen)…"
+QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}" \
+  conda run -n "${ENV_NAME}" python "${HANDOFF_ROOT}/scripts/verify_install.py" --ui-smoke
 
 echo
 echo "Installation verified. Start MorphAgent with:"

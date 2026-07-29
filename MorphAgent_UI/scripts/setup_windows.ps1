@@ -1,3 +1,8 @@
+# MorphAgent UI setup (Windows PowerShell).
+# Creates `morphagent` with Qt + scientific stack, then optional `morphagent_allen`.
+#
+# Prefer running from Anaconda Prompt / Miniforge Prompt:
+#   powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 param(
     [string]$EnvName = "morphagent",
     [string]$AllenEnvName = "morphagent_allen",
@@ -18,43 +23,144 @@ $AllenReq = Join-Path $Repository "envs\requirements-allen.txt"
 $AllenPkg = Join-Path $Repository "segmentation_allen"
 $AllenCheck = Join-Path $AllenPkg "check_installation.py"
 
-if (-not (Get-Command conda -ErrorAction SilentlyContinue)) {
-    throw "conda was not found. Open this script from an Anaconda/Miniforge Prompt."
+function Assert-Command([string]$Name) {
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        throw "$Name was not found. Open this script from an Anaconda/Miniforge Prompt."
+    }
 }
 
-$KnownEnvs = (conda env list --json | ConvertFrom-Json).envs
-$Exists = $KnownEnvs | Where-Object { (Split-Path $_ -Leaf) -eq $EnvName }
-if (-not $Exists) {
-    conda create -y -n $EnvName python=3.10 pip
+function Test-CondaEnv([string]$Name) {
+    # Prefer JSON; fall back to plain `conda env list` (warnings can break JSON on some Windows setups).
+    try {
+        $jsonText = & conda env list --json 2>$null | Out-String
+        $listed = $jsonText | ConvertFrom-Json
+        if ($null -ne $listed.envs) {
+            return [bool]($listed.envs | Where-Object { (Split-Path $_ -Leaf) -eq $Name })
+        }
+    } catch {
+        # fall through
+    }
+    $lines = & conda env list 2>$null
+    foreach ($line in $lines) {
+        if (-not $line -or $line.StartsWith("#")) { continue }
+        $token = ($line -split "\s+")[0]
+        if ($token -eq $Name) { return $true }
+    }
+    return $false
 }
 
-conda run -n $EnvName python -m pip install --upgrade pip
-conda run -n $EnvName python -m pip install -r $Requirements
-conda run -n $EnvName python -m pip install -e $Repository
+function Install-CoreCondaPackages([string]$Name) {
+    Write-Host "Installing core conda packages into $Name (PyQt5 / numpy / scipy / ...)..."
+    # conda-forge PyQt wheels are far more reliable on Windows than pip-only PyQt5.
+    & conda install -y -n $Name -c conda-forge `
+        "python=3.10" `
+        "pip>=24" `
+        "numpy>=1.26,<3" `
+        "scipy>=1.11" `
+        "pandas>=2.0" `
+        "pyqt=5" `
+        "qtpy>=2.4" `
+        "pillow>=10" `
+        "matplotlib>=3.8" `
+        "scikit-image>=0.22" `
+        "scikit-learn>=1.3" `
+        "tifffile>=2023" `
+        "pyyaml>=6" `
+        "tqdm" `
+        "h5py" `
+        "networkx" `
+        "imageio" `
+        "requests" `
+        "lxml"
+    if ($LASTEXITCODE -ne 0) {
+        throw "conda install of core packages failed for env '$Name' (exit $LASTEXITCODE)"
+    }
+}
+
+function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
+    & conda run --no-capture-output -n $Name @PythonArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "conda run -n $Name failed (exit $LASTEXITCODE): $($PythonArgs -join ' ')"
+    }
+}
+
+Assert-Command "conda"
+
+if (-not (Test-Path $Requirements)) {
+    throw "Missing requirements file: $Requirements"
+}
+if (-not (Test-Path $Repository)) {
+    throw "Missing MorphAgent repository folder: $Repository"
+}
+
+if (-not (Test-CondaEnv $EnvName)) {
+    Write-Host "Creating conda environment: $EnvName"
+    & conda create -y -n $EnvName -c conda-forge python=3.10 pip
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create conda env '$EnvName'"
+    }
+} else {
+    Write-Host "Using existing conda environment: $EnvName"
+}
+
+Install-CoreCondaPackages $EnvName
+
+Write-Host "Installing pip packages from requirements-demo-ui.txt..."
+Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "--upgrade", "pip")
+Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "-r", $Requirements)
+Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "-e", $Repository)
+
+# Import check: if pip overwrote Qt badly, reinstall conda pyqt/numpy.
+$importCheck = & conda run -n $EnvName python -c "import PyQt5, qtpy, numpy; print('ok')"
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "PyQt5/numpy import failed after pip; reinstalling pyqt/numpy from conda-forge..."
+    Install-CoreCondaPackages $EnvName
+    Invoke-CondaRun $EnvName @(
+        "python", "-c",
+        "import PyQt5, qtpy, numpy; print('[OK] PyQt5', PyQt5.QtCore.PYQT_VERSION_STR, 'numpy', numpy.__version__)"
+    )
+} else {
+    Write-Host "[OK] PyQt5 / qtpy / numpy import check passed"
+}
+
 $EnvFile = Join-Path $Repository ".env"
 $EnvExample = Join-Path $Repository ".env.example"
 if (-not (Test-Path $EnvFile)) {
-    Copy-Item $EnvExample $EnvFile
+    if (Test-Path $EnvExample) {
+        Copy-Item $EnvExample $EnvFile
+    } else {
+        Write-Warning ".env.example missing; skipped creating .env"
+    }
 }
 
 if (-not $SkipAllen) {
     try {
         if (-not (Test-Path $AllenYml)) { throw "Allen environment.yml not found: $AllenYml" }
         if (-not (Test-Path $AllenReq)) { throw "Allen requirements not found: $AllenReq" }
-        $AllenExists = $KnownEnvs | Where-Object { (Split-Path $_ -Leaf) -eq $AllenEnvName }
-        if (-not $AllenExists) {
-            Write-Host "Creating Allen segmentation environment: $AllenEnvName"
-            conda env create -y -n $AllenEnvName -f $AllenYml
+        if (-not (Test-Path $AllenPkg)) { throw "Allen package not found: $AllenPkg" }
+
+        # Windows uses native win-64 Python 3.6 builds (no CONDA_SUBDIR / Rosetta).
+        if (-not (Test-CondaEnv $AllenEnvName)) {
+            Write-Host "Creating Allen segmentation environment: $AllenEnvName (win-64 / Python 3.6)"
+            & conda env create -y -n $AllenEnvName -f $AllenYml
+            if ($LASTEXITCODE -ne 0) {
+                throw "conda env create failed for '$AllenEnvName'"
+            }
         } else {
             Write-Host "Using existing conda environment: $AllenEnvName"
         }
+
         Write-Host "Installing Allen scientific stack..."
-        conda run -n $AllenEnvName python -m pip install --upgrade "pip<22" "setuptools<59" "wheel"
-        conda run -n $AllenEnvName python -m pip install -r $AllenReq
+        & conda run --no-capture-output -n $AllenEnvName python -m pip install --upgrade "pip<22" "setuptools<59" "wheel"
+        if ($LASTEXITCODE -ne 0) { throw "Allen pip bootstrap failed" }
+        & conda run --no-capture-output -n $AllenEnvName python -m pip install -r $AllenReq
+        if ($LASTEXITCODE -ne 0) { throw "Allen requirements install failed" }
         Write-Host "Installing vendored aicssegmentation..."
-        conda run -n $AllenEnvName python -m pip install -e $AllenPkg --no-deps
+        & conda run --no-capture-output -n $AllenEnvName python -m pip install -e $AllenPkg --no-deps
+        if ($LASTEXITCODE -ne 0) { throw "aicssegmentation editable install failed" }
         Write-Host "Verifying Allen installation..."
-        conda run -n $AllenEnvName python $AllenCheck
+        & conda run --no-capture-output -n $AllenEnvName python $AllenCheck
+        if ($LASTEXITCODE -ne 0) { throw "Allen check_installation.py failed" }
         Write-Host "[OK] Allen environment $AllenEnvName is ready"
     } catch {
         Write-Warning "Allen environment setup failed: $($_.Exception.Message)"
@@ -64,7 +170,21 @@ if (-not $SkipAllen) {
     Write-Host "[INFO] Skipping Allen env (-SkipAllen)."
 }
 
-conda run -n $EnvName python $Verifier --ui-smoke
+Write-Host "Running install verification (UI smoke, offscreen)..."
+$prevQt = $env:QT_QPA_PLATFORM
+$env:QT_QPA_PLATFORM = "offscreen"
+try {
+    & conda run --no-capture-output -n $EnvName python $Verifier --ui-smoke
+    if ($LASTEXITCODE -ne 0) {
+        throw "verify_install.py failed (exit $LASTEXITCODE)"
+    }
+} finally {
+    if ($null -eq $prevQt) {
+        Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    } else {
+        $env:QT_QPA_PLATFORM = $prevQt
+    }
+}
 
 Write-Host "Installation verified. Run scripts\start_ui.ps1 to launch MorphAgent."
 Write-Host "Allen segmentation env (optional): $AllenEnvName"

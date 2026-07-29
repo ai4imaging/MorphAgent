@@ -47,7 +47,7 @@ METHOD_LABELS = {
     "vlm": "VLM only",
 }
 
-FREE_API_URL = "https://platform.xiaomimimo.com/"
+FREE_API_URL = "https://aicosthub.com/guides/free-ai-apis-2026"
 
 DATASET_LAYOUT_HELP = (
     "Required input path layout:\n"
