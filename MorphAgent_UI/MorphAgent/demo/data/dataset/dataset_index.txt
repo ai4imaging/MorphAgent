@@ -1,10 +1,14 @@
 Dataset: MorphAgent demo (Tau protein in neurons, fluorescence microscopy)
 
 Overview
-  - A small 5-sample subset for demonstrating the MorphAgent pipeline end to end.
+  - Ten samples for demonstrating the MorphAgent pipeline end to end:
+      WT_1 … WT_5  — wild-type (pseudo-label group WT)
+      MU_1 … MU_5  — mutant (pseudo-label group MU; renamed from WT_6 … WT_10)
   - Each sample is one imaged neuron / field, stored in its own subdirectory.
   - Task context: quantify the morphology of Tau protein aggregation and the
     surrounding cellular structures.
+  - Paired labels for deterministic validation live in ../metadata.csv
+    (columns: sample_id, group, genotype).
 
 Dimension
   - 2D maximum-intensity projection (MIP), single channel (grayscale intensity
@@ -27,5 +31,5 @@ Notes for feature design
   - Suggested feature directions: aggregate size / count / area fraction,
     filament length / straightness / bundling, nuclear vs cytoplasmic
     distribution, texture and intensity heterogeneity of the Tau signal.
-  - Samples: WT_1, WT_2, WT_3, WT_4, WT_5 (the sample list comes from scanning
-    subdirectories; this file is only for understanding/planning).
+  - Sample list comes from scanning subdirectories; this file is only for
+    understanding/planning. Use metadata.csv for group-aware validation.

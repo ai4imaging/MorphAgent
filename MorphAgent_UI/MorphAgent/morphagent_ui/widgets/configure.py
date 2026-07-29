@@ -243,6 +243,37 @@ class ConfigurePage(QWidget):
             knowledge.addWidget(checkbox, 1)
         layout.addLayout(knowledge)
 
+        validation_label = QLabel("Feature validation · optional paired metadata")
+        validation_label.setProperty("role", "fieldLabel")
+        layout.addWidget(validation_label)
+        validation_help = QLabel(
+            "When enabled, MorphAgent runs deterministic feature validation after each round. "
+            "Provide a CSV with sample_id plus group/label columns for metadata-aware checks; "
+            "without metadata it falls back to unsupervised validation."
+        )
+        validation_help.setProperty("role", "muted")
+        validation_help.setWordWrap(True)
+        layout.addWidget(validation_help)
+
+        validation_row = QHBoxLayout()
+        validation_row.setSpacing(14)
+        self.validation_check = QCheckBox("Enable feature validation")
+        self.validation_check.setChecked(True)
+        self.validation_check.setProperty("choiceTile", True)
+        self.validation_check.setMinimumHeight(46)
+        validation_row.addWidget(self.validation_check, 1)
+        layout.addLayout(validation_row)
+
+        self.metadata_picker = PathPicker("Metadata CSV (optional)", mode="csv")
+        self.metadata_picker.setToolTip(
+            "CSV with sample_id aligned to dataset folder names, plus categorical fields such as group/genotype."
+        )
+        layout.addWidget(self.metadata_picker)
+        self.metadata_note = QLabel("No metadata selected · unsupervised validation if enabled.")
+        self.metadata_note.setProperty("role", "muted")
+        self.metadata_note.setWordWrap(True)
+        layout.addWidget(self.metadata_note)
+
         config_row = QHBoxLayout()
         self.advanced_toggle = QPushButton("Config")
         self.advanced_toggle.setCheckable(True)
@@ -390,8 +421,11 @@ class ConfigurePage(QWidget):
             self.expert_check,
             self.deep_check,
             self.rag_check,
+            self.validation_check,
         ):
             widget.toggled.connect(self._fields_changed)
+        self.validation_check.toggled.connect(self._toggle_validation_fields)
+        self.metadata_picker.path_changed.connect(self._metadata_path_changed)
         self.advanced_toggle.toggled.connect(self._toggle_advanced)
         for spin in (
             self.temperature_spin,
@@ -422,6 +456,32 @@ class ConfigurePage(QWidget):
 
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
+
+    def _toggle_validation_fields(self, enabled: bool) -> None:
+        self.metadata_picker.setEnabled(enabled)
+        self.metadata_note.setEnabled(enabled)
+        self._refresh_metadata_note()
+
+    def _metadata_path_changed(self, value: str = "") -> None:
+        if self._loading:
+            return
+        self.config.metadata_path = value.strip()
+        self._refresh_metadata_note()
+        self._fields_changed()
+
+    def _refresh_metadata_note(self) -> None:
+        if not self.validation_check.isChecked():
+            self.metadata_note.setText("Feature validation is off.")
+            self.metadata_note.setProperty("role", "muted")
+        elif self.metadata_picker.text():
+            name = Path(self.metadata_picker.text()).name
+            self.metadata_note.setText(f"Using {name} for paired / metadata-aware validation.")
+            self.metadata_note.setProperty("role", "success")
+        else:
+            self.metadata_note.setText("No metadata selected · unsupervised validation if enabled.")
+            self.metadata_note.setProperty("role", "muted")
+        self.metadata_note.style().unpolish(self.metadata_note)
+        self.metadata_note.style().polish(self.metadata_note)
 
     def load_api_settings(self) -> None:
         values = read_model_environment(self.config.repository_root)
@@ -539,6 +599,9 @@ class ConfigurePage(QWidget):
         self.expert_check.setChecked(self.config.enable_expert_knowledge)
         self.deep_check.setChecked(self.config.enable_deep_research)
         self.rag_check.setChecked(self.config.enable_rag)
+        self.validation_check.setChecked(self.config.enable_feature_analysis)
+        self.metadata_picker.setText(self.config.metadata_path)
+        self._toggle_validation_fields(self.config.enable_feature_analysis)
         self.temperature_spin.setValue(float(self.config.temperature))
         self.config.reproduce = float(self.config.temperature) <= 0.0
         self.rounds_spin.setValue(int(self.config.num_rounds))
@@ -547,6 +610,7 @@ class ConfigurePage(QWidget):
         self.workers_spin.setValue(int(self.config.code_parallel_workers))
         self.vlm_concurrency_spin.setValue(int(self.config.vlm_online_concurrency))
         self._refresh_scale_summary()
+        self._refresh_metadata_note()
         self._loading = False
 
     def _refresh_scale_summary(self) -> None:
@@ -566,6 +630,7 @@ class ConfigurePage(QWidget):
             self.dataset_summary = None
             self.config.description_path = ""
             self.config.metadata_path = ""
+            self.metadata_picker.setText("")
             self.config.dataset_source = "custom"
             self.dataset_note.setText("Path not usable — see the dialog for the required layout.")
             self.dataset_note.setProperty("role", "warning")
@@ -578,6 +643,8 @@ class ConfigurePage(QWidget):
         if path is not None and path.is_dir():
             self.dataset_summary = scan_dataset(path)
             self._detect_dataset_context(path)
+            self.metadata_picker.setText(self.config.metadata_path)
+            self._refresh_metadata_note()
             demo_root = Path(self.config.repository_root).expanduser().resolve() / "demo" / "data"
             try:
                 self.config.dataset_source = "demo" if path.resolve() == demo_root else "custom"
@@ -587,6 +654,7 @@ class ConfigurePage(QWidget):
             self.dataset_summary = None
             self.config.description_path = ""
             self.config.metadata_path = ""
+            self.metadata_picker.setText("")
             self.config.dataset_source = "custom"
         self._fields_changed()
 
@@ -630,6 +698,8 @@ class ConfigurePage(QWidget):
         self.config.enable_expert_knowledge = self.expert_check.isChecked()
         self.config.enable_deep_research = self.deep_check.isChecked()
         self.config.enable_rag = self.rag_check.isChecked()
+        self.config.enable_feature_analysis = self.validation_check.isChecked()
+        self.config.metadata_path = self.metadata_picker.text()
         self.config.temperature = float(self.temperature_spin.value())
         # Temperature 0 ⇒ reproducible Code + VLM (seed, deterministic decoding, cache).
         self.config.reproduce = self.config.temperature <= 0.0

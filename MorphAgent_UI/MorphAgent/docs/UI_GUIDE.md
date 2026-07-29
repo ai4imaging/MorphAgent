@@ -32,7 +32,7 @@ Required entries in the repository-local `.env`:
 ## Fastest safe first run
 
 1. Open **Configure**.
-2. Select **Load demo dataset** to reproduce the bundled workflow. It loads the ten Tau-neuron samples (`WT_1`–`WT_10`), the supplied biological question, all three knowledge sources, existing masks, and the cached RAG summary. Demo digests prepared knowledge folders only (no auto PubMed / auto deep-research API).
+2. Select **Load demo dataset** to reproduce the bundled workflow. It loads the ten Tau-neuron samples (`WT_1`–`WT_5` / `MU_1`–`MU_5`), paired `metadata.csv` for validation, the supplied biological question, all three knowledge sources, existing masks, and the cached RAG summary. Demo digests prepared knowledge folders only (no auto PubMed / auto deep-research API).
 3. For a different dataset, choose either:
    - a project root containing `dataset/`, `expert_knowledge/`, `deep_research/`, or `RAG/`; or
    - the dataset directory directly.

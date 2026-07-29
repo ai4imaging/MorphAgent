@@ -145,6 +145,11 @@ class RunConfigTests(unittest.TestCase):
             (dataset / "dataset_index.txt").write_text("Tau demo", encoding="utf-8")
             (rag / "paper.pdf").write_bytes(b"reference")
             (precomputed / "rag_knowledge_summary.txt").write_text("cached knowledge", encoding="utf-8")
+            metadata_csv = demo / "data" / "metadata.csv"
+            metadata_csv.write_text(
+                "sample_id,group,genotype\nWT_1,WT,wild_type\n",
+                encoding="utf-8",
+            )
 
             config = RunConfig(repository_root=str(repo))
             self.assertTrue(hasattr(config, "apply_reference_demo"))
@@ -152,7 +157,8 @@ class RunConfigTests(unittest.TestCase):
 
             self.assertEqual(config.data_root, str((demo / "data").resolve()))
             self.assertEqual(config.description_path, str((dataset / "dataset_index.txt").resolve()))
-            self.assertEqual(config.metadata_path, "")
+            self.assertEqual(config.metadata_path, str(metadata_csv.resolve()))
+            self.assertTrue(config.enable_feature_analysis)
             self.assertEqual(config.results_dir, "")
             self.assertIn("Tau protein aggregation", config.query)
             self.assertEqual(config.method, "both")
@@ -168,6 +174,8 @@ class RunConfigTests(unittest.TestCase):
             self.assertTrue(cache_path.is_file())
             self.assertIn("cached knowledge", cache_path.read_text(encoding="utf-8"))
             command = config.build_command()
+            self.assertIn("--metadata-path", command)
+            self.assertNotIn("--disable-feature-analysis", command)
             self.assertNotIn("--auto-deep-research", command)
             self.assertNotIn("--auto-literature-retrieval", command)
             env = config.pipeline_environment()

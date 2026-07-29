@@ -31,7 +31,7 @@ bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/s
 
 Highlights:
 
-- **Demo dataset** — click **Load demo dataset** to run the full pipeline on **10** Tau sample images (`WT_1`–`WT_10`) without preparing your own data first;
+- **Demo dataset** — click **Load demo dataset** to run the full pipeline on **10** Tau sample images (`WT_1`–`WT_5` / `MU_1`–`MU_5`) without preparing your own data first;
 - **Load a previous run** — instantly browse a completed run’s **Features** and **Evidence** pages, no API key required;
 - **In-app API configuration** — fill in Base URL / API key / model on the Configure page; credentials are applied automatically when you click **Run MorphAgent** (no separate Save step) and written to `MorphAgent/.env`.
 
