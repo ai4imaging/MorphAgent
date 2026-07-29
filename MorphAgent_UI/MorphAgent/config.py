@@ -701,12 +701,13 @@ class MorphAgentConfig:
     reproduce_seed: int = int(os.getenv("REPRODUCE_SEED", "42"))
     reproduce_cache_dir: Optional[str] = None  # Set at runtime to data_root/.morphagent_repro_cache
     
-    # Segmentation Settings (Optional). The default auto-segmentation backend is
-    # Cellpose-SAM, run inside `segmentation_conda_env`. In the unified public
-    # environment this is the same env that runs the agent ("morphagent").
+    # Segmentation Settings (Optional). UI/demo default backend is Allen
+    # (classic aicssegmentation) in the isolated `morphagent_allen` env.
+    # Do NOT fall back to CONDA_ENV here — that is the agent env (`morphagent`)
+    # and is why Allen previously ran without aicsimageio.
     segmentation_backend: str = os.getenv("SEGMENTATION_BACKEND", "allen")  # "allen" or "cellpose"
     cellpose_model: str = "cyto2"  # Cellpose model name
-    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", os.getenv("CONDA_ENV", "morphagent_allen"))
+    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", "morphagent_allen")
     
     # Data Settings. Point this at your dataset with `--data-root`; the default
     # is a `data/` folder next to this file (see README for the expected layout).

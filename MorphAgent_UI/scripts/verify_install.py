@@ -81,9 +81,54 @@ def check_optional_segmentation() -> None:
         except Exception:
             missing.append(name)
     if missing:
-        print("[INFO] Optional mask regeneration is not installed: " + ", ".join(missing))
+        print("[INFO] Optional Cellpose mask-regeneration stack is not installed: " + ", ".join(missing))
     else:
         print("[OK] Optional Cellpose mask-regeneration stack is installed")
+
+
+def check_allen_environment() -> None:
+    """Verify the isolated morphagent_allen env used by the UI default backend."""
+    import shutil
+    import subprocess
+
+    allen_env = os.environ.get("MORPHAGENT_ALLEN_ENV_NAME", "morphagent_allen")
+    if shutil.which("conda") is None:
+        print("[WARN] conda not found; cannot verify Allen environment")
+        return
+
+    listed = subprocess.run(
+        ["conda", "env", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    names = {line.split()[0] for line in listed.stdout.splitlines() if line.strip() and not line.startswith("#")}
+    if allen_env not in names:
+        print(
+            f"[WARN] Allen env '{allen_env}' is missing. "
+            "Custom datasets without masks will skip segmentation. "
+            "Install with: bash scripts/setup.sh"
+        )
+        return
+
+    check_script = REPOSITORY / "segmentation_allen" / "check_installation.py"
+    result = subprocess.run(
+        ["conda", "run", "-n", allen_env, "python", str(check_script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(
+            f"[WARN] Allen env '{allen_env}' exists but check_installation failed; "
+            "custom data without masks will skip segmentation and the run continues."
+        )
+        if result.stdout:
+            print(result.stdout[-800:])
+        if result.stderr:
+            print(result.stderr[-800:])
+        return
+    print(f"[OK] Allen environment '{allen_env}' passes check_installation.py")
 
 
 def ui_smoke_test() -> None:
@@ -110,6 +155,7 @@ def main() -> int:
     check_demo()
     check_completed_run()
     check_optional_segmentation()
+    check_allen_environment()
     if args.ui_smoke:
         ui_smoke_test()
     print("[PASS] MorphAgent handoff verification completed")

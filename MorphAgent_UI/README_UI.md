@@ -33,8 +33,7 @@ For a first review, the recipient should follow this order:
 2. Install the “UI + bundled demo” dependencies.
 3. Launch the UI, choose **Load a previous run**, load the completed results, and inspect Features and Evidence.
 4. On the Configure page, enter your own API credentials, then run the full pipeline with **Load demo dataset**.
-5. Install the optional Allen (`morphagent_allen`) environment only if you need automatic masks for custom data without existing segmentation/.
-
+5. `bash scripts/setup.sh` also creates **`morphagent_allen`** (UI default auto-mask backend for custom data). Set `MORPHAGENT_INSTALL_ALLEN=0` to skip.
 This lets you verify the UI and result views first, then external APIs, and only then the longer full computation path.
 
 ## 3. System Requirements
@@ -43,7 +42,7 @@ This lets you verify the UI and result views first, then external APIs, and only
 - Miniforge, Mambaforge, Miniconda, or Anaconda recommended.
 - Python 3.10; the install scripts create a dedicated environment named `morphagent`.
 - UI + bundled demo: at least 8 GB RAM and 5 GB free disk recommended; GPU not required.
-- Custom data without masks: optional Allen environment (`morphagent_allen`); if missing, segmentation is skipped gracefully.
+- Custom data without masks: `setup.sh` installs `morphagent_allen` by default; if missing, segmentation is skipped gracefully and VLM still scores images without masks.
 - A full new experiment needs a reachable OpenAI Chat Completions–compatible API.
 - Models used for the Code + VLM route must support both text and image input; if the model does not support images, use Code only or configure a separate VLM.
 
@@ -59,7 +58,7 @@ Open a terminal and enter the handoff directory:
 
 ```bash
 cd /path/to/MorphAgent_handoff_20260719
-bash scripts/setup_macos_linux.sh
+bash scripts/setup.sh
 ```
 
 After install, launch:
@@ -71,7 +70,7 @@ bash scripts/start_ui.sh
 To use a different environment name:
 
 ```bash
-MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup_macos_linux.sh
+MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup.sh
 MORPHAGENT_ENV_NAME=my_morphagent bash scripts/start_ui.sh
 ```
 
@@ -236,7 +235,7 @@ Check whether Base URL is missing `/v1`, and confirm the model name matches the 
 
 ### Code route works, but VLM route fails
 
-The current model may not support image input. Configure a separate multimodal VLM, or temporarily choose **Code only**.
+Confirm the VLM Base URL / API key / model, and that the endpoint accepts image inputs. You can also temporarily choose **Code only**.
 
 ### Failure when Allen segmentation is missing
 

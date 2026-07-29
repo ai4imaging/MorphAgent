@@ -2,10 +2,6 @@
 
 Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao Niu, Yaorong Guo, Jinzhuo Wang, Liangyi Chen, He Sun
 
-† Contributed equally to this work: Enze Ye, Xiaoxuan Wu, and Rui Peng.
-
-\* Corresponding authors: J. Wang (wangjinzhuo@pku.edu.cn), L. Chen (lychen@pku.edu.cn), and H. Sun (hesun@pku.edu.cn)
-
 ---
 
 ## Abstract
@@ -29,7 +25,7 @@ https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 ```bash
 git clone https://github.com/ai4imaging/MorphAgent.git
 cd MorphAgent/MorphAgent_UI
-bash scripts/setup_macos_linux.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
+bash scripts/setup.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
 bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
 ```
 

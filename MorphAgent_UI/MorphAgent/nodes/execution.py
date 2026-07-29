@@ -72,11 +72,7 @@ def _perform_segmentation(
         The segmentation mask path (string), or None if it fails
     """
     from pathlib import Path
-    from tools.segmentation import (
-        segment_image_with_cellpose,
-        check_segmentation_exists,
-        get_segmentation_mask_path
-    )
+    from tools.segmentation import ensure_sample_segmentation, check_segmentation_exists
     
     if not image_paths:
         print(f"  [Segmentation] ⚠️  No image paths available, cannot perform segmentation")
@@ -107,7 +103,6 @@ def _perform_segmentation(
     # Collect segmentation parameters (extract from features if available)
     # Default to using the first image
     input_image_path = str(first_image_path)
-    output_mask_path = str(get_segmentation_mask_path(sample_dir))
     
     # Extract channel information from features (if available)
     channels = None
@@ -117,20 +112,20 @@ def _perform_segmentation(
             channels = seg_channels
             break
     
-    # Execute segmentation
+    # Execute segmentation with the configured backend (Allen by default)
     print(f"  [Segmentation] Starting segmentation: {first_image_path.name}")
-    success = segment_image_with_cellpose(
-        input_image_path=input_image_path,
-        output_mask_path=output_mask_path,
+    mask_path = ensure_sample_segmentation(
+        sample_dir=sample_dir,
+        image_path=input_image_path,
         channels=channels,
-        conda_env=None  # resolves to settings.segmentation_conda_env
+        conda_env=None,
     )
     
-    if success and Path(output_mask_path).exists():
-        print(f"  [Segmentation] ✅ Segmentation completed: {output_mask_path}")
-        return output_mask_path
+    if mask_path is not None:
+        print(f"  [Segmentation] ✅ Segmentation completed: {mask_path}")
+        return str(mask_path)
     else:
-        print(f"  [Segmentation] ❌ Segmentation failed")
+        print(f"  [Segmentation] ⚠️  Segmentation failed; continuing without masks")
         return None
 
 

@@ -168,6 +168,7 @@ class RunConfigTests(unittest.TestCase):
             env = config.pipeline_environment()
             self.assertEqual(env["CODE_MAX_RETRIES"], "3")
             self.assertEqual(env["SEGMENTATION_BACKEND"], "allen")
+            self.assertEqual(env["SEGMENTATION_CONDA_ENV"], "morphagent_allen")
 
     def test_custom_dataset_passes_auto_knowledge_flags(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

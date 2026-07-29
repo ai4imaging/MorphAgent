@@ -5,6 +5,9 @@ Segment image.tif using the Allen Cell Segmenter
 Supports single-channel or multi-channel TIFF (STCZYX and similar dimensions).
 Single-channel: the same channel is used for nucleus/cytoplasm segmentation;
 Multi-channel: the order is assumed to be [DAPI, Actin, Tubulin] or specified by channel_indices.
+
+I/O uses tifffile (not aicsimageio) so morphagent_allen does not need aicspylibczi /
+CZI native builds that fail on modern macOS toolchains.
 """
 
 import numpy as np
@@ -16,14 +19,13 @@ from skimage.morphology import remove_small_objects, dilation, ball
 from skimage.measure import label
 from skimage.color import label2rgb
 from scipy.ndimage import binary_fill_holes
+import tifffile
 
-from aicsimageio import AICSImage
 from aicssegmentation.core.pre_processing_utils import (
     intensity_normalization,
     image_smoothing_gaussian_slice_by_slice,
 )
 from aicssegmentation.core.MO_threshold import MO
-from aicsimageio.writers import OmeTiffWriter
 
 
 # Default channel indices [dapi, actin, tubulin] (0-based); None = auto-infer.
@@ -36,35 +38,29 @@ def load_tif_image(image_path, channel_indices=None):
     For single-channel input, dapi and actin use the same channel.
     """
     print(f"Loading: {image_path}")
-    img = AICSImage(str(image_path))
-    data = img.get_image_data()
+    data = tifffile.imread(str(image_path))
 
-    # Normalize to STCZYX, then squeeze out S, T
-    if 'S' in img.dims and 'T' in img.dims:
-        # data is usually (S,T,C,Z,Y,X) or similar
-        while data.ndim > 3 and data.shape[0] == 1:
-            data = data.squeeze(0)
-    if data.ndim == 5:
-        # (C, Z, Y, X)
-        pass
-    elif data.ndim == 4:
-        # (C, Z, Y, X) or (Z, Y, X, C)
-        if data.shape[-1] in (1, 2, 3, 4):
-            data = np.moveaxis(data, -1, 0)  # -> (C, Z, Y, X)
-    elif data.ndim == 3:
-        # (Z, Y, X)
-        data = data[np.newaxis, ...]  # (1, Z, Y, X)
-    elif data.ndim == 2:
+    # Normalize to (C, Z, Y, X)
+    if data.ndim == 2:
         data = data[np.newaxis, np.newaxis, ...]  # (1, 1, Y, X)
+    elif data.ndim == 3:
+        # (Z, Y, X) or (C, Y, X) — prefer single-plane multi-channel when C small
+        if data.shape[0] <= 4 and data.shape[0] < min(data.shape[1], data.shape[2]):
+            data = data[:, np.newaxis, ...]  # (C, 1, Y, X)
+        else:
+            data = data[np.newaxis, ...]  # (1, Z, Y, X)
+    elif data.ndim == 4:
+        # Already (C, Z, Y, X) or (Z, Y, X, C)
+        if data.shape[-1] in (1, 2, 3, 4) and data.shape[-1] < data.shape[0]:
+            data = np.moveaxis(data, -1, 0)
+    elif data.ndim > 4:
+        while data.ndim > 4 and data.shape[0] == 1:
+            data = data.squeeze(0)
+        if data.ndim > 4:
+            data = data.reshape((-1,) + data.shape[-3:])
 
-    # Now data is (C, Z, Y, X) or (Z, Y, X)
-    if data.ndim == 4:
-        nch = data.shape[0]
-    else:
-        nch = 1
-        data = data[np.newaxis, ...]
+    nch = data.shape[0]
 
-    # Normalize to [0, 1] float32
     def norm_ch(c):
         c = c.astype(np.float32)
         minv, maxv = c.min(), c.max()
@@ -74,12 +70,8 @@ def load_tif_image(image_path, channel_indices=None):
             c = np.zeros_like(c)
         return c
 
-    channels_list = []
-    for i in range(nch):
-        ch = data[i]
-        channels_list.append(norm_ch(ch))
+    channels_list = [norm_ch(data[i]) for i in range(nch)]
 
-    # Single-channel: dapi and actin both use the same channel
     if nch == 1:
         dapi = channels_list[0]
         actin = channels_list[0]
@@ -89,7 +81,6 @@ def load_tif_image(image_path, channel_indices=None):
         if channel_indices is not None:
             idx_d, idx_a, idx_t = channel_indices[0], channel_indices[1], channel_indices[2]
         else:
-            # Default: channel 0 Actin, channel 1 Tubulin, channel 2 DAPI (matching common RGB)
             if nch >= 3:
                 idx_d, idx_a, idx_t = 2, 0, 1
             elif nch == 2:
@@ -101,15 +92,13 @@ def load_tif_image(image_path, channel_indices=None):
         tubulin = channels_list[idx_t]
         print(f"Multi-channel TIFF (C={nch}); DAPI/Actin/Tubulin channel indices: {idx_d},{idx_a},{idx_t}")
 
-    # Ensure at least 3D (Z,Y,X)
     if dapi.ndim == 2:
         dapi = dapi[np.newaxis, ...]
         actin = actin[np.newaxis, ...]
         tubulin = tubulin[np.newaxis, ...]
 
     channels = {"dapi": dapi, "actin": actin, "tubulin": tubulin}
-    # RGB for visualization: (1, H, W, 3)
-    rgb = np.stack([actin[0], tubulin[0], dapi[0]], axis=-1) if dapi.shape[0] >= 1 else np.stack([actin, tubulin, dapi], axis=-1)
+    rgb = np.stack([actin[0], tubulin[0], dapi[0]], axis=-1)
     if rgb.ndim == 3:
         rgb = rgb[np.newaxis, ...]
     return channels, rgb
@@ -267,10 +256,8 @@ def main():
             p.unlink()
     n3d = np.expand_dims(nucleus_bw, axis=0) if nucleus_bw.ndim == 2 else nucleus_bw
     c3d = np.expand_dims(cytoplasm_bw, axis=0) if cytoplasm_bw.ndim == 2 else cytoplasm_bw
-    with OmeTiffWriter(str(nucleus_out)) as w:
-        w.save(n3d)
-    with OmeTiffWriter(str(cytoplasm_out)) as w:
-        w.save(c3d)
+    tifffile.imwrite(str(nucleus_out), n3d.astype(np.uint8))
+    tifffile.imwrite(str(cytoplasm_out), c3d.astype(np.uint8))
     print(f"\n  Nucleus: {nucleus_out}")
     print(f"  Cytoplasm: {cytoplasm_out}")
 

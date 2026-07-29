@@ -428,10 +428,13 @@ def _vlm_worker_process(
                         if seg_result.get("success"):
                             sample_seg_mask = seg_result.get("mask_path")
                         else:
+                            # Still score with VLM on the raw image; do not zero-out the sample.
                             if batch_log_fp:
-                                batch_log_fp.write(f"{sample_id}: ❌ Segmentation failed\n")
-                            result_queue.put((sample_index, sample_id, {}))
-                            continue
+                                batch_log_fp.write(
+                                    f"{sample_id}: ⚠️ Segmentation failed; "
+                                    f"continuing VLM scoring without mask\n"
+                                )
+                            sample_seg_mask = None
                 
                 # Build AgentState for batch VLM execution
                 state: AgentState = {
@@ -937,11 +940,14 @@ def execute_feature_on_all_samples(
                             if log_fp:
                                 log_fp.write(f"{sample_id}: ✅ Segmentation complete: {sample_seg_mask}\n")
                         else:
-                            error_msg = f"Segmentation failed: {seg_result.get('message', 'Unknown error')}"
+                            error_msg = (
+                                f"Segmentation failed: {seg_result.get('message', 'Unknown error')}; "
+                                f"continuing VLM scoring without mask"
+                            )
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                                log_fp.write(f"{sample_id}: ⚠️  {error_msg}\n")
                             print(f"    ⚠️  {sample_id}: {error_msg}")
-                            continue  # skip this sample
+                            sample_seg_mask = None
                 sample_dir = data_root / sample_id
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
@@ -1695,10 +1701,22 @@ Examples:
             skip_if_any_segmentation_exists=getattr(args, "segmentation_skip_if_present", True)
         )
         
-        # Tally the segmentation results (success / skipped_user_seg / failed)
+        # Tally the segmentation results (success / skipped / unavailable — never abort)
         success_count = sum(1 for v in segmentation_results.values() if v == "success")
-        skipped_count = sum(1 for v in segmentation_results.values() if v == "skipped_user_seg")
-        print(f"  Segmentation stats: {success_count} succeeded, {skipped_count} skipped (already segmented), {len(sample_ids) - success_count - skipped_count} failed")
+        skipped_count = sum(
+            1
+            for v in segmentation_results.values()
+            if v in {"skipped_user_seg", "skipped_allen_unavailable", "skipped_seg_unavailable"}
+        )
+        unavailable = sum(
+            1
+            for v in segmentation_results.values()
+            if v in {"skipped_allen_unavailable", "skipped_seg_unavailable", "failed"}
+        )
+        print(
+            f"  Segmentation stats: {success_count} succeeded, "
+            f"{skipped_count} skipped/reused, {unavailable} unavailable (warnings only; run continues)"
+        )
         
         # Get the mask order from the first sample that has any segmentation file (consistent with data_path_selector, including user uploads)
         first_sample_with_seg = None
@@ -2392,8 +2410,11 @@ Examples:
                                         sample_seg_mask = seg_result.get("mask_path")
                                     else:
                                         if batch_log_fp:
-                                            batch_log_fp.write(f"{sample_id}: ❌ Segmentation failed\n")
-                                        continue
+                                            batch_log_fp.write(
+                                                f"{sample_id}: ⚠️ Segmentation failed; "
+                                                f"continuing VLM scoring without mask\n"
+                                            )
+                                        sample_seg_mask = None
                             
                             # Build AgentState for batch VLM execution
                             state: AgentState = {
