@@ -137,13 +137,17 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertFalse(hasattr(page, "reproduce_check"))
         self.assertTrue(widget.config.enable_segmentation)
         self.assertTrue(widget.config.segmentation_skip_if_present)
+        self.assertEqual(widget.config.temperature, 0.0)
         self.assertTrue(widget.config.reproduce)
         self.assertFalse(page.reuse_llm_for_vlm.isChecked())
         self.assertTrue(hasattr(page, "advanced_toggle"))
         self.assertEqual(page.advanced_toggle.text(), "Config")
         self.assertFalse(page.advanced_panel.isVisible())
+        self.assertFalse(page.save_api_button.isVisible())
+        self.assertIn("Input data path", labels)
 
         widget.config.reproduce = False
+        widget.config.temperature = 0.0
         page.load_from_config()
         self.assertTrue(widget.config.reproduce)
         self.assertIn("--reproduce", widget.config.build_command())
@@ -199,15 +203,17 @@ class WidgetSmokeTests(unittest.TestCase):
                 self.assertTrue(hasattr(page, "load_api_settings"))
                 page.load_api_settings()
 
-                self.assertEqual(page.llm_base_url_edit.text(), "https://old.example/v1")
-                self.assertEqual(page.llm_model_edit.text(), "old-model")
+                # Form stays empty on open; .env values are reused only when fields stay blank on Run.
+                self.assertEqual(page.llm_base_url_edit.text(), "")
+                self.assertEqual(page.llm_model_edit.text(), "")
                 self.assertEqual(page.llm_api_key_edit.echoMode(), QLineEdit.Password)
                 self.assertEqual(page.llm_api_key_edit.text(), "")
-                self.assertIn("already saved", page.llm_api_key_edit.placeholderText().lower())
+                self.assertIn("already on file", page.llm_api_key_edit.placeholderText().lower())
                 # Default is unchecked; VLM fields stay visible even when values match LLM.
                 self.assertFalse(page.reuse_llm_for_vlm.isChecked())
                 self.assertFalse(page.vlm_connection_fields.isHidden())
                 self.assertNotIn("existing-secret", page.api_status_label.text())
+                self.assertFalse(page.save_api_button.isVisible())
 
                 page.reuse_llm_for_vlm.setChecked(True)
                 self.app.processEvents()
@@ -216,7 +222,7 @@ class WidgetSmokeTests(unittest.TestCase):
                 page.llm_base_url_edit.setText("https://new.example/v1")
                 page.llm_model_edit.setText("new-model")
                 page.llm_api_key_edit.setText("replacement-secret")
-                page.save_api_button.click()
+                self.assertTrue(page._persist_api_settings())
                 self.app.processEvents()
 
                 saved = dotenv_values(env_path)
@@ -585,10 +591,16 @@ class WidgetSmokeTests(unittest.TestCase):
             widget.close()
 
     def test_ready_configuration_enables_launch(self) -> None:
-        previous_llm = os.environ.get("LLM_API_KEY")
-        previous_vlm = os.environ.get("VLM_API_KEY")
-        os.environ["LLM_API_KEY"] = "ui-test-key"
-        os.environ["VLM_API_KEY"] = "ui-test-vlm"
+        names = ("LLM_API_KEY", "VLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "VLM_BASE_URL", "VLM_MODEL")
+        previous = {name: os.environ.get(name) for name in names}
+        os.environ.update({
+            "LLM_API_KEY": "ui-test-key",
+            "VLM_API_KEY": "ui-test-vlm",
+            "LLM_BASE_URL": "https://example.com/v1",
+            "LLM_MODEL": "gpt-4o",
+            "VLM_BASE_URL": "https://example.com/v1",
+            "VLM_MODEL": "gpt-4o",
+        })
         try:
             with tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
@@ -597,6 +609,10 @@ class WidgetSmokeTests(unittest.TestCase):
                 (sample / "image.png").touch()
                 widget = MorphAgentWidget()
                 page = widget.configure_page
+                page.llm_base_url_edit.setText("https://example.com/v1")
+                page.llm_model_edit.setText("gpt-4o")
+                page.llm_api_key_edit.setText("ui-test-key")
+                page.reuse_llm_for_vlm.setChecked(True)
                 page.dataset_picker.setText(str(root))
                 page.query_edit.setPlainText("Profile interpretable nuclear morphology")
                 page.refresh_preflight(scan=True)
@@ -605,14 +621,11 @@ class WidgetSmokeTests(unittest.TestCase):
                 self.assertIn("--data-root", page.command_preview.toPlainText())
                 widget.close()
         finally:
-            if previous_llm is None:
-                os.environ.pop("LLM_API_KEY", None)
-            else:
-                os.environ["LLM_API_KEY"] = previous_llm
-            if previous_vlm is None:
-                os.environ.pop("VLM_API_KEY", None)
-            else:
-                os.environ["VLM_API_KEY"] = previous_vlm
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
     def test_reference_demo_button_loads_teacher_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

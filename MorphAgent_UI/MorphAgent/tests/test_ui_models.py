@@ -55,9 +55,23 @@ class RunConfigTests(unittest.TestCase):
     def test_ui_run_config_defaults_to_reproducible_mode(self) -> None:
         config = RunConfig(query="Profile cells")
 
+        self.assertEqual(config.temperature, 0.0)
         self.assertTrue(config.reproduce)
         self.assertIn("--reproduce", config.build_command())
         self.assertIn("--reproduce-seed", config.build_command())
+        env = config.pipeline_environment()
+        self.assertEqual(env["CODE_TEMPERATURE"], "0")
+        self.assertEqual(env["VLM_TEMPERATURE"], "0")
+
+    def test_diagnose_dataset_selection_for_custom_images_only(self) -> None:
+        from morphagent_ui.models import diagnose_dataset_selection
+
+        repo = Path(__file__).resolve().parents[1]
+        data_test = repo / "demo" / "data_test"
+        if data_test.is_dir():
+            self.assertIsNone(diagnose_dataset_selection(data_test))
+            self.assertIsNotNone(diagnose_dataset_selection(data_test / "dataset" / "WT_1"))
+        self.assertIsNotNone(diagnose_dataset_selection(repo / "does_not_exist"))
 
     def _ready_dataset(self, root: Path):
         sample = root / "sample_1"
@@ -182,7 +196,11 @@ class RunConfigTests(unittest.TestCase):
                 python_executable=sys.executable,
                 enable_segmentation=False,
             )
-            issues = config.validate(summary, {"LLM_API_KEY": "x"})
+            issues = config.validate(summary, {
+                "LLM_API_KEY": "x",
+                "LLM_BASE_URL": "https://example.com/v1",
+                "LLM_MODEL": "gpt-4o",
+            })
             self.assertIn("sample_count_low", {issue.code for issue in issues})
 
     def test_preflight_blocks_missing_key_and_accepts_fallback(self) -> None:
@@ -192,9 +210,15 @@ class RunConfigTests(unittest.TestCase):
             config = RunConfig(data_root=str(root), query="Profile nuclear texture", python_executable=sys.executable, enable_segmentation=False)
             missing = config.validate(summary, {})
             self.assertIn("llm_key_missing", {issue.code for issue in missing})
-            self.assertIn("vlm_key_missing", {issue.code for issue in missing})
 
-            ready = config.validate(summary, {"LLM_API_KEY": "test-only"})
+            ready = config.validate(summary, {
+                "LLM_API_KEY": "test-only",
+                "LLM_BASE_URL": "https://example.com/v1",
+                "LLM_MODEL": "gpt-4o",
+                "VLM_API_KEY": "test-only",
+                "VLM_BASE_URL": "https://example.com/v1",
+                "VLM_MODEL": "gpt-4o",
+            })
             self.assertFalse(any(issue.severity is Severity.BLOCKER for issue in ready))
 
     def test_command_is_explicit_and_manifest_has_no_secret(self) -> None:
@@ -261,6 +285,8 @@ class RunConfigTests(unittest.TestCase):
                 repository_root=str(repository),
                 python_executable=sys.executable,
                 enable_segmentation=False,
+                llm_base_url="https://example.com/v1",
+                llm_model="gpt-4o",
             )
             issues = config.validate(summary, {})
             self.assertNotIn("llm_key_missing", {issue.code for issue in issues})

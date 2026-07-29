@@ -694,7 +694,7 @@ class MorphAgentConfig:
     # Thread-level hard wall-clock timeout (seconds): even if the server's "trickle-style" slow response defeats the httpx read timeout,
     # the request is forcibly abandoned and retried when the time is up, preventing a single sample from hanging the whole round of VLM scoring indefinitely.
     vlm_online_hard_timeout: int = int(os.getenv("VLM_ONLINE_HARD_TIMEOUT", "180"))
-    vlm_temperature: float = float(os.getenv("VLM_TEMPERATURE", "0.1"))
+    vlm_temperature: float = float(os.getenv("VLM_TEMPERATURE", "0.0"))
 
     # Reproducibility (--reproduce)
     reproduce_mode: bool = False
@@ -751,7 +751,7 @@ class MorphAgentConfig:
     code_max_memory: int = int(os.getenv("CODE_MAX_MEMORY", "2"))  # GB
     code_max_retries: int = int(os.getenv("CODE_MAX_RETRIES", "3"))  # Maximum number of retries (default 3)
     code_error_rate_threshold: float = float(os.getenv("CODE_ERROR_RATE_THRESHOLD", "0.5"))  # Error rate threshold (50%)
-    code_temperature: float = float(os.getenv("CODE_TEMPERATURE", "0.3"))  # Temperature for code generation (default 0.3, increases diversity)
+    code_temperature: float = float(os.getenv("CODE_TEMPERATURE", "0.0"))  # Temperature for code generation (default 0.0 for reproducibility)
     enable_critic_agent: bool = bool(os.getenv("ENABLE_CRITIC_AGENT", "True").lower() == "true")  # Whether to enable the VLM critic agent to evaluate code (enabled by default)
     # Conda env used to EXECUTE agent-generated feature code (the "sandbox").
     # In the unified public environment this is the same env as the agent.

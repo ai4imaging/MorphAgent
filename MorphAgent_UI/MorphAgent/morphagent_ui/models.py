@@ -174,7 +174,7 @@ class RunConfig:
     reproduce: bool = True
     reproduce_seed: int = 42
     resume: bool = False
-    temperature: float = 0.3
+    temperature: float = 0.0
     code_vlm_ratio: float = field(default_factory=lambda: _environment_ratio("CODE_VLM_RATIO", 0.5))
     knowledge_dependency: float = field(default_factory=lambda: _environment_ratio("KNOWLEDGE_DEPENDENCY", 0.5))
     code_parallel_workers: int = field(default_factory=lambda: _environment_int("CODE_PARALLEL_WORKERS", 1))
@@ -186,6 +186,12 @@ class RunConfig:
     vlm_online_model: str = ""
     dataset_source: str = "custom"  # "demo" | "custom"
     pubmed_max_results: int = 10
+    # Live API fields from Configure (used for preflight before .env write).
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    vlm_base_url: str = ""
+    vlm_api_key: str = ""
+    reuse_llm_for_vlm: bool = False
     python_executable: str = field(default_factory=lambda: sys.executable)
     repository_root: str = field(default_factory=lambda: str(Path(__file__).resolve().parents[1]))
 
@@ -195,7 +201,10 @@ class RunConfig:
         self.features_per_iteration = 5
         self.target_feature_count = 5
         self.num_rounds = 1
+        self.temperature = 0.0
         self.reproduce = True
+        self.code_parallel_workers = 1
+        self.vlm_online_concurrency = 1
 
     def apply_reference_demo(self) -> Path:
         """Load the demo dataset and seed its precomputed RAG cache."""
@@ -329,25 +338,60 @@ class RunConfig:
         config_path = Path(self.repository_root).expanduser() / "config.py"
         source_llm = _configured_key_fallback(config_path, "DEFAULT_LLM_API_KEY")
         source_vlm = _configured_key_fallback(config_path, "DEFAULT_VLM_API_KEY") or source_llm
-        llm_key = bool(str(env.get("LLM_API_KEY", "")).strip()) or source_llm
-        vlm_key = bool(str(env.get("VLM_API_KEY", "")).strip()) or llm_key or source_vlm
-        if not llm_key:
+        form_llm_key = (self.llm_api_key or "").strip()
+        form_vlm_key = (self.vlm_api_key or "").strip()
+        if self.reuse_llm_for_vlm:
+            form_vlm_key = form_llm_key or form_vlm_key
+        llm_key = form_llm_key or bool(str(env.get("LLM_API_KEY", "")).strip()) or source_llm
+        vlm_key = (
+            form_vlm_key
+            or bool(str(env.get("VLM_API_KEY", "")).strip())
+            or (form_llm_key if self.reuse_llm_for_vlm or not (self.vlm_base_url or self.vlm_online_model) else False)
+            or llm_key
+            or source_vlm
+        )
+        llm_base = (self.llm_base_url or str(env.get("LLM_BASE_URL", ""))).strip()
+        llm_model = (self.llm_model or str(env.get("LLM_MODEL", ""))).strip()
+        if not llm_base or not llm_model or not llm_key:
             if self.api_provider.strip().lower() == "default":
-                issues.append(ValidationIssue(Severity.BLOCKER, "llm_key_missing", "LLM_API_KEY is empty in the repository .env file.", "Fill LLM_API_KEY in .env and restart the UI; secrets are never saved in a run manifest."))
+                issues.append(ValidationIssue(
+                    Severity.BLOCKER,
+                    "llm_key_missing",
+                    "Fill Base URL, API key, and Model under Model API.",
+                    "Credentials are applied automatically when you click Run — no separate Save step.",
+                ))
             else:
                 issues.append(ValidationIssue(Severity.WARNING, "llm_preset_unverified", f"The UI cannot verify credentials for provider preset '{self.api_provider}'.", "Confirm that the preset's key environment variable is exported."))
         if self.method in {"vlm", "both"} and self.vlm_api_provider.lower() in {"online", "api"} and not vlm_key:
-            issues.append(ValidationIssue(Severity.BLOCKER, "vlm_key_missing", "The online VLM route has no API key.", "In .env, set VLM_API_KEY=${LLM_API_KEY} to reuse the same key."))
+            issues.append(ValidationIssue(
+                Severity.BLOCKER,
+                "vlm_key_missing",
+                "Image scoring needs a VLM API key (or enable “Use the same connection”).",
+                "Fill the VLM fields, or check “Use the same connection for image scoring”.",
+            ))
         if self.method in {"vlm", "both"} and self.vlm_api_provider.lower() == "qwen":
             issues.append(ValidationIssue(Severity.WARNING, "local_vlm", "Local Qwen requires a supported CUDA GPU and extra packages.", "Confirm the local model and device in the repository configuration."))
 
-        scoring_model = (self.vlm_online_model or env.get("VLM_MODEL", "") or self.llm_model or env.get("LLM_MODEL", "")).strip()
+        scoring_model = (
+            self.vlm_online_model
+            or env.get("VLM_MODEL", "")
+            or self.llm_model
+            or env.get("LLM_MODEL", "")
+        ).strip()
         if self.method in {"vlm", "both"} and scoring_model and not looks_like_vlm_model(scoring_model):
             issues.append(ValidationIssue(
                 Severity.WARNING,
                 "vlm_model_uncertain",
                 f"Model '{scoring_model}' may not support image input.",
                 "Use a multimodal VLM, or switch the analysis route to Code only.",
+            ))
+
+        if self.reproduce or self.temperature <= 0.0:
+            issues.append(ValidationIssue(
+                Severity.INFO,
+                "reproducible_run",
+                "Temperature 0 · reproducible mode (fixed seed, deterministic VLM decoding).",
+                "",
             ))
 
         if self.resume:
@@ -436,6 +480,7 @@ class RunConfig:
     def pipeline_environment(self) -> dict[str, str]:
         """Extra env vars injected when the UI launches main.py."""
 
+        deterministic = self.reproduce or self.temperature <= 0.0
         return {
             "CODE_MAX_RETRIES": "3",
             "SEGMENTATION_BACKEND": "allen",
@@ -444,6 +489,8 @@ class RunConfig:
             "FEATURES_PER_ITERATION": str(self.features_per_iteration),
             "TARGET_FEATURE_COUNT": str(self.target_feature_count),
             "PUBMED_MAX_RESULTS": str(self.pubmed_max_results),
+            "CODE_TEMPERATURE": "0" if deterministic else str(self.temperature),
+            "VLM_TEMPERATURE": "0" if deterministic else str(self.temperature),
         }
 
     def command_preview(self) -> str:
@@ -452,6 +499,8 @@ class RunConfig:
     def manifest(self, dataset: DatasetSummary | None = None) -> dict[str, Any]:
         payload = asdict(self)
         payload.pop("repository_root", None)
+        for secret in ("llm_api_key", "vlm_api_key"):
+            payload.pop(secret, None)
         payload["python_executable"] = str(Path(self.python_executable).expanduser())
         payload["created_at"] = datetime.now(timezone.utc).isoformat()
         payload["schema_version"] = 1
@@ -513,6 +562,55 @@ def _configured_key_fallback(config_path: Path, assignment_name: str) -> bool:
 def _is_mask_dir(name: str) -> bool:
     lowered = name.lower()
     return any(marker in lowered for marker in MASK_DIR_MARKERS)
+
+
+def diagnose_dataset_selection(path: str | Path | None) -> str | None:
+    """Return a user-facing error if the chosen path cannot be used, else None."""
+
+    if path is None or not str(path).strip():
+        return None
+    requested = Path(path).expanduser()
+    if not requested.exists():
+        return (
+            "This path does not exist.\n\n"
+            "Choose a folder that contains a `dataset/` directory:\n\n"
+            "  your_folder/\n"
+            "    dataset/\n"
+            "      sample_a/\n"
+            "        image.tif\n"
+            "      sample_b/\n"
+            "        image.tif"
+        )
+    if not requested.is_dir():
+        return "Please choose a folder (not a file). The folder should contain `dataset/` with one subfolder per sample."
+
+    summary = scan_dataset(requested)
+    dataset_child = requested / "dataset"
+    if summary.sample_count == 0:
+        if not dataset_child.is_dir():
+            return (
+                "No usable samples found.\n\n"
+                f"Selected: {requested}\n\n"
+                "Expected layout:\n"
+                "  <path you select>/\n"
+                "    dataset/\n"
+                "      <sample_folder>/\n"
+                "        *.tif  (primary image)\n\n"
+                "Select the parent folder that contains `dataset/`, not a single sample folder."
+            )
+        return (
+            "Found `dataset/`, but it has no sample folders with images.\n\n"
+            "Each sample must be a subfolder under `dataset/` containing at least one `.tif` / `.tiff` / `.png` image."
+        )
+    if summary.empty_samples and len(summary.empty_samples) == summary.sample_count:
+        preview = ", ".join(summary.empty_samples[:4])
+        suffix = "…" if len(summary.empty_samples) > 4 else ""
+        return (
+            "Sample folders were found, but none contain usable images.\n\n"
+            f"Empty samples: {preview}{suffix}\n\n"
+            "Put a microscopy image (e.g. `image.tif`) directly inside each sample folder."
+        )
+    return None
 
 
 def scan_dataset(path: str | Path) -> DatasetSummary:

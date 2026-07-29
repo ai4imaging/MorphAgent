@@ -1,9 +1,56 @@
-# MorphAgent
+# Agentic cell profiling across microscopy modalities via biologically grounded feature design
+
+Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao Niu, Yaorong Guo, Jinzhuo Wang, Liangyi Chen, He Sun
+
+† Contributed equally to this work: Enze Ye, Xiaoxuan Wu, and Rui Peng.
+
+\* Corresponding authors: J. Wang (wangjinzhuo@pku.edu.cn), L. Chen (lychen@pku.edu.cn), and H. Sun (hesun@pku.edu.cn)
+
+---
+
+## Abstract
+
+Microscopy-based cell profiling typically relies on predefined morphological features that may not capture the structures present across imaging modalities. We developed MorphAgent, an agentic AI framework that autonomously designs, implements and validates biologically grounded morphological features. Drawing on biological knowledge bases, MorphAgent generates candidate morphology features, quantifies them using agent-generated code or vision-language model scoring, and iteratively refines and validates them through statistical and visual evaluation. On 3,552 wide-field BBBC021 profiles, MorphAgent features improved perturbation-retrieval mean average precision by 48% over CellProfiler and 20% over DeepProfiler while using substantially fewer dimensions. In confocal mitochondrial imaging, MorphAgent identified a 25-feature vocabulary from only 110 hematopoietic stem cells with paired imaging and transcriptomic data. When applied without reselection to an independent dataset of 162 cells, these features enabled classifiers trained within the new dataset to achieve an age-state AUC of 0.905. In Tau-labeled samples, MorphAgent enabled cell profiling to use the structural information uniquely resolved by super-resolution microscopy, increasing the wild-type-versus-mutant classification AUC from 0.864 in wide-field images to 0.947. In image–transcriptome-paired data, MorphAgent further organized morphology–gene associations into a three-level hierarchy, linking super-resolution structural phenotypes across spatial scales to their underlying transcriptional programs. MorphAgent establishes agentic feature design as a general framework for converting advances in microscopy into compact, biologically grounded and predictive representations of cellular state.
+
+---
+
+## Online demo
+
+Prefer not to drive everything from the command line? This repo ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
+
+Watch the ~4m40s demo video first to see the full workflow end-to-end:
+
+https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
+
+> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
+
+### Try it
+
+```bash
+git clone https://github.com/ai4imaging/MorphAgent.git
+cd MorphAgent/MorphAgent_UI
+bash scripts/setup_macos_linux.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
+bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
+```
+
+Highlights:
+
+- **Demo dataset** — click **Load demo dataset** to run the full pipeline on **10** Tau sample images (`WT_1`–`WT_10`) without preparing your own data first;
+- **Load a previous run** — instantly browse a completed run’s **Features** and **Evidence** pages, no API key required;
+- **In-app API configuration** — fill in Base URL / API key / model on the Configure page; credentials are applied automatically when you click **Run MorphAgent** (no separate Save step) and written to `MorphAgent/.env`.
+
+For your own images, select the parent folder that contains `dataset/<sample>/*.tif`. The required layout is documented in [Input Data Format (Important)](#input-data-format-important) below.
+
+Full install/usage instructions, system requirements, and troubleshooting live in [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
+
+---
+
+## MorphAgent (software)
 
 MorphAgent is an **automatic microscopy image feature extraction agent** built on large language models (LLMs) and multimodal vision-language models (VLMs). Given a batch of microscopy images and a one-sentence natural-language task description, it automatically:
 
 1. **Understands the dataset** (dimensions, channels, markers, naming conventions);
-2. **Automatically segments** cells / nuclei / cytoplasm and other structures (Cellpose-SAM, or Allen aicssegmentation);
+2. **Automatically segments** cells / nuclei / cytoplasm and other structures (Allen by default in the UI path; Cellpose-SAM available);
 3. **Plans features** (morphology, intensity, texture, distribution, spatial, and other categories);
 4. Extracts scalar features via two complementary paths:
    - **Code features**: the LLM generates an `extract()` Python function that runs in an isolated sandbox environment, self-debugs, and executes in batch;
@@ -11,13 +58,14 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 5. (Optional) injects external knowledge: **expert_knowledge** (expert materials), **auto_deep_research** (deep research reports), **auto_literature_retrieval / RAG** (literature corpus);
 6. **Deterministically validates** and filters features, and outputs a feature table CSV.
 
-> This repository is the **public, general-purpose build**: it accesses models only through an **OpenAI-compatible API** (**no local model deployment whatsoever**), and it contains no specific datasets, experiments, or paper-analysis code. You only need to prepare your own dataset and configure an API to run it on any microscopy dataset.
+> This repository is the **public, general-purpose build**: it accesses models only through an **OpenAI-compatible API** (**no local model deployment whatsoever**), and it contains no paper-analysis code beyond the bundled UI demo. You only need to prepare your own dataset and configure an API to run it on any microscopy dataset.
 
 ---
 
 ## Table of Contents
 
-- [Graphical User Interface (UI)](#graphical-user-interface-morphagent-ui)
+- [Online demo](#online-demo)
+- [MorphAgent (software)](#morphagent-software)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
 - [Environment & Installation](#environment--installation)
@@ -32,41 +80,13 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 ---
 
-## Graphical User Interface (MorphAgent UI)
-
-Prefer not to drive everything from the command line? This repo also ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
-
-Watch the ~4m40s demo video first to see the full workflow end-to-end:
-
-https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
-
-> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
-
-### Try it
-
-```bash
-cd MorphAgent_UI
-bash scripts/setup_macos_linux.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
-bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
-```
-
-Highlights:
-
-- **Bundled demo dataset** — click **Use bundled Tau demo** to run the full pipeline on 5 sample images without preparing your own data first;
-- **Load a previous run** — instantly browse a completed run's `Features` and `Evidence` pages, no API key required;
-- **In-app API configuration** — fill in Base URL / API key / model on the Configure page; it writes straight to `MorphAgent/.env`, no manual file editing needed.
-
-Full install/usage instructions, system requirements, and troubleshooting live in [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
-
----
-
 ## Key Features
 
 | Capability | Description | Dependencies |
 |------|------|------|
 | Code feature extraction | The LLM generates/repairs an `extract(img, seg)` function and runs it in batch | LLM API + sandbox conda environment |
 | VLM feature scoring | A multimodal model scores images feature by feature on a continuous scale | Multimodal API (e.g. GPT-4o) |
-| auto_segmentation | Generates masks with Cellpose-SAM (default) or Allen aicssegmentation | GPU (Cellpose) / CPU (Allen) |
+| auto_segmentation | Generates masks with Allen (UI default) or Cellpose-SAM; existing masks are reused | Optional Allen env / GPU for Cellpose |
 | auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF uses PaddleX) |
 | auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → PaddleX → LLM digests → injects into planning | Internet + PaddleX (CPU) + LLM API |
 | expert_knowledge | Reads expert materials under `expert_knowledge/` → LLM digests | LLM API |
@@ -89,6 +109,7 @@ MorphAgent/
 ├── utils/ utils_modules/    # Cell context, data preprocessing, channel parsing, reproducibility
 ├── validation/              # Deterministic feature validation and registry
 ├── segmentation_allen/      # Allen aicssegmentation backend (vendored + CLI entry point)
+├── MorphAgent_UI/           # Desktop UI handoff package (demo data + launch scripts)
 ├── envs/                    # Environment yaml files (see "Environment & Installation")
 ├── .env.example             # Configuration template (copy to .env)
 └── README.md
@@ -99,12 +120,12 @@ MorphAgent/
 ## Environment & Installation
 
 This project has **no local large model**: all LLM/VLM calls go through an OpenAI-compatible API. The environment only needs to cover
-agent orchestration, sandbox scientific computing, and Cellpose-SAM segmentation. Everything is merged into **one** unified environment.
+agent orchestration, sandbox scientific computing, and (optional) segmentation backends.
 
-- **`morphagent` (unified environment, Python 3.10)**: runs the main program (LangChain/LangGraph/OpenAI client), the sandbox that executes generated code (numpy/scipy/scikit-image/opencv/tifffile/mahotas, etc.), and **Cellpose-SAM** segmentation (cellpose ≥ 4.0 + PyTorch). For convenience, the agent, sandbox, and segmentation are merged into the same environment.
-- **`morphagent_allen` (optional/legacy, Python 3.6)**: Allen `aicssegmentation` has older dependencies (scikit-image 0.15, numpy 1.19) that **cannot be merged with a modern environment**, so it must be created separately. The default Cellpose-SAM path does not use it at all.
+- **`morphagent` (unified environment, Python 3.10)**: runs the main program (LangChain/LangGraph/OpenAI client), the sandbox that executes generated code (numpy/scipy/scikit-image/opencv/tifffile/mahotas, etc.), and **Cellpose-SAM** segmentation when used. For convenience, the agent, sandbox, and Cellpose path are merged into the same environment.
+- **`morphagent_allen` (optional, Python 3.6)**: Allen `aicssegmentation` has older dependencies that **cannot be merged with a modern environment**, so it must be created separately. The UI defaults to Allen when masks are missing and **skips gracefully** if this env is not installed.
 
-Installation:
+Installation (CLI path from the repo root):
 
 ```bash
 # 1) Unified main environment (recommended)
@@ -125,15 +146,16 @@ PY
 # 3) (Optional) extra features such as PDF parsing / local VLM
 #   pip install -r envs/requirements-optional.txt
 
-# 4) (Optional/legacy) Allen segmentation environment
+# 4) (Optional) Allen segmentation environment (used by the UI when masks are missing)
 conda env create -f envs/environment_allen.yml # creates morphagent_allen
 conda activate morphagent_allen
 pip install -e segmentation_allen              # installs vendored aicssegmentation
 python segmentation_allen/check_installation.py
-export SEGMENTATION_CONDA_ENV=morphagent_allen # make the main program use the Allen segmentation backend
+export SEGMENTATION_CONDA_ENV=morphagent_allen
+export SEGMENTATION_BACKEND=allen
 ```
 
-> See `envs/README.md` for details.
+> For the desktop UI install path, prefer the [Online demo](#online-demo) scripts under `MorphAgent_UI/`. See `envs/README.md` for CLI environment details.
 
 ---
 
@@ -156,6 +178,8 @@ export VLM_API_KEY="sk-..."
 export VLM_MODEL="gpt-4o"          # multimodal (vision) model used for scoring
 ```
 
+In the **UI**, fill the same fields on Configure → Model API; they are applied automatically on **Run MorphAgent** and written to `MorphAgent/.env` (no manual editing required).
+
 **Option B: Edit `config.py` directly**
 
 Open the `USER CONFIGURATION` block at the top of `config.py` and change the default values of `DEFAULT_LLM_*` / `DEFAULT_VLM_*` to your own.
@@ -172,7 +196,7 @@ MorphAgent makes **very general** assumptions about the data layout: **one datas
 
 ### 1. Top-level layout
 
-The directory you point `--data-root` at (denoted `INPUT`) can be one of two forms, and the program will recognize them automatically:
+The directory you point `--data-root` at (or the folder you select in the UI; denoted `INPUT`) can be one of two forms, and the program will recognize them automatically:
 
 ```
 # Form 1: INPUT is directly the dataset root
@@ -182,12 +206,14 @@ INPUT/                         # == data_root
 ├── sample_0002/
 └── ...
 
-# Form 2: INPUT is the project root, containing a dataset/ subdirectory (recommended, allows knowledge folders)
-INPUT/                         # == project_root
+# Form 2: INPUT is the project root, containing a dataset/ subdirectory (recommended)
+INPUT/                         # == project_root  ← select this folder in the UI
 ├── dataset/                   # == data_root (auto-detected)
 │   ├── dataset_index.txt
 │   ├── sample_0001/
-│   └── ...
+│   │   └── image.tif          # primary image (required for custom data)
+│   └── sample_0002/
+│       └── image.tif
 ├── expert_knowledge/          # optional
 ├── deep_research/             # optional
 └── RAG/                       # optional
@@ -195,6 +221,8 @@ INPUT/                         # == project_root
 
 - **Sample ID = subdirectory name**: `read_dataset_index()` directly scans all non-hidden subdirectories under `data_root` as the sample list, and **does not rely on any manifest inside an index file**. The directory name is the sample ID (processed in sorted order).
 - If a `dataset/` directory exists under `INPUT`, then `data_root=INPUT/dataset` and `project_root=INPUT`; otherwise `data_root=INPUT` and `project_root` is the parent directory of `INPUT`. Knowledge folders (`expert_knowledge/`, `deep_research/`, `RAG/`) always live under **project_root**.
+- **Recommend ≥5 samples** so validation has enough unique values. The UI warns below that threshold but does not block Run.
+- In the UI, if the selected path cannot be used (missing `dataset/`, no sample folders, or no images), a dialog explains the expected layout.
 
 ### 2. Inside each sample directory
 
@@ -205,7 +233,7 @@ sample_0001/
 ├── slices/                    # (2) secondary directory (derived data), preferred by VLM features
 │   ├── slice_0000_channel_0.png
 │   └── ...
-└── segmentation/              # (3) segmentation masks (auto-generated by this tool, or bring your own)
+└── segmentation/              # (3) segmentation masks (auto-generated, or bring your own)
     ├── mask_cell.tif
     ├── mask_nucleus.tif
     └── ...
@@ -213,7 +241,7 @@ sample_0001/
 
 - **(1) Primary files (primary)**: image files **directly** under the sample directory (excluding subdirectories). These are the input for **Code features** (the `img` in `extract(img, ...)`). Supports `.tif/.tiff/.png/.jpg/.jpeg/.bmp/.gif`. The generated code chooses the reading method by extension (tifffile for TIFF, PIL for PNG/JPG).
 - **(2) Secondary directories (secondary)**: image files inside subdirectories of the sample directory (e.g. `slices/*.png`). **VLM features** prefer these 2D slices that are easy to view visually; if none exist, they fall back to the primary files. These slices can be generated automatically by this tool's preprocessing stage (normalized slices for multi-channel/z-stack data), or you can bring your own.
-- **(3) `segmentation/`**: the segmentation mask directory (see the next section).
+- **(3) `segmentation/`**: the segmentation mask directory (see the next section). Custom data with only `image.tif` (no masks) is supported — the UI will attempt Allen segmentation when available, otherwise skip and continue.
 
 ### 3. Segmentation masks and the `seg` dictionary (key point)
 
@@ -265,7 +293,7 @@ Notes: single cell per image; pixel size ~0.65 um.
 | `RAG/` | Literature corpus (PMC `.xml`; `.pdf` also supported), placed flat at the top level of this directory | The LLM digests them in batch into literature knowledge and injects it into planning (with hash caching) |
 
 - These are all **optional** and can be turned off with `--disable-expert-knowledge` / `--disable-deep-research` / `--disable-rag`.
-- You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)).
+- You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)). In the UI, **Load demo dataset** digests prepared folders only; custom datasets may enable auto deep-research / PubMed when those knowledge sources are checked.
 - `.pdf` parsing uses PaddleX, which is **installed by the unified environment (CPU)** and works out of the box; `.md/.txt/.xml` sources are read directly without PaddleX.
 
 ---
@@ -286,6 +314,7 @@ python main.py "Generate unbiased morphological features for these microscopy im
 - The positional argument is the **natural-language task description** (it feeds into the feature planning prompt).
 - `--method both`: use both code and vlm; you can also use `code` or `vlm`.
 - The first run automatically: understands the dataset → (optionally) segments → plans features → generates/executes code + VLM scoring → validates → writes CSV.
+- For a guided first run with the bundled Tau demo, use the [Online demo](#online-demo) UI instead.
 
 ---
 
@@ -307,9 +336,16 @@ By default, results are written to `<project_root>/results/run_<timestamp>/` (ca
 
 ## Auto Segmentation (auto_segmentation)
 
-### Cellpose-SAM (default, integrated into the main pipeline)
+### Allen (UI default when masks are missing)
 
-Step 2.4 of the main program automatically segments all samples (requires a GPU). You can also call it separately:
+When a sample has no files under `segmentation/`, the UI pipeline defaults to Allen (`SEGMENTATION_BACKEND=allen`, conda env `morphagent_allen`). If that environment is not installed, segmentation is skipped for those samples and the run continues.
+
+```bash
+conda activate morphagent_allen
+python segmentation_allen/run_segment_image_tif.py input.tif -o sample_dir/segmentation/
+```
+
+### Cellpose-SAM (optional / CLI)
 
 ```bash
 # Single image
@@ -320,23 +356,7 @@ python tools/segment_tif_with_cpsam.py input.tif -o sample_dir/segmentation/ -c 
 python -c "from tools.segmentation import segment_all_samples; ..."
 ```
 
-This outputs `cyto.tif` / `nuclei.tif` / `cytoplasm.tif` to each sample's `segmentation/`. Use `--disable-segmentation` to turn it off.
-
-### Allen aicssegmentation (optional, separate environment)
-
-Good for classic nucleus/cytoplasm segmentation and fiber/mitochondria-like punctate structures. Requires the `morphagent_allen` environment (see `segmentation_allen/README_SEGMENTATION.md`):
-
-```bash
-conda activate morphagent_allen
-# Nucleus + cytoplasm (TIFF)
-python segmentation_allen/run_segment_image_tif.py input.tif -o out_dir/ -c 2 0 1
-# Mitochondria / punctate structures
-python segmentation_allen/run_segment_mitochondria.py input.tif -o out_dir/
-# PNG batch
-python segmentation_allen/segmentation_pipeline.py -d png_dir/ -o out_dir/
-```
-
-Place the generated masks into each sample's `segmentation/`, and the main pipeline will use them directly (skipping Cellpose by default).
+This outputs `cyto.tif` / `nuclei.tif` / `cytoplasm.tif` to each sample's `segmentation/`. Use `--disable-segmentation` to turn it off. Existing masks are always reused when present (`--segmentation-skip-if-present`).
 
 ---
 
@@ -427,8 +447,9 @@ read directly and never need PaddleX.
 
 ## FAQ
 
-- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU; but **Cellpose-SAM segmentation requires a GPU**. Without a GPU, you can disable segmentation (`--disable-segmentation`) or use your own masks / Allen (CPU) instead.
+- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo reuses bundled masks and does not require a GPU. Cellpose-SAM (optional) generally needs a GPU; without one, reuse your own masks, use Allen (CPU), or disable segmentation.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
 - **PaddleX / PDF parsing?** PaddleX (CPU) is installed by the unified environment and works out of the box; for GPU parsing install `paddlepaddle-gpu==3.0.0` and set `PADDLEX_DEVICE=gpu:0`. If you only use `.md/.txt` deep_research and `.xml` RAG, PaddleX is never invoked.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
+- **UI: where do I put my own images?** Select the parent folder that contains `dataset/<sample>/image.tif` (see [Input Data Format](#input-data-format-important)). If the path is wrong, the UI shows a dialog with the expected layout.

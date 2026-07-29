@@ -28,7 +28,15 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ..models import DatasetSummary, RunConfig, Severity, ValidationIssue, looks_like_vlm_model, scan_dataset
+from ..models import (
+    DatasetSummary,
+    RunConfig,
+    Severity,
+    ValidationIssue,
+    diagnose_dataset_selection,
+    looks_like_vlm_model,
+    scan_dataset,
+)
 from ..environment import read_model_environment, save_model_environment
 from ..theme import COLORS
 from .common import Card, PageHeader, PathPicker
@@ -41,6 +49,17 @@ METHOD_LABELS = {
 }
 
 FREE_API_URL = "https://platform.xiaomimimo.com/"
+
+DATASET_LAYOUT_HELP = (
+    "Required input path layout:\n"
+    "  <folder you select>/\n"
+    "    dataset/\n"
+    "      sample_1/\n"
+    "        image.tif   (or any .tif / .tiff / .png)\n"
+    "      sample_2/\n"
+    "        image.tif\n"
+    "Select the parent folder that contains `dataset/` (one subfolder per sample)."
+)
 
 
 class ConfigurePage(QWidget):
@@ -109,9 +128,18 @@ class ConfigurePage(QWidget):
         layout.setSpacing(12)
         layout.addWidget(self._section_title("1 · Data"))
 
+        path_title = QLabel("Input data path")
+        path_title.setProperty("role", "fieldLabel")
+        layout.addWidget(path_title)
+
+        layout_help = QLabel(DATASET_LAYOUT_HELP)
+        layout_help.setProperty("role", "muted")
+        layout_help.setWordWrap(True)
+        layout_help.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(layout_help)
+
         help_text = QLabel(
-            "Load the demo dataset, or choose your own dataset folder "
-            "(one subfolder per sample — see README_UI.md for the layout)."
+            "Load the demo dataset, or browse to your own folder that matches the layout above."
         )
         help_text.setProperty("role", "muted")
         help_text.setWordWrap(True)
@@ -266,7 +294,8 @@ class ConfigurePage(QWidget):
         layout.addWidget(self._section_title("3 · Model API"))
 
         help_text = QLabel(
-            "Saved only in the repository .env file. The key is masked and never added to commands, manifests, or logs."
+            "Enter your OpenAI-compatible endpoint. Credentials are applied automatically when you click Run — "
+            "no separate Save step. Keys stay in the local .env and are never written to manifests or logs."
         )
         help_text.setProperty("role", "muted")
         help_text.setWordWrap(True)
@@ -286,9 +315,10 @@ class ConfigurePage(QWidget):
         self.llm_form.setHorizontalSpacing(16)
         self.llm_form.setVerticalSpacing(9)
         self.llm_base_url_edit = QLineEdit()
-        self.llm_base_url_edit.setPlaceholderText("https://api.openai.com/v1")
+        self.llm_base_url_edit.setPlaceholderText("Base URL · e.g. https://api.openai.com/v1")
         self.llm_api_key_edit = QLineEdit()
         self.llm_api_key_edit.setEchoMode(QLineEdit.Password)
+        self.llm_api_key_edit.setPlaceholderText("API key")
         self.llm_model_edit = QLineEdit()
         self.llm_model_edit.setPlaceholderText("Model name")
         self.llm_form.addRow("Base URL", self.llm_base_url_edit)
@@ -304,9 +334,10 @@ class ConfigurePage(QWidget):
         self.vlm_form.setHorizontalSpacing(16)
         self.vlm_form.setVerticalSpacing(9)
         self.vlm_base_url_edit = QLineEdit()
-        self.vlm_base_url_edit.setPlaceholderText("Multimodal API base URL")
+        self.vlm_base_url_edit.setPlaceholderText("VLM Base URL (optional if same as above)")
         self.vlm_api_key_edit = QLineEdit()
         self.vlm_api_key_edit.setEchoMode(QLineEdit.Password)
+        self.vlm_api_key_edit.setPlaceholderText("VLM API key")
         self.vlm_model_edit = QLineEdit()
         self.vlm_model_edit.setPlaceholderText("Multimodal model name")
         self.vlm_form.addRow("VLM Base URL", self.vlm_base_url_edit)
@@ -320,15 +351,13 @@ class ConfigurePage(QWidget):
         self.reuse_llm_for_vlm.setMinimumHeight(46)
         layout.addWidget(self.reuse_llm_for_vlm)
 
-        save_row = QHBoxLayout()
-        self.api_status_label = QLabel("Model API configuration has not been checked yet.")
+        self.api_status_label = QLabel("Fill the fields above · applied automatically on Run")
         self.api_status_label.setProperty("role", "muted")
         self.api_status_label.setWordWrap(True)
+        # Kept for tests that previously clicked Save; no longer shown.
         self.save_api_button = QPushButton("Save API configuration")
-        self.save_api_button.setProperty("choiceAction", True)
-        save_row.addWidget(self.api_status_label, 1)
-        save_row.addWidget(self.save_api_button)
-        layout.addLayout(save_row)
+        self.save_api_button.hide()
+        layout.addWidget(self.api_status_label)
         self.content_layout.addWidget(card)
 
     def _build_ready_section(self) -> None:
@@ -378,7 +407,17 @@ class ConfigurePage(QWidget):
         self.reuse_llm_for_vlm.toggled.connect(self._toggle_vlm_fields)
         self.llm_model_edit.textChanged.connect(self._update_vlm_route_availability)
         self.vlm_model_edit.textChanged.connect(self._update_vlm_route_availability)
-        self.save_api_button.clicked.connect(self._save_api_settings)
+        for edit in (
+            self.llm_base_url_edit,
+            self.llm_api_key_edit,
+            self.llm_model_edit,
+            self.vlm_base_url_edit,
+            self.vlm_api_key_edit,
+            self.vlm_model_edit,
+        ):
+            edit.textChanged.connect(self._fields_changed)
+        self.reuse_llm_for_vlm.toggled.connect(self._fields_changed)
+        self.save_api_button.clicked.connect(self._persist_api_settings)
 
     def _toggle_advanced(self, checked: bool) -> None:
         self.advanced_panel.setVisible(checked)
@@ -416,93 +455,94 @@ class ConfigurePage(QWidget):
             if value:
                 os.environ[name] = value
 
-        llm_base = values.get("LLM_BASE_URL", "") or "https://api.openai.com/v1"
-        llm_model = values.get("LLM_MODEL", "") or "gpt-4o"
-        vlm_base = values.get("VLM_BASE_URL", "")
-        vlm_model = values.get("VLM_MODEL", "")
+        # Always open with blank fields — never prefill Base URL / Model from .env.
         llm_key = values.get("LLM_API_KEY", "").strip()
         vlm_key = values.get("VLM_API_KEY", "").strip()
-        llm_key_ready = bool(llm_key)
-        vlm_key_ready = bool(vlm_key)
+        llm_ready = bool(
+            llm_key
+            and values.get("LLM_BASE_URL", "").strip()
+            and values.get("LLM_MODEL", "").strip()
+        )
 
-        self.llm_base_url_edit.setText(llm_base)
-        self.llm_model_edit.setText(llm_model)
+        self.llm_base_url_edit.clear()
+        self.llm_model_edit.clear()
         self.llm_api_key_edit.clear()
         self.llm_api_key_edit.setPlaceholderText(
-            "API key already saved · leave blank to keep it" if llm_key_ready else "Enter API key"
+            "API key already on file · leave blank to keep it" if llm_key else "API key"
         )
 
-        # Plan default: same-connection stays unchecked so VLM fields remain visible.
         self.reuse_llm_for_vlm.setChecked(False)
-        self.vlm_base_url_edit.setText(vlm_base)
-        self.vlm_model_edit.setText(vlm_model)
+        self.vlm_base_url_edit.clear()
+        self.vlm_model_edit.clear()
         self.vlm_api_key_edit.clear()
         self.vlm_api_key_edit.setPlaceholderText(
-            "VLM API key already saved · leave blank to keep it" if vlm_key_ready else "Enter VLM API key"
+            "VLM API key already on file · leave blank to keep it" if vlm_key else "VLM API key"
         )
         self._toggle_vlm_fields(False)
-        self._set_api_status(llm_key_ready, vlm_key_ready)
-
-    def _set_api_status(self, llm_ready: bool, vlm_ready: bool, saved: bool = False) -> None:
-        if llm_ready and vlm_ready:
-            text = "Saved to .env · planning and image scoring are ready" if saved else "Loaded from .env · planning and image scoring are ready"
-            role = "success"
-        elif llm_ready:
-            text = "Planning API is ready · image-scoring API still needs a key"
-            role = "warning"
+        if llm_ready:
+            self.api_status_label.setText(
+                "Credentials on file · leave fields blank to reuse them on Run, or type new values"
+            )
+            self.api_status_label.setProperty("role", "success")
         else:
-            text = "Enter an API key, then save this configuration"
-            role = "warning"
-        self.api_status_label.setText(text)
-        self.api_status_label.setProperty("role", role)
+            self.api_status_label.setText("Fill the fields above · applied automatically on Run")
+            self.api_status_label.setProperty("role", "muted")
         self.api_status_label.style().unpolish(self.api_status_label)
         self.api_status_label.style().polish(self.api_status_label)
 
-    def _save_api_settings(self) -> None:
+    def _persist_api_settings(self) -> bool:
+        """Write form credentials to .env / environ. Called automatically on Run."""
+
         current = read_model_environment(self.config.repository_root)
-        llm_base = self.llm_base_url_edit.text().strip()
-        llm_model = self.llm_model_edit.text().strip()
+        llm_base = self.llm_base_url_edit.text().strip() or current.get("LLM_BASE_URL", "").strip()
+        llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
         llm_key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
         if not llm_base or not llm_model or not llm_key:
-            self.api_status_label.setText("Base URL, model, and API key are required before saving.")
+            self.api_status_label.setText("Base URL, model, and API key are required before running.")
             self.api_status_label.setProperty("role", "warning")
-            return
+            self.api_status_label.style().unpolish(self.api_status_label)
+            self.api_status_label.style().polish(self.api_status_label)
+            return False
 
         values = {
             "LLM_BASE_URL": llm_base,
             "LLM_API_KEY": llm_key,
             "LLM_MODEL": llm_model,
         }
-        if self.reuse_llm_for_vlm.isChecked():
+        reuse = self.reuse_llm_for_vlm.isChecked()
+        vlm_base = self.vlm_base_url_edit.text().strip() or current.get("VLM_BASE_URL", "").strip()
+        vlm_model = self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
+        vlm_key = self.vlm_api_key_edit.text().strip() or current.get("VLM_API_KEY", "").strip()
+        # Comfort: empty VLM fields reuse the LLM connection automatically.
+        if reuse or not (vlm_base and vlm_model and vlm_key):
             values.update({
                 "VLM_BASE_URL": llm_base,
                 "VLM_API_KEY": llm_key,
                 "VLM_MODEL": llm_model,
             })
-            vlm_ready = True
         else:
-            vlm_base = self.vlm_base_url_edit.text().strip()
-            vlm_model = self.vlm_model_edit.text().strip()
-            vlm_key = self.vlm_api_key_edit.text().strip() or current.get("VLM_API_KEY", "").strip()
-            if not vlm_base or not vlm_model or not vlm_key:
-                self.api_status_label.setText("Complete the separate VLM Base URL, model, and API key before saving.")
-                self.api_status_label.setProperty("role", "warning")
-                return
             values.update({
                 "VLM_BASE_URL": vlm_base,
                 "VLM_API_KEY": vlm_key,
                 "VLM_MODEL": vlm_model,
             })
-            vlm_ready = True
 
         save_model_environment(self.config.repository_root, values)
         self.llm_api_key_edit.clear()
-        self.llm_api_key_edit.setPlaceholderText("API key already saved · leave blank to keep it")
         self.vlm_api_key_edit.clear()
-        self.vlm_api_key_edit.setPlaceholderText("VLM API key already saved · leave blank to keep it")
-        self._set_api_status(True, vlm_ready, saved=True)
+        self.llm_api_key_edit.setPlaceholderText("API key already on file · leave blank to keep it")
+        self.vlm_api_key_edit.setPlaceholderText("VLM API key already on file · leave blank to keep it")
+        self.api_status_label.setText("Credentials applied · ready to run")
+        self.api_status_label.setProperty("role", "success")
+        self.api_status_label.style().unpolish(self.api_status_label)
+        self.api_status_label.style().polish(self.api_status_label)
         self.refresh_preflight(scan=False)
         self.configuration_changed.emit()
+        return True
+
+    def _save_api_settings(self) -> None:
+        """Backward-compatible alias used by older tests."""
+        self._persist_api_settings()
 
     def _load_reference_demo(self) -> None:
         try:
@@ -520,13 +560,13 @@ class ConfigurePage(QWidget):
         self.dataset_picker.setText(self.config.data_root)
         self.query_edit.setPlainText(self.config.query)
         self.method_buttons.get(self.config.method, self.method_buttons["both"]).setChecked(True)
-        self.config.reproduce = True
         self.config.enable_segmentation = True
         self.config.segmentation_skip_if_present = True
         self.expert_check.setChecked(self.config.enable_expert_knowledge)
         self.deep_check.setChecked(self.config.enable_deep_research)
         self.rag_check.setChecked(self.config.enable_rag)
         self.temperature_spin.setValue(float(self.config.temperature))
+        self.config.reproduce = float(self.config.temperature) <= 0.0
         self.rounds_spin.setValue(int(self.config.num_rounds))
         self.candidates_spin.setValue(int(self.config.features_per_iteration))
         self.target_spin.setValue(int(self.config.target_feature_count))
@@ -548,6 +588,20 @@ class ConfigurePage(QWidget):
         if self._loading:
             return
         path = Path(value).expanduser() if value.strip() else None
+        problem = diagnose_dataset_selection(path)
+        if problem:
+            self.dataset_summary = None
+            self.config.description_path = ""
+            self.config.metadata_path = ""
+            self.config.dataset_source = "custom"
+            self.dataset_note.setText("Path not usable — see the dialog for the required layout.")
+            self.dataset_note.setProperty("role", "warning")
+            self.dataset_note.style().unpolish(self.dataset_note)
+            self.dataset_note.style().polish(self.dataset_note)
+            QMessageBox.warning(self, "Dataset path not usable", problem)
+            self._fields_changed()
+            return
+
         if path is not None and path.is_dir():
             self.dataset_summary = scan_dataset(path)
             self._detect_dataset_context(path)
@@ -594,26 +648,51 @@ class ConfigurePage(QWidget):
         return "both"
 
     def _sync_config(self) -> None:
+        current = read_model_environment(self.config.repository_root)
         self.config.data_root = self.dataset_picker.text()
         self.config.query = self.query_edit.toPlainText().strip()
         self.config.method = self._selected_method()
-        self.config.reproduce = True
         self.config.enable_segmentation = True
         self.config.segmentation_skip_if_present = True
         self.config.enable_expert_knowledge = self.expert_check.isChecked()
         self.config.enable_deep_research = self.deep_check.isChecked()
         self.config.enable_rag = self.rag_check.isChecked()
         self.config.temperature = float(self.temperature_spin.value())
+        # Temperature 0 ⇒ reproducible Code + VLM (seed, deterministic decoding, cache).
+        self.config.reproduce = self.config.temperature <= 0.0
         self.config.num_rounds = int(self.rounds_spin.value())
         self.config.features_per_iteration = int(self.candidates_spin.value())
         self.config.target_feature_count = int(self.target_spin.value())
-        self.config.code_parallel_workers = int(self.workers_spin.value())
-        self.config.vlm_online_concurrency = int(self.vlm_concurrency_spin.value())
-        self.config.llm_model = self.llm_model_edit.text().strip()
-        if self.reuse_llm_for_vlm.isChecked():
+        workers = int(self.workers_spin.value())
+        vlm_conc = int(self.vlm_concurrency_spin.value())
+        if self.config.reproduce:
+            workers = 1
+            vlm_conc = 1
+        self.config.code_parallel_workers = workers
+        self.config.vlm_online_concurrency = vlm_conc
+        self.config.llm_base_url = self.llm_base_url_edit.text().strip()
+        self.config.llm_api_key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
+        self.config.llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
+        self.config.reuse_llm_for_vlm = self.reuse_llm_for_vlm.isChecked()
+        if self.config.reuse_llm_for_vlm:
+            self.config.vlm_base_url = self.config.llm_base_url
+            self.config.vlm_api_key = self.config.llm_api_key
             self.config.vlm_online_model = self.config.llm_model
         else:
-            self.config.vlm_online_model = self.vlm_model_edit.text().strip()
+            self.config.vlm_base_url = self.vlm_base_url_edit.text().strip()
+            self.config.vlm_api_key = (
+                self.vlm_api_key_edit.text().strip() or current.get("VLM_API_KEY", "").strip()
+            )
+            self.config.vlm_online_model = (
+                self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
+            )
+            # Empty VLM → treat as same connection for preflight comfort.
+            if not (self.config.vlm_base_url and self.config.vlm_online_model and self.config.vlm_api_key):
+                self.config.vlm_base_url = self.config.llm_base_url or current.get("LLM_BASE_URL", "").strip()
+                self.config.vlm_api_key = self.config.llm_api_key
+                self.config.vlm_online_model = self.config.llm_model
+        if not self.config.llm_base_url:
+            self.config.llm_base_url = current.get("LLM_BASE_URL", "").strip()
         self._refresh_scale_summary()
 
     def _fields_changed(self, *_args) -> None:
@@ -635,18 +714,23 @@ class ConfigurePage(QWidget):
         else:
             self.command_preview.clear()
         blockers = [issue for issue in issues if issue.severity is Severity.BLOCKER]
-        self.run_button.setEnabled(not blockers and self.dataset_summary is not None)
+        usable_dataset = (
+            self.dataset_summary is not None
+            and self.dataset_summary.sample_count > 0
+            and len(self.dataset_summary.empty_samples) < self.dataset_summary.sample_count
+        )
+        self.run_button.setEnabled(not blockers and usable_dataset)
         if blockers:
             self.blocker_label.setText(f"Complete {len(blockers)} required item{'s' if len(blockers) != 1 else ''}")
             self.blocker_label.setProperty("role", "error")
             details = "\n".join(f"• {issue.message}" for issue in blockers)
             self.run_button.setToolTip(f"Complete the required setup before running:\n{details}")
             self.run_button.setAccessibleDescription(details)
-        elif self.dataset_summary is None:
-            self.blocker_label.setText("Choose a dataset to continue")
+        elif not usable_dataset:
+            self.blocker_label.setText("Choose a usable dataset folder")
             self.blocker_label.setProperty("role", "warning")
-            self.run_button.setToolTip("Choose a dataset to continue")
-            self.run_button.setAccessibleDescription("Choose a dataset to continue")
+            self.run_button.setToolTip("Choose a folder that contains dataset/<sample>/*.tif")
+            self.run_button.setAccessibleDescription("Choose a usable dataset folder")
         else:
             self.blocker_label.setText("Everything required is ready")
             self.blocker_label.setProperty("role", "success")
@@ -696,6 +780,18 @@ class ConfigurePage(QWidget):
             self.readiness_list.addItem(item)
 
     def _request_run(self) -> None:
+        if not self._persist_api_settings():
+            QMessageBox.warning(
+                self,
+                "Model API incomplete",
+                "Fill Base URL, API key, and Model. Credentials are applied automatically when you click Run.",
+            )
+            self.refresh_preflight(scan=False)
+            return
+        problem = diagnose_dataset_selection(self.dataset_picker.text())
+        if problem:
+            QMessageBox.warning(self, "Dataset path not usable", problem)
+            return
         issues = self.refresh_preflight(scan=True)
         if any(issue.severity is Severity.BLOCKER for issue in issues):
             return

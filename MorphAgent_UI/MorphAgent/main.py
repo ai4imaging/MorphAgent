@@ -1460,6 +1460,9 @@ Examples:
         if args.code_parallel_workers > 1:
             print(f"  [reproduce] code-parallel-workers {args.code_parallel_workers} -> 1 (deterministic)")
             args.code_parallel_workers = 1
+        if getattr(args, "vlm_online_concurrency", 1) > 1:
+            print(f"  [reproduce] vlm-online-concurrency {args.vlm_online_concurrency} -> 1 (deterministic)")
+            args.vlm_online_concurrency = 1
         apply_reproduce_mode(args.reproduce_seed)
         print(f"  [reproduce] Enabled: temperature=0, seed={args.reproduce_seed}, VLM caching on")
     

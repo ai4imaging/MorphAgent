@@ -133,11 +133,11 @@ Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation u
 The window maximizes automatically on launch.
 
 1. On the home page, click **Start a discovery run**.
-2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue).
+2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue), or browse to a folder that contains `dataset/<sample>/*.tif`.
 3. The system fills in the demo samples (WT_1–WT_10), the data description, and a default biological question.
-4. Under **3 · Model API**, fill in LLM Base URL, key, and model first; then optional VLM fields. Free OpenAI-compatible APIs tip: [Xiaomi MiMo platform](https://platform.xiaomimimo.com/).
-5. **Use the same connection for image scoring** is unchecked by default (independent VLM fields stay visible). Check it only when LLM and VLM share one endpoint.
-6. Click **Save API configuration**. Settings are stored only on the local machine in `MorphAgent/.env`.
+4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Xiaomi MiMo platform](https://platform.xiaomimimo.com/).
+5. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
+6. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
 
 Do not forward the generated `.env` to others. For a second handoff, delete `MorphAgent/.env` and keep only `.env.example`.
 
@@ -228,7 +228,7 @@ Default tests cover only the current main program and Qt UI. `segmentation_allen
 
 ### Run button is disabled
 
-Usually one of Data, Biological question, or API is incomplete. Click **Load demo dataset** first, then save Model API.
+Usually one of Data, Biological question, or API is incomplete. Click **Load demo dataset** first, then fill Model API (applied automatically on Run).
 
 ### API returns 404
 
