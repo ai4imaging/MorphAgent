@@ -49,6 +49,11 @@ dependencies:
       - python-dotenv==1.2.1
       - tenacity==9.1.2
 
+      # --- Desktop UI -----------------------------------------------------
+      # QtPy is the compatibility layer; PyQt5 supplies the actual Qt runtime.
+      - qtpy==2.4.3
+      - PyQt5==5.15.11
+
       # --- Literature retrieval / report parsing (HTML/text) --------------
       - requests==2.32.5
       - beautifulsoup4==4.14.3

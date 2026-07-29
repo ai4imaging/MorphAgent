@@ -59,12 +59,14 @@ Install the focused Qt interface on top of the unified environment:
 
 ```bash
 conda activate morphagent
-pip install -e ".[ui]"
+pip install -e .
 python launch_ui.py  # automatically reads ../.env
 ```
 
-`requirements-ui.txt` lists the standalone UI dependencies. This default does
-not install or show napari. If interactive layer/canvas inspection is needed,
+QtPy and PyQt5 are included in the unified environment and editable package
+dependencies. `requirements-ui.txt` remains available for adding only the
+standalone UI dependencies to an existing environment. This default does not
+install or show napari. If interactive layer/canvas inspection is needed,
 install `pip install -e ".[napari]"` and launch with
 `python launch_ui.py --with-napari`; the editable package also registers
 `morphagent_ui/napari.yaml` with napari's plugin engine.

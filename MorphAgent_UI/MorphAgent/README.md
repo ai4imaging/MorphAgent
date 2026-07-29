@@ -100,7 +100,7 @@ PY
 #   pip install -r envs/requirements-optional.txt
 
 # 3b) (Optional, recommended for desktop use) MorphAgent UI
-pip install -e ".[ui]"
+pip install -e .
 
 # 4) (Optional/legacy) Allen segmentation environment
 conda env create -f envs/environment_allen.yml # creates morphagent_allen
@@ -255,7 +255,7 @@ The focused Qt workspace wraps the existing `main.py` pipeline without duplicati
 
 ```bash
 conda activate morphagent
-pip install -e ".[ui]"             # first UI launch only
+pip install -e .                    # first UI launch only
 python launch_ui.py                 # automatically reads the repository .env
 ```
 

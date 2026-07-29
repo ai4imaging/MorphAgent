@@ -11,7 +11,7 @@ Prepare the main MorphAgent environment and API configuration first:
 ```bash
 conda env create -f envs/environment.yml
 conda activate morphagent
-pip install -e ".[ui]"
+pip install -e .
 python launch_ui.py  # automatically reads the repository .env
 ```
 
