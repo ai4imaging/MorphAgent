@@ -1,0 +1,44 @@
+name: Windows UI smoke
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-ui-smoke.yml"
+      - "MorphAgent_UI/dependencies/**"
+      - "MorphAgent_UI/scripts/**"
+      - "MorphAgent_UI/MorphAgent/pyproject.toml"
+      - "MorphAgent_UI/MorphAgent/envs/**"
+      - "MorphAgent_UI/MorphAgent/launch_ui.py"
+      - "MorphAgent_UI/MorphAgent/morphagent_ui/**"
+
+jobs:
+  install-and-launch:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Miniconda
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          auto-update-conda: true
+          python-version: "3.10"
+
+      - name: Run official Windows installer and UI smoke test
+        shell: pwsh
+        run: |
+          .\MorphAgent_UI\scripts\setup_windows.ps1 `
+            -EnvName morphagent-ci `
+            -SkipAllen
+
+      - name: Confirm the installed Qt runtime
+        shell: pwsh
+        run: |
+          conda run --no-capture-output -n morphagent-ci python -c `
+            "import qtpy, PyQt5; from qtpy.QtWidgets import QApplication; print(f'Qt API: {qtpy.API_NAME}'); print('Windows Qt runtime OK')"
