@@ -127,32 +127,6 @@ class RunPreset(str, Enum):
         return "Demo scale · 1 round × 5 candidates · target 5"
 
 
-_VLM_MODEL_HINTS = (
-    "gpt-4o",
-    "gpt-4.1",
-    "4v",
-    "vision",
-    "vl-",
-    "-vl",
-    "qwen-vl",
-    "qwen2-vl",
-    "qwen2.5-vl",
-    "gemini",
-    "claude-3",
-    "claude-sonnet-4",
-    "claude-opus-4",
-    "llava",
-    "internvl",
-)
-
-
-def looks_like_vlm_model(model_name: str) -> bool:
-    lowered = (model_name or "").strip().lower()
-    if not lowered:
-        return False
-    return any(token in lowered for token in _VLM_MODEL_HINTS)
-
-
 @dataclass
 class RunConfig:
     data_root: str = ""
@@ -371,20 +345,6 @@ class RunConfig:
             ))
         if self.method in {"vlm", "both"} and self.vlm_api_provider.lower() == "qwen":
             issues.append(ValidationIssue(Severity.WARNING, "local_vlm", "Local Qwen requires a supported CUDA GPU and extra packages.", "Confirm the local model and device in the repository configuration."))
-
-        scoring_model = (
-            self.vlm_online_model
-            or env.get("VLM_MODEL", "")
-            or self.llm_model
-            or env.get("LLM_MODEL", "")
-        ).strip()
-        if self.method in {"vlm", "both"} and scoring_model and not looks_like_vlm_model(scoring_model):
-            issues.append(ValidationIssue(
-                Severity.WARNING,
-                "vlm_model_uncertain",
-                f"Model '{scoring_model}' may not support image input.",
-                "Use a multimodal VLM, or switch the analysis route to Code only.",
-            ))
 
         if self.reproduce or self.temperature <= 0.0:
             issues.append(ValidationIssue(

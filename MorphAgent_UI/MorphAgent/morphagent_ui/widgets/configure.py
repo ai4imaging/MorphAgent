@@ -34,7 +34,6 @@ from ..models import (
     Severity,
     ValidationIssue,
     diagnose_dataset_selection,
-    looks_like_vlm_model,
     scan_dataset,
 )
 from ..environment import read_model_environment, save_model_environment
@@ -405,8 +404,6 @@ class ConfigurePage(QWidget):
             spin.valueChanged.connect(self._fields_changed)
         self.run_button.clicked.connect(self._request_run)
         self.reuse_llm_for_vlm.toggled.connect(self._toggle_vlm_fields)
-        self.llm_model_edit.textChanged.connect(self._update_vlm_route_availability)
-        self.vlm_model_edit.textChanged.connect(self._update_vlm_route_availability)
         for edit in (
             self.llm_base_url_edit,
             self.llm_api_key_edit,
@@ -425,29 +422,6 @@ class ConfigurePage(QWidget):
 
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
-        self._update_vlm_route_availability()
-
-    def _scoring_model_name(self) -> str:
-        if self.reuse_llm_for_vlm.isChecked():
-            return self.llm_model_edit.text().strip()
-        return self.vlm_model_edit.text().strip() or self.llm_model_edit.text().strip()
-
-    def _update_vlm_route_availability(self, *_args) -> None:
-        model = self._scoring_model_name()
-        uncertain = bool(model) and not looks_like_vlm_model(model)
-        for value in ("both", "vlm"):
-            button = self.method_buttons[value]
-            button.setEnabled(not uncertain)
-            if uncertain:
-                button.setToolTip(
-                    f"Model '{model}' may not support images. Use a multimodal VLM or Code only."
-                )
-            else:
-                button.setToolTip("")
-        if uncertain and self.method_buttons["vlm"].isChecked():
-            self.method_buttons["code"].setChecked(True)
-        elif uncertain and self.method_buttons["both"].isChecked():
-            self.method_buttons["code"].setChecked(True)
 
     def load_api_settings(self) -> None:
         values = read_model_environment(self.config.repository_root)
@@ -574,7 +548,6 @@ class ConfigurePage(QWidget):
         self.vlm_concurrency_spin.setValue(int(self.config.vlm_online_concurrency))
         self._refresh_scale_summary()
         self._loading = False
-        self._update_vlm_route_availability()
 
     def _refresh_scale_summary(self) -> None:
         source = "Demo" if self.config.dataset_source == "demo" else "Custom"
