@@ -17,6 +17,7 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 ## Table of Contents
 
+- [Graphical User Interface (UI)](#graphical-user-interface-morphagent-ui)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
 - [Environment & Installation](#environment--installation)
@@ -28,6 +29,34 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 - [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)
 - [Common Command-Line Arguments](#common-command-line-arguments)
 - [FAQ](#faq)
+
+---
+
+## Graphical User Interface (MorphAgent UI)
+
+Prefer not to drive everything from the command line? This repo also ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
+
+Watch the ~4m40s demo video first to see the full workflow end-to-end:
+
+https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
+
+> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
+
+### Try it
+
+```bash
+cd MorphAgent_UI
+bash scripts/setup_macos_linux.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
+bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
+```
+
+Highlights:
+
+- **Bundled demo dataset** — click **Use bundled Tau demo** to run the full pipeline on 5 sample images without preparing your own data first;
+- **Load a previous run** — instantly browse a completed run's `Features` and `Evidence` pages, no API key required;
+- **In-app API configuration** — fill in Base URL / API key / model on the Configure page; it writes straight to `MorphAgent/.env`, no manual file editing needed.
+
+Full install/usage instructions, system requirements, and troubleshooting live in [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
 
 ---
 
