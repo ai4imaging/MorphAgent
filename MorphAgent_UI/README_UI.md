@@ -89,14 +89,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_ui.ps1
 Without the scripts:
 
 ```bash
-conda create -n morphagent -c conda-forge python=3.10 pip numpy "pyqt=5" qtpy -y
+# macOS/Linux: do NOT install conda pyqt — use pip PyQt5 from requirements-demo-ui.txt
+conda create -n morphagent -c conda-forge python=3.10 pip numpy -y
 conda activate morphagent
-# Core Qt / numpy also come from conda-forge in scripts/setup.sh and setup_windows.ps1.
 python -m pip install -r dependencies/requirements-demo-ui.txt
 python -m pip install -e MorphAgent
-python scripts/verify_install.py --ui-smoke
+QT_QPA_PLATFORM=offscreen python scripts/verify_install.py --ui-smoke
 python MorphAgent/launch_ui.py
 ```
+
+On Windows, prefer `scripts/setup_windows.ps1` (conda `pyqt=5`, no pip PyQt5).
 
 `requirements-demo-ui.txt` is the recommended dependency set for handoff review: it runs the UI, LLM/VLM API routes, the Tau demo with existing masks, Features, and Evidence, without downloading segmentation stacks.
 
@@ -255,7 +257,24 @@ Confirm you launch with Python from the `morphagent` environment, not system Pyt
 conda run --no-capture-output -n morphagent python MorphAgent/launch_ui.py
 ```
 
-On Linux headless servers you can only run `--ui-smoke` offscreen checks; an interactive window cannot be shown.
+If setup/`verify_install --ui-smoke` aborts with duplicate `QtCore` / `Could not load the Qt platform plugin "offscreen"`, you have **both** conda `pyqt` and pip `PyQt5`. Keep **one** stack:
+
+```bash
+# macOS / Linux (recommended): pip-only PyQt5
+conda remove -y -n morphagent --force pyqt pyqt5-sip qt-main
+conda run -n morphagent python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip
+conda run -n morphagent python -m pip install --no-cache-dir "PyQt5==5.15.11" "qtpy==2.4.3"
+QT_QPA_PLATFORM=offscreen conda run -n morphagent python scripts/verify_install.py --ui-smoke
+```
+
+```powershell
+# Windows (recommended): conda-only pyqt
+conda run -n morphagent python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip
+conda install -y -n morphagent -c conda-forge "pyqt=5" qtpy
+$env:QT_QPA_PLATFORM="offscreen"; conda run -n morphagent python scripts\verify_install.py --ui-smoke
+```
+
+These scripts are intentionally different by platform: `setup.sh` → pip PyQt5; `setup_windows.ps1` → conda `pyqt=5`.
 
 ## 11. Run Strategy Summary
 

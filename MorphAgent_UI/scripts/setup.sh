@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# MorphAgent UI setup (macOS / Linux).
-# Creates `morphagent` with Qt + scientific stack, then optional `morphagent_allen`.
+# MorphAgent UI setup (macOS / Linux only — Windows uses setup_windows.ps1).
+# Creates `morphagent` with scientific stack + pip PyQt5, then optional `morphagent_allen`.
+#
+# Qt (Unix): pip PyQt5 only. Do not mirror Windows' conda pyqt path here — on
+# macOS, mixing conda `pyqt` with pip `PyQt5` loads two QtCore copies and aborts.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,18 +35,18 @@ env_exists() {
   conda env list | awk '{print $1}' | grep -Fxq "$1"
 }
 
-# Core GUI + numeric stack via conda-forge (reliable Qt binaries; pip pins follow).
+# Scientific stack via conda-forge (no pyqt — Qt comes from pip PyQt5 only).
 install_core_conda_packages() {
   local env="$1"
-  echo "Installing core conda packages into ${env} (PyQt5 / numpy / scipy / …)…"
+  echo "Installing core conda packages into ${env} (numpy / scipy / …; Qt via pip)…"
+  # Drop any previously mixed conda Qt stack before continuing.
+  conda remove -y -n "${env}" --force pyqt pyqt5-sip qt-main 2>/dev/null || true
   conda install -y -n "${env}" -c conda-forge \
     "python=3.10" \
     "pip>=24" \
     "numpy>=1.26,<3" \
     "scipy>=1.11" \
     "pandas>=2.0" \
-    "pyqt=5" \
-    "qtpy>=2.4" \
     "pillow>=10" \
     "matplotlib>=3.8" \
     "scikit-image>=0.22" \
@@ -58,6 +61,38 @@ install_core_conda_packages() {
     "lxml"
 }
 
+ensure_pip_pyqt() {
+  local env="$1"
+  echo "Ensuring a single pip PyQt5 stack in ${env}…"
+  conda run -n "${env}" python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip 2>/dev/null || true
+  # Clean broken partial installs that leave no RECORD/METADATA.
+  conda run -n "${env}" python - <<'PY'
+from pathlib import Path
+import site, shutil
+for base in map(Path, site.getsitepackages()):
+    for pattern in ("PyQt5", "PyQt5-*.dist-info", "PyQt5_sip*", "pyqt5_qt5*", "pyqt5_sip*"):
+        for path in base.glob(pattern):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            elif path.is_file():
+                path.unlink(missing_ok=True)
+print("[OK] cleared stale PyQt5 paths")
+PY
+  conda run -n "${env}" python -m pip install --ignore-installed --no-cache-dir "PyQt5==5.15.11" "qtpy==2.4.3"
+  conda run -n "${env}" python - <<'PY'
+from pathlib import Path
+from PyQt5 import QtCore
+import qtpy, numpy, PyQt5
+print(f"[OK] pip PyQt5={QtCore.PYQT_VERSION_STR}, qtpy={qtpy.__version__}, numpy={numpy.__version__}")
+print(f"[OK] QtCore={QtCore.__file__}")
+# Conda Qt dylibs must not remain beside pip PyQt5.
+lib = Path(PyQt5.__file__).resolve().parents[3] / "lib"
+conda_qt = list(lib.glob("libQt5Core*")) if lib.is_dir() else []
+if conda_qt:
+    raise SystemExit(f"conda Qt dylibs still present: {conda_qt[:3]} — remove conda pyqt/qt-main")
+PY
+}
+
 if env_exists "${ENV_NAME}"; then
   echo "Using existing conda environment: ${ENV_NAME}"
 else
@@ -67,17 +102,15 @@ fi
 
 install_core_conda_packages "${ENV_NAME}"
 
-echo "Installing pip packages from requirements-demo-ui.txt…"
+echo "Installing pip packages from requirements-demo-ui.txt (PyQt5 deferred)…"
 conda run -n "${ENV_NAME}" python -m pip install --upgrade pip
-conda run -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}"
+# Install non-Qt pins first so ensure_pip_pyqt owns a single clean PyQt5 tree.
+REQ_NO_PYQT="$(mktemp)"
+grep -vE '^[[:space:]]*PyQt5([=<>!].*)?([[:space:]]*#.*)?$' "${REQ_FILE}" > "${REQ_NO_PYQT}" || true
+conda run -n "${ENV_NAME}" python -m pip install -r "${REQ_NO_PYQT}"
+rm -f "${REQ_NO_PYQT}"
 conda run -n "${ENV_NAME}" python -m pip install -e "${REPOSITORY}"
-
-# Ensure PyQt is importable even if pip/conda competed on the binding name.
-if ! conda run -n "${ENV_NAME}" python -c "import PyQt5, qtpy, numpy" >/dev/null 2>&1; then
-  echo "[WARN] PyQt5/numpy import failed after pip; reinstalling pyqt/numpy from conda-forge…" >&2
-  install_core_conda_packages "${ENV_NAME}"
-  conda run -n "${ENV_NAME}" python -c "import PyQt5, qtpy, numpy; print('[OK]', 'PyQt5', PyQt5.QtCore.PYQT_VERSION_STR, 'numpy', numpy.__version__)"
-fi
+ensure_pip_pyqt "${ENV_NAME}"
 
 if [[ ! -f "${REPOSITORY}/.env" ]]; then
   if [[ -f "${REPOSITORY}/.env.example" ]]; then

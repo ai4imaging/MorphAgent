@@ -1,5 +1,8 @@
-# MorphAgent UI setup (Windows PowerShell).
+# MorphAgent UI setup (Windows only — macOS/Linux use setup.sh).
 # Creates `morphagent` with Qt + scientific stack, then optional `morphagent_allen`.
+#
+# Qt (Windows): conda `pyqt=5` only. Pip PyQt5 from requirements-demo-ui.txt is
+# filtered out on purpose — Windows is not meant to follow the Unix pip-Qt path.
 #
 # Prefer running from Anaconda Prompt / Miniforge Prompt:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
@@ -84,6 +87,38 @@ function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
     }
 }
 
+function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
+    $filtered = Join-Path $env:TEMP ("morphagent-req-no-pyqt-" + [guid]::NewGuid().ToString() + ".txt")
+    Get-Content $ReqFile | Where-Object { $_ -notmatch '^\s*PyQt5([=<>!].*)?\s*(#.*)?$' } | Set-Content -Path $filtered
+    Write-Host "Installing pip packages from $(Split-Path $ReqFile -Leaf) (PyQt5 lines skipped — using conda pyqt)..."
+    Invoke-CondaRun $Name @("python", "-m", "pip", "install", "--upgrade", "pip")
+    Invoke-CondaRun $Name @("python", "-m", "pip", "install", "-r", $filtered)
+    Remove-Item $filtered -ErrorAction SilentlyContinue
+    Write-Host "Removing any pip-installed PyQt5 wheels that conflict with conda pyqt..."
+    & conda run --no-capture-output -n $Name python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip 2>$null
+}
+
+function Ensure-SingleQtStack([string]$Name) {
+    Write-Host "Reaffirming single conda Qt stack in $Name..."
+    & conda install -y -n $Name -c conda-forge "pyqt=5" "qtpy>=2.4"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to reinstall conda pyqt for '$Name'"
+    }
+    Invoke-CondaRun $Name @(
+        "python", "-c",
+        @"
+import PyQt5
+from PyQt5 import QtCore
+from pathlib import Path
+import qtpy, numpy
+print('[OK] single Qt stack: PyQt5=%s, qtpy=%s, numpy=%s' % (QtCore.PYQT_VERSION_STR, qtpy.__version__, numpy.__version__))
+pip_qt = Path(PyQt5.__file__).resolve().parent / 'Qt5' / 'lib'
+if pip_qt.exists():
+    raise SystemExit('Pip PyQt5 Qt binaries still present; uninstall PyQt5/PyQt5-Qt5/PyQt5-sip and reinstall conda pyqt=5')
+"@
+    )
+}
+
 Assert-Command "conda"
 
 if (-not (Test-Path $Requirements)) {
@@ -104,24 +139,9 @@ if (-not (Test-CondaEnv $EnvName)) {
 }
 
 Install-CoreCondaPackages $EnvName
-
-Write-Host "Installing pip packages from requirements-demo-ui.txt..."
-Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "--upgrade", "pip")
-Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "-r", $Requirements)
+Install-PipRequirementsWithoutPyQt $EnvName $Requirements
 Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "-e", $Repository)
-
-# Import check: if pip overwrote Qt badly, reinstall conda pyqt/numpy.
-$importCheck = & conda run -n $EnvName python -c "import PyQt5, qtpy, numpy; print('ok')"
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "PyQt5/numpy import failed after pip; reinstalling pyqt/numpy from conda-forge..."
-    Install-CoreCondaPackages $EnvName
-    Invoke-CondaRun $EnvName @(
-        "python", "-c",
-        "import PyQt5, qtpy, numpy; print('[OK] PyQt5', PyQt5.QtCore.PYQT_VERSION_STR, 'numpy', numpy.__version__)"
-    )
-} else {
-    Write-Host "[OK] PyQt5 / qtpy / numpy import check passed"
-}
+Ensure-SingleQtStack $EnvName
 
 $EnvFile = Join-Path $Repository ".env"
 $EnvExample = Join-Path $Repository ".env.example"
