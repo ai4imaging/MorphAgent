@@ -7,38 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import settings, make_chat_llm
 
-# Try to import the PaddleX Loader
-try:
-    from .paddlex_loader import PaddleXPDFLoader
-    PADDLEX_AVAILABLE = True
-except ImportError:
-    PADDLEX_AVAILABLE = False
-    PaddleXPDFLoader = None
-
-
-def extract_text_from_pdf_paddlex(pdf_path: Path, device: str = "gpu:0") -> str:
-    """Extract PDF text using PaddleX
-
-    Args:
-        pdf_path: Path to the PDF file
-        device: Device (gpu:0, cpu, etc.)
-
-    Returns:
-        Extracted text content
-    """
-    if not PADDLEX_AVAILABLE:
-        return f"[ERROR] PaddleX is not available. Cannot extract text from {pdf_path.name}"
-    
-    try:
-        loader = PaddleXPDFLoader(str(pdf_path), device=device)
-        documents = loader.load()
-        
-        # Merge the content of all pages
-        full_text = "\n\n".join([doc.page_content for doc in documents])
-        
-        return full_text
-    except Exception as e:
-        return f"[ERROR] Failed to extract text from {pdf_path.name}: {e}"
+from .pdf_text import extract_text_from_pdf
 
 
 def summarize_deep_research_content(
@@ -121,7 +90,7 @@ def extract_deep_research(
     Args:
         project_root: Path to the project root directory (parent directory containing dataset and deep_research)
         enable_deep_research: Whether to enable Deep Research extraction
-        device: Device used by PaddleX (gpu:0, cpu, etc.)
+        device: unused by lite PDF extraction; kept for CLI compatibility
 
     Returns:
         Deep Research summary text, or None if not enabled or not found
@@ -146,7 +115,7 @@ def extract_deep_research(
     
     print(f"\n[Deep Research] Starting to process the Deep Research folder: {deep_research_dir}")
     
-    # Text/markdown reports are read directly (no PaddleX needed); PDFs need PaddleX.
+    # Text/markdown reports are read directly; PDFs use lite extraction by default.
     text_files = sorted(
         list(deep_research_dir.glob("*.md"))
         + list(deep_research_dir.glob("*.markdown"))
@@ -163,7 +132,7 @@ def extract_deep_research(
     pdf_texts = []
     pdf_names = []
     
-    # 1) Plain-text / markdown reports (preferred; no heavy dependency).
+    # 1) Plain-text / markdown reports (preferred).
     for text_file in text_files:
         print(f"  Reading text report: {text_file.name}")
         try:
@@ -175,17 +144,17 @@ def extract_deep_research(
         except Exception as e:
             print(f"    ❌ Read error: {e}")
     
-    # 2) PDF reports (require PaddleX for layout-aware parsing).
+    # 2) PDF reports (lite text extract → LLM; optional PaddleX via RAG_PDF_BACKEND).
     for pdf_file in pdf_files:
         print(f"  Processing PDF: {pdf_file.name}")
         try:
-            if PADDLEX_AVAILABLE:
-                text = extract_text_from_pdf_paddlex(pdf_file, device=device)
-                pdf_texts.append(text)
-                pdf_names.append(pdf_file.name)
-                print(f"    ✅ Extracted successfully, text length: {len(text)} characters")
-            else:
-                print(f"    ⚠️  PaddleX not available, skipping this PDF (you can save the report as .md/.txt to avoid depending on PaddleX)")
+            text = extract_text_from_pdf(pdf_file, device=device)
+            if text.startswith("[ERROR]"):
+                print(f"    ⚠️  {text}")
+                continue
+            pdf_texts.append(text)
+            pdf_names.append(pdf_file.name)
+            print(f"    ✅ Extracted successfully, text length: {len(text)} characters")
         except Exception as e:
             print(f"    ❌ Processing error: {e}")
             import traceback

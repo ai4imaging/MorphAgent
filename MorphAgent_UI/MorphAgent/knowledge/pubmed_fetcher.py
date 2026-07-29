@@ -2,7 +2,7 @@
 
 Given a set of keywords, this module searches the biomedical literature and
 downloads open-access full-text PDFs into the ``RAG/`` folder, so the existing
-RAG pipeline (PaddleX -> LLM summary) can consume them.
+RAG pipeline (lite PDF text -> LLM summary) can consume them.
 
 Design notes
 ------------

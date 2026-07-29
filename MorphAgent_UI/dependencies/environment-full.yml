@@ -20,12 +20,10 @@
 # * PyTorch: the pinned `torch==2.9.1` wheel on PyPI ships CUDA 12 support for
 #   Linux x86_64 out of the box (GPU used automatically if available, otherwise
 #   it falls back to CPU). No extra index URL is required.
-# * PaddleX (CPU) is included so the RAG / deep-research PDF pipeline works out
-#   of the box. For GPU PDF parsing, replace `paddlepaddle` with the matching
-#   `paddlepaddle-gpu` wheel and set PADDLEX_DEVICE=gpu:0.
-# * The only optional extra (local Qwen3-VL VLM) is intentionally left out to
-#   keep this environment lean — install it from `requirements-optional.txt`
-#   only if you need it.
+# * PDF ingest uses pymupdf (lite text → LLM). Optional PaddleX OCR lives in
+#   requirements-extra-optional.txt (`RAG_PDF_BACKEND=paddlex`).
+# * Optional extras (PaddleX OCR, local Qwen3-VL) are intentionally left out —
+#   install from requirements-extra-optional.txt only if you need them.
 # * The legacy Allen segmentation backend needs an older, incompatible Python
 #   stack and lives in its own environment — see `environment_allen.yml`.
 # =============================================================================
@@ -55,12 +53,8 @@ dependencies:
       - beautifulsoup4==4.14.3
       - lxml==6.0.2
 
-      # --- PDF parsing for RAG + Deep Research (PaddleX, CPU by default) ---
-      # Auto literature retrieval and auto deep-research feed PDFs through
-      # PaddleX (PP-StructureV3 layout parsing + OCR). CPU works out of the box;
-      # for GPU install `paddlepaddle-gpu==3.0.0` instead and set PADDLEX_DEVICE=gpu:0.
-      - paddlepaddle==3.0.0
-      - paddlex[ocr]==3.3.10
+      # --- PDF text for RAG + Deep Research (lite extract → LLM) ------------
+      - pymupdf>=1.24.0,<2
 
       # --- Core scientific / imaging stack (agent + sandbox) --------------
       - numpy==2.2.6

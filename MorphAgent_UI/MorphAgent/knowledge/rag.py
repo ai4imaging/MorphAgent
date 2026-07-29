@@ -10,13 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import settings, make_chat_llm
 
-# Try to import the PaddleX Loader
-try:
-    from .paddlex_loader import PaddleXPDFLoader
-    PADDLEX_AVAILABLE = True
-except ImportError:
-    PADDLEX_AVAILABLE = False
-    PaddleXPDFLoader = None
+from .pdf_text import extract_text_from_pdf
 
 # Try to import BeautifulSoup for XML parsing
 try:
@@ -25,31 +19,6 @@ try:
 except ImportError:
     BEAUTIFULSOUP_AVAILABLE = False
     BeautifulSoup = None
-
-
-def extract_text_from_pdf_paddlex(pdf_path: Path, device: str = "gpu:0") -> str:
-    """Extract PDF text using PaddleX
-    
-    Args:
-        pdf_path: PDF file path
-        device: device (gpu:0, cpu, etc.)
-        
-    Returns:
-        The extracted text content
-    """
-    if not PADDLEX_AVAILABLE:
-        return f"[ERROR] PaddleX is not available. Cannot extract text from {pdf_path.name}"
-    
-    try:
-        loader = PaddleXPDFLoader(str(pdf_path), device=device)
-        documents = loader.load()
-        
-        # Merge the content of all pages
-        full_text = "\n\n".join([doc.page_content for doc in documents])
-        
-        return full_text
-    except Exception as e:
-        return f"[ERROR] Failed to extract text from {pdf_path.name}: {e}"
 
 
 def extract_text_from_xml(xml_path: Path) -> str:
@@ -588,7 +557,8 @@ def extract_rag_knowledge(
     Args:
         project_root: project root directory path (the parent directory containing dataset and RAG)
         enable_rag: whether to enable RAG knowledge extraction
-        device: device used by PaddleX (gpu:0, cpu, etc.)
+        device: unused by the default lite PDF extractor; kept for CLI compatibility
+            (PaddleX device when ``RAG_PDF_BACKEND=paddlex``)
         use_cache: whether to use caching (default True)
         cache_dir: cache directory path; if None, use project_root / ".rag_cache"
         
@@ -662,18 +632,18 @@ def extract_rag_knowledge(
     document_names = []
     document_types = []
     
-    # Process PDF files
+    # Process PDF files (lite text extract by default; optional PaddleX via RAG_PDF_BACKEND)
     for pdf_file in pdf_files:
         print(f"  Processing PDF: {pdf_file.name}")
         try:
-            if PADDLEX_AVAILABLE:
-                text = extract_text_from_pdf_paddlex(pdf_file, device=device)
-                document_texts.append(text)
-                document_names.append(pdf_file.name)
-                document_types.append('pdf')
-                print(f"    ✅ Extraction succeeded, text length: {len(text)} characters")
-            else:
-                print(f"    ⚠️  PaddleX is not available; skipping this PDF")
+            text = extract_text_from_pdf(pdf_file, device=device)
+            if text.startswith("[ERROR]"):
+                print(f"    ⚠️  {text}")
+                continue
+            document_texts.append(text)
+            document_names.append(pdf_file.name)
+            document_types.append("pdf")
+            print(f"    ✅ Extraction succeeded, text length: {len(text)} characters")
         except Exception as e:
             print(f"    ❌ Error while processing: {e}")
             import traceback

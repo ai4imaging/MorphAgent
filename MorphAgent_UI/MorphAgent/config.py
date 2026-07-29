@@ -739,8 +739,7 @@ class MorphAgentConfig:
     pubmed_min_year: int = int(os.getenv("PUBMED_MIN_YEAR", "0"))
     pubmed_open_access_only: bool = bool(os.getenv("PUBMED_OPEN_ACCESS_ONLY", "True").lower() == "true")
 
-    # PaddleX device used to parse PDFs ("cpu" is the safe default in the public
-    # build; set "gpu:0" if you installed paddlepaddle-gpu).
+    # Device hint for optional PaddleX OCR when RAG_PDF_BACKEND=paddlex.
     paddlex_device: str = os.getenv("PADDLEX_DEVICE", "cpu")
     
     # Prompt Templates

@@ -1349,7 +1349,7 @@ Examples:
     parser.add_argument("--enable-rag", action="store_true", default=True, help="Enable RAG knowledge extraction (enabled by default)")
     parser.add_argument("--disable-rag", action="store_false", dest="enable_rag", help="Disable RAG knowledge extraction")
     parser.add_argument("--paddlex-device", type=str, default=None,
-                        help="Device used by PaddleX to parse PDFs (cpu, gpu:0, ...). Defaults to config.paddlex_device (cpu).")
+                        help="Device for optional PaddleX PDF OCR when RAG_PDF_BACKEND=paddlex (cpu, gpu:0, ...). Defaults to config.paddlex_device (cpu).")
 
     # --- Auto Deep Research (single API call -> markdown report) --------------
     parser.add_argument("--auto-deep-research", action="store_true", default=False,
@@ -1602,7 +1602,7 @@ Examples:
             f.write(expert_knowledge)
         print(f"  Expert knowledge saved: {expert_knowledge_path}")
     
-    # Resolve the PaddleX device (CLI overrides config; config default is cpu).
+    # Resolve PDF device hint (used only when RAG_PDF_BACKEND=paddlex).
     paddlex_device = args.paddlex_device or settings.paddlex_device
 
     # Step 2.15: Auto Deep Research — generate a report with ONE API call and
@@ -1633,7 +1633,7 @@ Examples:
     
     # Step 2.25: Auto Literature Retrieval — search PubMed/Europe PMC and
     # download open-access PDFs into the RAG/ folder so extract_rag_knowledge
-    # (PaddleX -> LLM summary) can consume them.
+    # (lite PDF text -> LLM summary) can consume them.
     if getattr(args, "auto_literature_retrieval", False) and args.enable_rag:
         from knowledge.pubmed_fetcher import fetch_pubmed_literature
         lit_query = args.pubmed_query or args.user_query

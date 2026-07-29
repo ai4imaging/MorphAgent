@@ -170,8 +170,8 @@ Key facts to check:
   (2D/3D/multi-channel/z-stack), what each channel is, naming conventions.
 - Optional knowledge folders live under the **project root** (the parent that
   contains `dataset/`): `expert_knowledge/`, `deep_research/`, `RAG/`. All
-  optional. PaddleX (CPU) is installed by the unified env and parses PDFs
-  automatically; `.md/.txt/.xml` are read directly and never need PaddleX.
+  optional. PDFs use lightweight PyMuPDF text extract by default; `.md/.txt/.xml`
+  are read directly. Optional PaddleX OCR: see `envs/requirements-optional.txt`.
   You can also let MorphAgent **generate** these contents:
   - `--auto-deep-research` — one API call to `DEEP_RESEARCH_MODEL` writes a
     markdown report into `deep_research/`.
@@ -244,9 +244,9 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
   export SEGMENTATION_CONDA_ENV=morphagent_allen
   ```
   See `segmentation_allen/README_SEGMENTATION.md`.
-- **PaddleX PDF parsing**: already in the unified env (CPU). For GPU parsing:
-  `pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0`
-  then `export PADDLEX_DEVICE=gpu:0`.
+- **PDF parsing**: default is pymupdf lite extract → LLM. Optional PaddleX OCR:
+  `pip install -r envs/requirements-optional.txt` (uncomment paddlex lines) then
+  `export RAG_PDF_BACKEND=paddlex`.
 - **Local Qwen3-VL** (advanced, optional): `pip install -r envs/requirements-optional.txt`
   then `--vlm-api-provider qwen`. Requires a suitable GPU.
 - **Auto Deep Research / Literature Retrieval**: `--auto-deep-research` and
@@ -264,11 +264,9 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
   VLM endpoint must accept image inputs (multimodal).
 - **0 samples found** → data layout wrong; each sample must be its own subdirectory
   under `data_root`.
-- **PDF knowledge ignored / PaddleX init fails** → make sure `paddlex[ocr]` and
-  `paddlepaddle` are installed (they are in `environment.yml`). First-run model
-  downloads can hang on HuggingFace; prefer Baidu BOS:
-  `export PADDLE_PDX_MODEL_SOURCE=bos`. Convert reports to `.md/.txt` if you want
-  to skip PaddleX entirely.
+- **PDF knowledge ignored / empty extract** → install `pymupdf` (in the unified
+  env). Scanned/image-only PDFs need optional PaddleX (`RAG_PDF_BACKEND=paddlex`)
+  or convert reports to `.md/.txt`.
 - **Literature download failed but search worked** → network restriction on the
   server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a
   machine with internet (`HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.

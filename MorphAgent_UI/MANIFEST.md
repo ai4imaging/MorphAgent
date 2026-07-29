@@ -35,8 +35,8 @@
 |---|---|---|
 | Recommended review/demo | `dependencies/requirements-demo-ui.txt` | UI, API LLM/VLM, bundled masks and all result pages |
 | Cellpose segmentation | `dependencies/requirements-segmentation-optional.txt` | Regenerate masks |
-| Full upstream environment | `dependencies/environment-full.yml` / `requirements-full.txt` | Unified install including segmentation + PaddleX (CPU) for RAG / auto literature / PDF deep-research |
-| GPU PDF / local VLM extras | `dependencies/requirements-extra-optional.txt` | GPU paddle swap notes or local Qwen; not needed for the bundled demo |
+| Full upstream environment | `dependencies/environment-full.yml` / `requirements-full.txt` | Unified install including segmentation + pymupdf for RAG / auto literature / PDF deep-research |
+| Optional PDF OCR / local VLM | `dependencies/requirements-extra-optional.txt` | Optional PaddleX OCR or local Qwen; not needed for the bundled demo |
 | Legacy Allen backend | `dependencies/environment-allen-optional.yml` | Optional isolated legacy environment |
 | Reviewer tests | `dependencies/requirements-test.txt` | pytest and Qt tests |
 

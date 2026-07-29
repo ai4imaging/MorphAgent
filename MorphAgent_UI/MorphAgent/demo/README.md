@@ -40,20 +40,21 @@ dataset/
 Recommend **≥5 samples** (enough unique values for validation). Fewer than 5
 triggers a UI warning but does not block Run.
 
-## Why it runs cheaply and offline (no GPU / no PaddleX)
+## Why it runs cheaply and offline (no GPU / no heavy PDF OCR)
 
 - **Segmentation is reused.** Every sample already ships masks under
   `segmentation/`, so the pipeline marks them `skipped_user_seg` and never
   needs Allen or Cellpose. No GPU required.
 - **deep_research** is provided as `report.md` (read directly by the LLM).
   Loading the demo dataset does **not** pass `--auto-deep-research`.
-- **RAG** is served from a pre-seeded cache so raw PDF parsing with PaddleX is
-  skipped. The demo path does **not** pass `--auto-literature-retrieval`.
+- **RAG** is served from a pre-seeded cache on the happy path. Fresh PDF
+  ingest uses lightweight PyMuPDF text extract → LLM (not PaddleX). The demo
+  path does **not** pass `--auto-literature-retrieval`.
 
 ## Requirements
 
 - The `morphagent` conda environment (see `../envs/environment.yml`).
-  It already includes PaddleX (CPU) for PDF parsing on custom corpora.
+  PDF ingest uses **pymupdf** (lite extract); PaddleX is optional only.
 - A working **LLM** and **VLM** API (OpenAI-compatible). Fill them in the
   notebook's API configuration cell (or set `LLM_*` / `VLM_*` env vars /
   edit `../config.py`) before running.
@@ -64,8 +65,8 @@ When you choose your own folder in the UI (not Load demo dataset):
 
 - **Deep research** checked → `--auto-deep-research` (uses the LLM API).
 - **Literature / RAG** checked → `--auto-literature-retrieval --pubmed-max-results 10`
-  (PubMed → PaddleX). Failures are logged and the run continues with whatever
-  local knowledge files already exist.
+  (PubMed → lite PDF text → LLM). Failures are logged and the run continues with
+  whatever local knowledge files already exist.
 - Missing masks → Allen via `morphagent_allen` when available; otherwise the
   sample is skipped gracefully (install optional Allen env only if needed).
 

@@ -242,9 +242,9 @@ The current model may not support image input. Configure a separate multimodal V
 
 Install `dependencies/environment-allen-optional.yml` if custom samples have no masks. Without it, those samples skip segmentation and the run continues.
 
-### RAG PDF parsing warns that PaddleX is missing
+### Literature / RAG PDF step is slow or mentions PaddleX
 
-The bundled demo already includes a precomputed RAG cache, so normal use of **Load demo dataset** does not need PaddleX. Custom datasets with Literature / RAG checked may call PubMed + PaddleX (`--auto-literature-retrieval`). GPU PDF parsing still uses the swap notes in `requirements-extra-optional.txt`.
+Demo and UI default to **lightweight PDF text extract** (PyMuPDF) → LLM summary. PaddleX is optional and **not** required for a smooth demo. Custom Literature / RAG runs download PubMed PDFs then use the lite path (`RAG_PDF_BACKEND=lite` by default). Only if you need layout OCR for scanned PDFs: install PaddleX (see `requirements-extra-optional.txt`) and set `RAG_PDF_BACKEND=paddlex`.
 
 ### UI fails to open or Qt plugin errors
 

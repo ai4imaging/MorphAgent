@@ -39,8 +39,8 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 | Code feature extraction | The LLM generates/repairs an `extract(img, seg)` function and runs it in batch | LLM API + sandbox conda environment |
 | VLM feature scoring | A multimodal model scores images feature by feature on a continuous scale | Multimodal API (e.g. GPT-4o) |
 | auto_segmentation | Generates masks with Cellpose-SAM (default) or Allen aicssegmentation | GPU (Cellpose) / CPU (Allen) |
-| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF uses PaddleX) |
-| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → PaddleX → LLM digests → injects into planning | Internet + PaddleX (CPU) + LLM API |
+| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF: lite text extract) |
+| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → lite PDF text → LLM digests → injects into planning | Internet + pymupdf + LLM API |
 | expert_knowledge | Reads expert materials under `expert_knowledge/` → LLM digests | LLM API |
 | Deterministic validation | Unsupervised / supervised (metadata) feature filtering with multi-round deduplication | None |
 
@@ -243,7 +243,7 @@ Notes: single cell per image; pixel size ~0.65 um.
 
 - These are all **optional** and can be turned off with `--disable-expert-knowledge` / `--disable-deep-research` / `--disable-rag`.
 - You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)).
-- PaddleX (CPU) is installed by the unified environment for PDF parsing; `.md/.txt/.xml` are read directly and never need PaddleX.
+- PDFs use lightweight PyMuPDF text extract by default (optional PaddleX via `RAG_PDF_BACKEND=paddlex`); `.md/.txt/.xml` are read directly.
 
 ---
 
@@ -382,11 +382,11 @@ model (e.g. Perplexity `sonar-deep-research`, OpenAI `gpt-4o-search-preview`);
 any strong chat model also works. You can still drop your own `.md`/`.txt`/`.pdf`
 reports into `deep_research/` instead of (or in addition to) generating one.
 
-### auto_literature_retrieval — keyword → PubMed PDFs → PaddleX → digest
+### auto_literature_retrieval — keyword → PubMed PDFs → lite text → digest
 
 Add `--auto-literature-retrieval` and MorphAgent searches PubMed / Europe PMC for
-your keywords, downloads **open-access PDFs** into `project_root/RAG/`, parses
-them with **PaddleX**, and injects the digested knowledge (with hash caching).
+your keywords, downloads **open-access PDFs** into `project_root/RAG/`, extracts
+text with **PyMuPDF** (default), and injects the digested knowledge (with hash caching).
 
 ```bash
 python main.py "quantify Tau aggregation morphology" \
@@ -404,12 +404,13 @@ You can also just place your own `.pdf` / PMC `.xml` files into `RAG/` and skip
 > fail even though search succeeds — run it on a machine with internet (a proxy
 > via `HTTPS_PROXY` works) or add PDFs to `RAG/` manually.
 
-### PaddleX (PDF parsing)
+### PDF parsing (lite by default)
 
-PaddleX (CPU) is installed by the unified environment, so PDF sources for both
-RAG and deep-research work out of the box. Set `PADDLEX_DEVICE=gpu:0` (and
-install `paddlepaddle-gpu`) for faster GPU parsing. Markdown/text/XML sources are
-read directly and never need PaddleX.
+RAG and deep-research PDFs use **lightweight text extraction** (`pymupdf`, with
+`pypdf` fallback) then an LLM summary — fast enough for demo/UI on CPU/Mac.
+Optional layout OCR: install PaddleX from `envs/requirements-optional.txt` and
+set `RAG_PDF_BACKEND=paddlex` (and `PADDLEX_DEVICE=gpu:0` with a GPU wheel if
+desired). Markdown/text/XML sources are read directly.
 
 ---
 
@@ -435,7 +436,7 @@ read directly and never need PaddleX.
 | `--auto-deep-research` + `--deep-research-query` | off | Generate a deep-research report (one API call) into `deep_research/` before digesting |
 | `--auto-literature-retrieval` + `--pubmed-query` | off | Download open-access PubMed PDFs into `RAG/` before digesting |
 | `--pubmed-max-results` / `--pubmed-min-year` / `--pubmed-include-non-oa` | 8 / 0 / off | Tune the PubMed search & download |
-| `--paddlex-device` | `cpu` | Device for PaddleX PDF parsing (`cpu` or `gpu:0`) |
+| `--paddlex-device` | `cpu` | Only used when `RAG_PDF_BACKEND=paddlex` (`cpu` or `gpu:0`) |
 | `--reproduce` | off in raw CLI; on in UI | Deterministic mode (temperature=0 + VLM caching) |
 | `--code-parallel-workers` | 1 | Number of parallel processes for running merged code across all samples |
 | `--vlm-online-concurrency` | 1 | Number of concurrent threads for the online VLM API |
@@ -448,6 +449,6 @@ read directly and never need PaddleX.
 
 - **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU; but **Cellpose-SAM segmentation requires a GPU**. Without a GPU, you can disable segmentation (`--disable-segmentation`) or use your own masks / Allen (CPU) instead.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
-- **PaddleX / PDF parsing?** PaddleX (CPU) is installed by the unified environment and works out of the box; for GPU parsing install `paddlepaddle-gpu==3.0.0` and set `PADDLEX_DEVICE=gpu:0`. If you only use `.md/.txt` deep_research and `.xml` RAG, PaddleX is never invoked.
+- **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
