@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Single-channel Tau MIP: generate two kinds of segmentation masks consistent with data_test_18.
+Single-channel Tau MIP: generate two kinds of segmentation masks for Tau MIP bundles.
 - mask_cell.tif: Allen MO threshold (large targets) + largest connected component (solid single-cell region)
 - mask_bundle.tif: Allen filament_2d coarse scale (same bundle parameters as build_final_seg_WT1)
 

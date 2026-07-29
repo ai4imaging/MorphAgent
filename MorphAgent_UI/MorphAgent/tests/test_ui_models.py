@@ -66,12 +66,17 @@ class RunConfigTests(unittest.TestCase):
     def test_diagnose_dataset_selection_for_custom_images_only(self) -> None:
         from morphagent_ui.models import diagnose_dataset_selection
 
-        repo = Path(__file__).resolve().parents[1]
-        data_test = repo / "demo" / "data_test"
-        if data_test.is_dir():
-            self.assertIsNone(diagnose_dataset_selection(data_test))
-            self.assertIsNotNone(diagnose_dataset_selection(data_test / "dataset" / "WT_1"))
-        self.assertIsNotNone(diagnose_dataset_selection(repo / "does_not_exist"))
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            dataset = root / "dataset"
+            sample = dataset / "WT_1"
+            sample.mkdir(parents=True)
+            (sample / "image.tif").touch()
+            (dataset / "dataset_index.txt").write_text("custom images", encoding="utf-8")
+
+            self.assertIsNone(diagnose_dataset_selection(root))
+            self.assertIsNotNone(diagnose_dataset_selection(sample))
+        self.assertIsNotNone(diagnose_dataset_selection(Path("/does/not/exist")))
 
     def _ready_dataset(self, root: Path):
         sample = root / "sample_1"

@@ -17,7 +17,7 @@ MorphAgent_handoff_20260719/
 ├── dependencies/                       # Dependency manifests organized by purpose
 ├── scripts/                            # One-click install, launch, and self-check
 ├── demo_video/
-│   ├── MorphAgent_demo_english.mp4     # ~4 min 40 sec English demo
+│   ├── MorphAgent_demo_english.mp4     # ~4 min 40 sec English demo (compressed)
 │   └── MorphAgent_demo_english.srt     # Matching subtitle file
 ├── MANIFEST.md                         # Package contents and run strategy
 └── SHA256SUMS.txt                      # File integrity checksums
