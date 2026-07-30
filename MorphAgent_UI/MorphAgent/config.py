@@ -215,13 +215,30 @@ def _should_retry_llm_error(exc: Exception) -> bool:
     return False
 
 
+def _is_max_tokens_limit_error(exc: Exception) -> bool:
+    """True when the provider rejects the *completion* max_tokens (not prompt length)."""
+    message = str(exc).lower()
+    if "max_tokens is too large" in message:
+        return True
+    if "max_tokens" in message and "at most" in message and "completion" in message:
+        return True
+    if "completion tokens" in message and ("too large" in message or "whereas you provided" in message):
+        return True
+    return False
+
+
 def _is_context_length_error(exc: Exception) -> bool:
     """Determine whether the exception likely means the prompt is too long / the request body is too large (can be mitigated by compressing the prompt).
 
     Some gateways often return an over-long request as a 400 'Invalid Request'
     with vague information, so BadRequestError(400) is uniformly treated as a
     candidate for compression-and-retry, aided by common textual markers.
+
+    Explicit *completion* max_tokens rejections are excluded — those need a
+    lower max_tokens (see RetryableChatLLM._maybe_clamp_max_tokens), not prompt compression.
     """
+    if _is_max_tokens_limit_error(exc):
+        return False
     if isinstance(exc, BadRequestError):
         return True
     status = getattr(exc, "status_code", None)
@@ -451,6 +468,7 @@ class RetryableChatLLM:
         self._max_retry_delay_seconds = max(self._base_retry_delay_seconds, max_retry_delay_seconds)
         self._llm_params = dict(llm_params or {})
         self._v1_fallback_tried = False
+        self._max_tokens_clamp_tried = False
 
     def _total_message_chars(self, messages: Any) -> int:
         if not isinstance(messages, (list, tuple)):
@@ -492,11 +510,12 @@ class RetryableChatLLM:
         )
         return (new_messages,) + tuple(args[1:])
 
-    def _rebuild_llm(self, base_url: str) -> None:
+    def _rebuild_llm(self, base_url: Optional[str] = None) -> None:
         from langchain_openai import ChatOpenAI
 
         params = dict(self._llm_params)
-        params["base_url"] = base_url
+        if base_url is not None:
+            params["base_url"] = base_url
         self._llm_params = params
         self._llm = ChatOpenAI(**params)
 
@@ -522,6 +541,36 @@ class RetryableChatLLM:
             pass
         return True
 
+    def _maybe_clamp_max_tokens(self, exc: Exception) -> bool:
+        """If the gateway rejects max_tokens (e.g. 65535), drop to 16383 and retry once — do not abort."""
+        if not _is_max_tokens_limit_error(exc):
+            return False
+        if getattr(self, "_max_tokens_clamp_tried", False):
+            return False
+        current = self._llm_params.get("max_tokens")
+        try:
+            current_int = int(current) if current is not None else 0
+        except (TypeError, ValueError):
+            current_int = 0
+        # Stay under the common 16384 completion ceiling reported by OpenAI-compatible gateways.
+        new_max = 16383
+        if current_int and current_int <= new_max:
+            return False
+        self._max_tokens_clamp_tried = True
+        self._llm_params["max_tokens"] = new_max
+        try:
+            settings.llm_max_tokens = new_max
+            if getattr(settings, "merge_max_tokens", None) and int(settings.merge_max_tokens) > new_max:
+                settings.merge_max_tokens = new_max
+        except Exception:
+            pass
+        print(
+            f"  ⚠️  Provider rejected max_tokens={current_int or current}; "
+            f"retrying with max_tokens={new_max} (provider={self._provider_name})"
+        )
+        self._rebuild_llm()
+        return True
+
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         """Uniformly handle retries for LLM timeout/524/connection errors; proactively compress over-long prompts before the call, and compress-then-retry when the prompt is too long (400/413)."""
         args = self._maybe_proactive_compact(args)
@@ -530,6 +579,12 @@ class RetryableChatLLM:
                 return self._llm.invoke(*args, **kwargs)
             except Exception as exc:
                 if self._maybe_retry_with_v1_base_url(exc):
+                    try:
+                        return self._llm.invoke(*args, **kwargs)
+                    except Exception as retry_exc:
+                        exc = retry_exc
+
+                if self._maybe_clamp_max_tokens(exc):
                     try:
                         return self._llm.invoke(*args, **kwargs)
                     except Exception as retry_exc:

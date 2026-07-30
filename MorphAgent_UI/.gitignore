@@ -1,0 +1,3 @@
+# Local Windows/macOS setup transcripts (kept on disk for the user; not committed)
+logs/
+*.log

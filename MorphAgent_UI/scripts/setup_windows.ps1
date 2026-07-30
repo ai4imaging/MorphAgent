@@ -39,6 +39,9 @@ $AllenCheck = Join-Path $AllenPkg "check_installation.py"
 
 # Script-scoped path to conda.exe (NOT conda.bat).
 $script:CondaExe = $null
+$script:SetupLogDir = Join-Path $HandoffRoot "logs"
+$script:SetupLogPath = $null
+$script:SetupStatusPath = Join-Path $script:SetupLogDir "setup_last_status.txt"
 
 function Initialize-Utf8Console {
     # Reduce GBK/CP936 mojibake when .bat/.ps1 print ASCII + Chinese together.
@@ -59,6 +62,111 @@ function Write-Utf8NoBomFile([string]$Path, [string]$Content) {
     # PowerShell 5.1 Set-Content defaults to UTF-16LE - never use it for .env / req files.
     $utf8 = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($Path, $Content, $utf8)
+}
+
+function Start-SetupTranscript {
+    try {
+        if (-not (Test-Path $script:SetupLogDir)) {
+            New-Item -ItemType Directory -Path $script:SetupLogDir -Force | Out-Null
+        }
+        $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $script:SetupLogPath = Join-Path $script:SetupLogDir ("setup_windows_" + $stamp + ".log")
+        Start-Transcript -Path $script:SetupLogPath -Force | Out-Null
+        Write-Host "[OK] Setup log (kept after window closes): $($script:SetupLogPath)"
+    } catch {
+        Write-Warning "Could not start setup transcript: $($_.Exception.Message)"
+        $script:SetupLogPath = $null
+    }
+}
+
+function Stop-SetupTranscriptSafe {
+    try { Stop-Transcript | Out-Null } catch {}
+}
+
+function Write-SetupStatusFile([int]$ExitCode, [string[]]$Lines) {
+    try {
+        if (-not (Test-Path $script:SetupLogDir)) {
+            New-Item -ItemType Directory -Path $script:SetupLogDir -Force | Out-Null
+        }
+        $header = @(
+            "MorphAgent UI Windows setup status"
+            "time=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+            "exit_code=$ExitCode"
+            "handoff=$HandoffRoot"
+            "log=$($script:SetupLogPath)"
+            "----"
+        )
+        Write-Utf8NoBomFile -Path $script:SetupStatusPath -Content (($header + $Lines) -join "`r`n")
+        Write-Host "[OK] Status saved: $($script:SetupStatusPath)"
+    } catch {
+        Write-Warning "Could not write status file: $($_.Exception.Message)"
+    }
+}
+
+function Resolve-EnvPythonExe([string]$Name) {
+    # Best-effort locate python.exe for a named conda env (Windows layout).
+    $candidates = @()
+    if ($script:CondaExe) {
+        $root = Split-Path (Split-Path $script:CondaExe -Parent) -Parent
+        $candidates += (Join-Path $root "envs\$Name\python.exe")
+    }
+    foreach ($base in @(
+        $env:CONDA_ROOT,
+        $env:CONDA_BASE,
+        (Join-Path $env:USERPROFILE "Miniconda3"),
+        (Join-Path $env:USERPROFILE "miniconda3"),
+        (Join-Path $env:USERPROFILE "Anaconda3"),
+        (Join-Path $env:LOCALAPPDATA "Miniconda3")
+    )) {
+        if ($base) { $candidates += (Join-Path $base "envs\$Name\python.exe") }
+    }
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if ($p -and (Test-Path $p)) { return $p }
+    }
+    return $null
+}
+
+function Write-InstallChecklist {
+    param([int]$ExitCode)
+    $lines = New-Object System.Collections.Generic.List[string]
+    $uiPy = Resolve-EnvPythonExe $EnvName
+    $sbPy = Resolve-EnvPythonExe $SandboxEnvName
+    $uiOk = [bool]$uiPy
+    $sbOk = [bool]$sbPy
+    Write-Host ""
+    Write-Host "============================================================"
+    if ($ExitCode -eq 0 -and $uiOk -and $sbOk) {
+        Write-Host " SETUP RESULT: PASS"
+    } elseif ($ExitCode -eq 0) {
+        Write-Host " SETUP RESULT: PARTIAL (script exit 0 but env python missing)"
+        $ExitCode = 1
+    } else {
+        Write-Host " SETUP RESULT: FAIL (exit $ExitCode)"
+    }
+    Write-Host "============================================================"
+    $uiLine = if ($uiOk) { "[OK] UI env $EnvName -> $uiPy" } else { "[MISSING] UI env $EnvName python.exe" }
+    $sbLine = if ($sbOk) { "[OK] sandbox env $SandboxEnvName -> $sbPy" } else { "[MISSING] sandbox env $SandboxEnvName python.exe" }
+    Write-Host $uiLine
+    Write-Host $sbLine
+    [void]$lines.Add($uiLine)
+    [void]$lines.Add($sbLine)
+    if ($script:SetupLogPath) {
+        Write-Host "Full log: $($script:SetupLogPath)"
+        [void]$lines.Add("log=$($script:SetupLogPath)")
+    }
+    Write-Host "============================================================"
+    Write-SetupStatusFile -ExitCode $ExitCode -Lines $lines.ToArray()
+    return $ExitCode
+}
+
+function Wait-Always {
+    param([int]$ExitCode = 0)
+    # Always keep the window open so the user can read PASS/FAIL + log path.
+    # CI can set MORPHAGENT_NO_PAUSE=1 to skip.
+    if ($env:MORPHAGENT_NO_PAUSE -eq "1") { return }
+    Write-Host ""
+    Write-Host "Press Enter to close this window (log is already saved)..."
+    try { [void][Console]::ReadLine() } catch { Start-Sleep -Seconds 60 }
 }
 
 function Invoke-CondaPythonScript {
@@ -94,25 +202,6 @@ function Write-FilteredUiRequirements([string]$Src, [string]$Dst) {
     if ([string]::IsNullOrEmpty($body)) { $body = "`n" }
     Write-Utf8NoBomFile -Path $Dst -Content $body
     Write-Host "[OK] wrote filtered requirements ($($kept.Count) lines), PyQt5 skipped"
-}
-
-function Wait-IfInteractive {
-    param([int]$ExitCode = 0)
-    if ($env:MORPHAGENT_NO_PAUSE -eq "1") { return }
-    try {
-        $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction SilentlyContinue).ParentProcessId
-        $parentName = if ($parent) {
-            (Get-CimInstance Win32_Process -Filter "ProcessId=$parent" -ErrorAction SilentlyContinue).Name
-        } else { "" }
-    } catch {
-        $parentName = ""
-    }
-    $fromExplorer = $parentName -match '(?i)explorer\.exe'
-    if ($fromExplorer -or $ExitCode -ne 0) {
-        Write-Host ""
-        Write-Host "Press Enter to close this window..."
-        try { [void][Console]::ReadLine() } catch { Start-Sleep -Seconds 12 }
-    }
 }
 
 function Resolve-CondaExeFromRoot([string]$Root) {
@@ -376,6 +465,7 @@ if pip_qt.exists():
 $scriptExit = 0
 try {
     Initialize-Utf8Console
+    Start-SetupTranscript
     Set-Location $HandoffRoot
     Write-Host "MorphAgent handoff root: $HandoffRoot"
 
@@ -513,7 +603,11 @@ try {
         Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
     }
 } finally {
-    Wait-IfInteractive -ExitCode $scriptExit
+    $scriptExit = Write-InstallChecklist -ExitCode $scriptExit
+    Stop-SetupTranscriptSafe
+    # When launched via setup_windows.bat, MORPHAGENT_NO_PAUSE=1 and the .bat pauses.
+    # When the .ps1 is run directly, always pause so the window does not flash-close.
+    Wait-Always -ExitCode $scriptExit
 }
 
 exit $scriptExit
