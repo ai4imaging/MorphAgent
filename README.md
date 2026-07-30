@@ -22,18 +22,63 @@ https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 
 ### Try it
 
+**Prerequisite:** install [Miniforge](https://github.com/conda-forge/miniforge) / Miniconda / Anaconda so `conda` is available on your PATH.
+
+All setup and launch scripts live under **`MorphAgent_UI/scripts/`**. After cloning, you must `cd` into `MorphAgent_UI` before running them.
+
+#### 1. Clone the repo and enter `MorphAgent_UI`
+
 ```bash
 git clone https://github.com/ai4imaging/MorphAgent.git
 cd MorphAgent/MorphAgent_UI
-bash scripts/setup.sh   # one-click environment setup (Windows: scripts/setup_windows.ps1)
-bash scripts/start_ui.sh            # launch the desktop app (Windows: scripts/start_ui.ps1)
 ```
+
+Stay in this directory for the platform-specific steps below. Relative paths such as `scripts/setup.sh` refer to files inside `MorphAgent_UI/scripts/`.
+
+#### 2a. macOS / Linux
+
+From `MorphAgent_UI/`:
+
+```bash
+# One-click env setup (creates conda env `morphagent`, and optionally `morphagent_allen`)
+bash scripts/setup.sh
+
+# Launch the desktop Qt app
+bash scripts/start_ui.sh
+```
+
+- `scripts/setup.sh` installs the UI + scientific stack into conda env `morphagent`, and by default also prepares Allen segmentation env `morphagent_allen`.
+- `scripts/start_ui.sh` starts `MorphAgent/launch_ui.py` via that conda env.
+- First-time setup needs a network connection (conda/pip downloads). Re-run `scripts/setup.sh` if packages fail to install.
+
+#### 2b. Windows
+
+**Easiest:** after finishing step 1, open `MorphAgent_UI\scripts\` in Explorer and double-click these files (they bypass ExecutionPolicy and auto-find conda when PATH is empty):
+
+1. `setup_windows.bat` — one-click env setup (`morphagent`, optional `morphagent_allen`)
+2. `start_ui_windows.bat` — launch the desktop Qt app
+
+Or from **Anaconda Prompt** / **Miniforge Prompt** / PowerShell, still inside `MorphAgent_UI\`:
+
+```powershell
+# One-click env setup
+.\scripts\setup_windows.bat
+
+# Launch the desktop Qt app
+.\scripts\start_ui_windows.bat
+```
+
+- Prefer the `.bat` wrappers over “Run with PowerShell” on the `.ps1` files — Windows blocks unsigned scripts by default; the `.bat` files call PowerShell with `-ExecutionPolicy Bypass`.
+- The `.bat` / `.ps1` pair also auto-discovers common Miniconda / Miniforge / Anaconda installs when `conda` is not on PATH, uses conda `pyqt=5` (not pip PyQt5) for a single Qt stack, and sets UTF-8 for pip on PowerShell 5.1.
+- You still need Miniconda/Miniforge/Anaconda installed once beforehand: https://docs.conda.io/en/latest/miniconda.html or https://github.com/conda-forge/miniforge
+
+#### After the UI opens
 
 Highlights:
 
 - **Demo dataset** — click **Load demo dataset** to run the full pipeline on **10** Tau sample images (`WT_1`–`WT_5` / `MU_1`–`MU_5`) without preparing your own data first;
 - **Load a previous run** — instantly browse a completed run’s **Features** and **Evidence** pages, no API key required;
-- **In-app API configuration** — fill in Base URL / API key / model on the Configure page; credentials are applied automatically when you click **Run MorphAgent** (no separate Save step) and written to `MorphAgent/.env`.
+- **In-app API configuration** — fill in Base URL / API key / model on the Configure page (or use **Use free restricted API** for a token-limited test endpoint locked to 1 round × 5 features). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step) and written to `MorphAgent/.env`.
 
 For your own images, select the parent folder that contains `dataset/<sample>/*.tif`. The required layout is documented in [Input Data Format (Important)](#input-data-format-important) below.
 
