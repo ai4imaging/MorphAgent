@@ -9,6 +9,8 @@
 #
 # IMPORTANT (Windows): never invoke conda.bat with specs containing "<" or ">".
 # cmd.exe treats those as redirection ("系统找不到指定的文件"). Always use conda.exe.
+# Also: old conda (4.14) rejects `conda run python -c` when the -c string has newlines.
+# Use a temp .py file or PowerShell filtering instead.
 #
 # Silky path for non-dev machines: double-click scripts\setup_windows.bat
 # (bypasses ExecutionPolicy and auto-finds conda). Advanced:
@@ -49,12 +51,49 @@ function Initialize-Utf8Console {
     } catch {}
     if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
     if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
+    # Old conda (e.g. 4.14) otherwise prompts y/N after unexpected errors and hangs .bat runs.
+    $env:CONDA_REPORT_ERRORS = "false"
 }
 
 function Write-Utf8NoBomFile([string]$Path, [string]$Content) {
     # PowerShell 5.1 Set-Content defaults to UTF-16LE - never use it for .env / req files.
     $utf8 = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($Path, $Content, $utf8)
+}
+
+function Invoke-CondaPythonScript {
+    # Old conda (4.x) rejects `conda run python -c` when the -c string contains newlines.
+    # Always write a temp .py and run that file instead.
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$ScriptText
+    )
+    $py = Join-Path $env:TEMP ("morphagent-conda-run-" + [guid]::NewGuid().ToString() + ".py")
+    try {
+        Write-Utf8NoBomFile -Path $py -Content $ScriptText
+        & $script:CondaExe run --no-capture-output -n $Name python $py
+        if ($LASTEXITCODE -ne 0) {
+            throw "conda run python script failed in env '$Name' (exit $LASTEXITCODE)"
+        }
+    } finally {
+        Remove-Item $py -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-FilteredUiRequirements([string]$Src, [string]$Dst) {
+    # Filter PyQt5 lines in PowerShell (UTF-8) - no conda run / no multiline -c needed.
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    $lines = [System.IO.File]::ReadAllLines($Src, $utf8)
+    $pat = [regex]::new('^\s*PyQt5([=<>!\.].*)?\s*(#.*)?$', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    $kept = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in $lines) {
+        if (-not $pat.IsMatch($ln)) { [void]$kept.Add($ln) }
+    }
+    $body = ($kept -join "`n")
+    if (-not [string]::IsNullOrEmpty($body) -and -not $body.EndsWith("`n")) { $body += "`n" }
+    if ([string]::IsNullOrEmpty($body)) { $body = "`n" }
+    Write-Utf8NoBomFile -Path $Dst -Content $body
+    Write-Host "[OK] wrote filtered requirements ($($kept.Count) lines), PyQt5 skipped"
 }
 
 function Wait-IfInteractive {
@@ -293,27 +332,11 @@ function Repair-Pip([string]$Name) {
 }
 
 function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
-    # PowerShell 5.1 Set-Content / Out-File often write UTF-16LE; pip requires UTF-8.
-    # Always build the filtered requirements file with Python (UTF-8, no BOM).
+    # Build filtered requirements as UTF-8 (no BOM) in PowerShell - never UTF-16LE,
+    # and never multiline `conda run python -c` (broken on conda 4.14).
     $filtered = Join-Path $env:TEMP ("morphagent-req-no-pyqt-" + [guid]::NewGuid().ToString() + ".txt")
-    $env:MORPHAGENT_REQ_SRC = $ReqFile
-    $env:MORPHAGENT_REQ_DST = $filtered
     Write-Host "Writing UTF-8 pip requirements (PyQt5 lines skipped - using conda pyqt)..."
-    Invoke-CondaRun $Name @(
-        "python", "-c",
-        @"
-from pathlib import Path
-import os, re
-src = Path(os.environ['MORPHAGENT_REQ_SRC'])
-dst = Path(os.environ['MORPHAGENT_REQ_DST'])
-pat = re.compile(r'^\s*PyQt5([=<>!\.].*)?\s*(#.*)?$', re.I)
-lines = [ln for ln in src.read_text(encoding='utf-8').splitlines() if not pat.match(ln)]
-dst.write_text('\n'.join(lines) + '\n', encoding='utf-8')
-print('[OK] wrote', dst, 'lines=', len(lines), 'encoding=utf-8')
-"@
-    )
-    Remove-Item Env:MORPHAGENT_REQ_SRC -ErrorAction SilentlyContinue
-    Remove-Item Env:MORPHAGENT_REQ_DST -ErrorAction SilentlyContinue
+    Write-FilteredUiRequirements -Src $ReqFile -Dst $filtered
 
     Write-Host "Installing pip packages from $(Split-Path $ReqFile -Leaf) (PyQt5 skipped)..."
     $prevPyUtf8 = $env:PYTHONUTF8
@@ -338,19 +361,16 @@ function Ensure-SingleQtStack([string]$Name) {
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to reinstall conda pyqt for '$Name'"
     }
-    Invoke-CondaRun $Name @(
-        "python", "-c",
-        @"
+    Invoke-CondaPythonScript -Name $Name -ScriptText @'
 import PyQt5
 from PyQt5 import QtCore
 from pathlib import Path
 import qtpy, numpy
-print('[OK] single Qt stack: PyQt5=%s, qtpy=%s, numpy=%s' % (QtCore.PYQT_VERSION_STR, qtpy.__version__, numpy.__version__))
-pip_qt = Path(PyQt5.__file__).resolve().parent / 'Qt5' / 'lib'
+print("[OK] single Qt stack: PyQt5=%s, qtpy=%s, numpy=%s" % (QtCore.PYQT_VERSION_STR, qtpy.__version__, numpy.__version__))
+pip_qt = Path(PyQt5.__file__).resolve().parent / "Qt5" / "lib"
 if pip_qt.exists():
-    raise SystemExit('Pip PyQt5 Qt binaries still present; uninstall PyQt5-Qt5 and reinstall conda pyqt=5')
-"@
-    )
+    raise SystemExit("Pip PyQt5 Qt binaries still present; uninstall PyQt5-Qt5 and reinstall conda pyqt=5")
+'@
 }
 
 $scriptExit = 0

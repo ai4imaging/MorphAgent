@@ -35,6 +35,7 @@ if errorlevel 1 (
 set "MORPHAGENT_NO_PAUSE=1"
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
+set "CONDA_REPORT_ERRORS=false"
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1" %*
 set "EXITCODE=%ERRORLEVEL%"
 
