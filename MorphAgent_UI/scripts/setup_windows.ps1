@@ -445,6 +445,20 @@ try {
             if (-not $envText.EndsWith("`n")) { $envText += "`n" }
             $envText += "CONDA_ENV=morphagent_sandbox`n"
         }
+        # Keep completion budgets at/under common OpenAI-compatible gateway ceilings (16384).
+        foreach ($pair in @(
+            @('LLM_MAX_TOKENS', '16384'),
+            @('MERGE_MAX_TOKENS', '16384'),
+            @('VLM_MAX_TOKENS', '16384')
+        )) {
+            $key = $pair[0]; $val = $pair[1]
+            if ($envText -match "(?m)^$key=") {
+                $envText = [regex]::Replace($envText, "(?m)^$key=.*$", "$key=$val")
+            } else {
+                if (-not $envText.EndsWith("`n")) { $envText += "`n" }
+                $envText += "$key=$val`n"
+            }
+        }
         Write-Utf8NoBomFile -Path $EnvFile -Content $envText
     }
 

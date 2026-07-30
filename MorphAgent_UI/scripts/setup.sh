@@ -294,6 +294,16 @@ if [[ -f "${REPOSITORY}/.env" ]]; then
   else
     printf '\nCONDA_ENV=morphagent_sandbox\n' >> "${REPOSITORY}/.env"
   fi
+  # Keep completion budgets at/under common OpenAI-compatible gateway ceilings.
+  for pair in LLM_MAX_TOKENS=16384 MERGE_MAX_TOKENS=16384 VLM_MAX_TOKENS=16384; do
+    key="${pair%%=*}"
+    val="${pair#*=}"
+    if grep -q "^${key}=" "${REPOSITORY}/.env"; then
+      sed -i.bak "s/^${key}=.*/${key}=${val}/" "${REPOSITORY}/.env" && rm -f "${REPOSITORY}/.env.bak"
+    else
+      printf '\n%s=%s\n' "${key}" "${val}" >> "${REPOSITORY}/.env"
+    fi
+  done
 fi
 
 if [[ "${INSTALL_ALLEN}" == "1" ]]; then

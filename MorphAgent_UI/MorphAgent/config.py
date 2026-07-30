@@ -215,13 +215,55 @@ def _should_retry_llm_error(exc: Exception) -> bool:
     return False
 
 
+def _is_max_tokens_limit_error(exc: Exception) -> bool:
+    """True when the provider rejects the *completion* max_tokens (not prompt length).
+
+    Example (GPUGeek / many OpenAI-compatible gateways):
+      max_tokens is too large: 65535. This model supports at most 16384 completion tokens
+    Compressing the prompt cannot fix this — max_tokens must be lowered.
+    """
+    message = str(exc).lower()
+    if "max_tokens is too large" in message:
+        return True
+    if "max_tokens" in message and "at most" in message and "completion" in message:
+        return True
+    if "completion tokens" in message and "too large" in message:
+        return True
+    return False
+
+
+def _parse_max_completion_tokens_ceiling(exc: Exception) -> Optional[int]:
+    """Extract the provider's completion-token ceiling from a max_tokens error, if present."""
+    message = str(exc)
+    match = re.search(
+        r"at most\s+(\d+)\s+completion\s+tokens",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return int(match.group(1))
+    match = re.search(
+        r"supports\s+at\s+most\s+(\d+)",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def _is_context_length_error(exc: Exception) -> bool:
     """Determine whether the exception likely means the prompt is too long / the request body is too large (can be mitigated by compressing the prompt).
 
     Some gateways often return an over-long request as a 400 'Invalid Request'
     with vague information, so BadRequestError(400) is uniformly treated as a
     candidate for compression-and-retry, aided by common textual markers.
+
+    Explicit *completion* max_tokens rejections are excluded — those need a
+    lower max_tokens, not prompt compression.
     """
+    if _is_max_tokens_limit_error(exc):
+        return False
     if isinstance(exc, BadRequestError):
         return True
     status = getattr(exc, "status_code", None)
@@ -451,6 +493,7 @@ class RetryableChatLLM:
         self._max_retry_delay_seconds = max(self._base_retry_delay_seconds, max_retry_delay_seconds)
         self._llm_params = dict(llm_params or {})
         self._v1_fallback_tried = False
+        self._max_tokens_clamp_tried = False
 
     def _total_message_chars(self, messages: Any) -> int:
         if not isinstance(messages, (list, tuple)):
@@ -492,11 +535,12 @@ class RetryableChatLLM:
         )
         return (new_messages,) + tuple(args[1:])
 
-    def _rebuild_llm(self, base_url: str) -> None:
+    def _rebuild_llm(self, base_url: Optional[str] = None) -> None:
         from langchain_openai import ChatOpenAI
 
         params = dict(self._llm_params)
-        params["base_url"] = base_url
+        if base_url is not None:
+            params["base_url"] = base_url
         self._llm_params = params
         self._llm = ChatOpenAI(**params)
 
@@ -522,6 +566,38 @@ class RetryableChatLLM:
             pass
         return True
 
+    def _maybe_clamp_max_tokens(self, exc: Exception) -> bool:
+        """Lower max_tokens when the gateway rejects the completion budget; rebuild once."""
+        if not _is_max_tokens_limit_error(exc):
+            return False
+        if getattr(self, "_max_tokens_clamp_tried", False):
+            return False
+        current = self._llm_params.get("max_tokens")
+        try:
+            current_int = int(current) if current is not None else 0
+        except (TypeError, ValueError):
+            current_int = 0
+        ceiling = _parse_max_completion_tokens_ceiling(exc) or 16384
+        # Stay a little under the advertised ceiling — some gateways over-report.
+        new_max = max(256, min(ceiling, ceiling - 1 if ceiling > 256 else ceiling))
+        if current_int and current_int <= new_max:
+            return False
+        self._max_tokens_clamp_tried = True
+        self._llm_params["max_tokens"] = new_max
+        try:
+            settings.llm_max_tokens = new_max
+            if getattr(settings, "merge_max_tokens", None) and int(settings.merge_max_tokens) > new_max:
+                settings.merge_max_tokens = new_max
+        except Exception:
+            pass
+        print(
+            f"  ⚠️  Provider rejected max_tokens={current_int or current} "
+            f"(ceiling={ceiling}); retrying with max_tokens={new_max} "
+            f"(provider={self._provider_name})"
+        )
+        self._rebuild_llm()
+        return True
+
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         """Uniformly handle retries for LLM timeout/524/connection errors; proactively compress over-long prompts before the call, and compress-then-retry when the prompt is too long (400/413)."""
         args = self._maybe_proactive_compact(args)
@@ -530,6 +606,12 @@ class RetryableChatLLM:
                 return self._llm.invoke(*args, **kwargs)
             except Exception as exc:
                 if self._maybe_retry_with_v1_base_url(exc):
+                    try:
+                        return self._llm.invoke(*args, **kwargs)
+                    except Exception as retry_exc:
+                        exc = retry_exc
+
+                if self._maybe_clamp_max_tokens(exc):
                     try:
                         return self._llm.invoke(*args, **kwargs)
                     except Exception as retry_exc:
@@ -702,14 +784,15 @@ class MorphAgentConfig:
     llm_api_key: Optional[str] = DEFAULT_LLM_API_KEY
     llm_provider_name: str = os.getenv("LLM_PROVIDER_NAME", "default")
     llm_default_headers: Optional[Dict[str, str]] = field(default_factory=lambda: DEFAULT_LLM_HEADERS)
-    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "65535"))  # Token limit
+    # Completion budget. Many OpenAI-compatible gateways (e.g. GPUGeek Vendor2/GPT-4o)
+    # cap completion tokens at 16384; 65535 triggers intermittent 400s.
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "16384"))
     llm_request_timeout_seconds: int = int(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "600"))
     llm_timeout_max_attempts: int = int(os.getenv("LLM_TIMEOUT_MAX_ATTEMPTS", "3"))
     llm_retry_base_delay_seconds: int = int(os.getenv("LLM_RETRY_BASE_DELAY_SECONDS", "10"))
     llm_retry_max_delay_seconds: int = int(os.getenv("LLM_RETRY_MAX_DELAY_SECONDS", "120"))
-    # The LLM's max_tokens when merging feature code; explicitly raised to a larger limit by default to reduce the risk of long functions being truncated
-    # To adjust, override it via the MERGE_MAX_TOKENS environment variable
-    merge_max_tokens: Optional[int] = int(os.getenv("MERGE_MAX_TOKENS", "180000"))
+    # Merge-code completion budget; keep at/under the same gateway ceiling as llm_max_tokens.
+    merge_max_tokens: Optional[int] = int(os.getenv("MERGE_MAX_TOKENS", "16384"))
 
     # VLM Settings (Eyes). The public build defaults to the online multimodal
     # API. The fields below with `vlm_model_path` / `vlm_device` only matter for
@@ -718,7 +801,7 @@ class MorphAgentConfig:
     vlm_model_path: str = os.getenv("VLM_MODEL_PATH", "Qwen/Qwen3-VL-8B-Instruct")  # local-only
     vlm_device: str = os.getenv("VLM_DEVICE", "cuda")  # local-only
     vlm_max_images: int = int(os.getenv("VLM_MAX_IMAGES", "50"))  # Maximum number of images for the VLM
-    vlm_max_tokens: int = int(os.getenv("VLM_MAX_TOKENS", "65535"))  # VLM Token limit
+    vlm_max_tokens: int = int(os.getenv("VLM_MAX_TOKENS", "16384"))  # VLM Token limit
     vlm_image_resize_max: int = int(os.getenv("VLM_IMAGE_RESIZE_MAX", "512"))  # Maximum image resize dimension (long side)
     vlm_supported_formats: Set[str] = field(default_factory=lambda: {'.png', '.jpg', '.jpeg'})  # Image formats supported by the VLM
 
@@ -799,9 +882,20 @@ class MorphAgentConfig:
     conda_base_paths: List[Path] = field(default_factory=lambda: [
         p for p in [
             Path(os.environ["CONDA_BASE"]) if os.getenv("CONDA_BASE") else None,
-            Path(os.environ["CONDA_PREFIX"]).parent.parent if os.getenv("CONDA_PREFIX") else None,
+            Path(os.environ["CONDA_ROOT"]) if os.getenv("CONDA_ROOT") else None,
+            Path(os.environ["CONDA_PREFIX"]).parent.parent
+            if os.getenv("CONDA_PREFIX") and "envs" in Path(os.environ["CONDA_PREFIX"]).parts
+            else (Path(os.environ["CONDA_PREFIX"]) if os.getenv("CONDA_PREFIX") else None),
+            Path.home() / "Miniconda3",
             Path.home() / "miniconda3",
+            Path.home() / "Anaconda3",
             Path.home() / "anaconda3",
+            Path.home() / "Miniforge3",
+            Path.home() / "miniforge3",
+            Path(os.environ["LOCALAPPDATA"]) / "Miniconda3" if os.getenv("LOCALAPPDATA") else None,
+            Path(os.environ["LOCALAPPDATA"]) / "miniconda3" if os.getenv("LOCALAPPDATA") else None,
+            Path(os.environ["ProgramData"]) / "miniconda3" if os.getenv("ProgramData") else None,
+            Path("/opt/homebrew/Caskroom/miniconda/base"),
             Path("/opt/conda"),
         ] if p is not None
     ])  # Candidate Conda installation root paths (by priority; can be overridden with CONDA_BASE)

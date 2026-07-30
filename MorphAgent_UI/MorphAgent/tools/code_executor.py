@@ -35,59 +35,142 @@ def _sandbox_env_name() -> str:
 
 
 def _find_conda_python(conda_env: str) -> Optional[Path]:
-    """Find the Python interpreter path in a conda environment"""
+    """Find the Python interpreter path in a conda environment (POSIX + Windows)."""
     import os
-    
-    conda_base = None
-    
-    # Check the CONDA_BASE_PATH environment variable
-    if "CONDA_BASE_PATH" in os.environ:
-        conda_base = Path(os.environ["CONDA_BASE_PATH"])
-        if not conda_base.exists():
-            conda_base = None
-    
-    # Detect from CONDA_PREFIX
-    if not conda_base and "CONDA_PREFIX" in os.environ:
-        current_env = os.environ.get("CONDA_PREFIX", "")
-        if current_env:
-            current_path = Path(current_env)
-            if "envs" in current_path.parts:
-                idx = current_path.parts.index("envs")
-                conda_base = Path(*current_path.parts[:idx])
-    
-    # Try common conda installation paths (read from config)
-    if not conda_base or not conda_base.exists():
-        from config import settings
-        for base_path in settings.conda_base_paths:
-            if base_path.exists():
-                conda_base = base_path
-                break
-    
-    if conda_base:
-        conda_env_path = conda_base / "envs" / conda_env
-        if conda_env_path.exists():
-            # Try to find the Python executable (read the version list from config)
+    import shutil
+
+    def _python_candidates(env_root: Path) -> List[Path]:
+        names: List[str]
+        try:
             from config import settings
-            for python_name in settings.python_versions:
-                python_path = conda_env_path / "bin" / python_name
-                if python_path.exists() and python_path.is_file():
-                    return python_path
-    
-    # Fallback: try using conda run
-    try:
-        result = subprocess.run(
-            ["conda", "run", "-n", conda_env, "which", "python"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            python_path = Path(result.stdout.strip())
-            if python_path.exists():
+            names = list(settings.python_versions)
+        except Exception:
+            names = ["python3.10", "python3.11", "python3.9", "python3.12", "python3", "python"]
+
+        out: List[Path] = []
+        if sys.platform == "win32":
+            # Windows conda envs put python.exe at the env root (and sometimes Scripts/).
+            out.append(env_root / "python.exe")
+            out.append(env_root / "Scripts" / "python.exe")
+            for name in names:
+                if not name.endswith(".exe"):
+                    out.append(env_root / "Scripts" / f"{name}.exe")
+                    out.append(env_root / f"{name}.exe")
+        else:
+            for name in names:
+                out.append(env_root / "bin" / name)
+        # Deduplicate while preserving order
+        seen = set()
+        unique: List[Path] = []
+        for p in out:
+            key = str(p).lower() if sys.platform == "win32" else str(p)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(p)
+        return unique
+
+    def _resolve_from_base(conda_base: Path) -> Optional[Path]:
+        env_root = conda_base / "envs" / conda_env
+        if not env_root.is_dir():
+            return None
+        for python_path in _python_candidates(env_root):
+            if python_path.exists() and python_path.is_file():
                 return python_path
+        return None
+
+    conda_bases: List[Path] = []
+
+    if "CONDA_BASE_PATH" in os.environ:
+        conda_bases.append(Path(os.environ["CONDA_BASE_PATH"]))
+    if os.getenv("CONDA_BASE"):
+        conda_bases.append(Path(os.environ["CONDA_BASE"]))
+    if os.getenv("CONDA_ROOT"):
+        conda_bases.append(Path(os.environ["CONDA_ROOT"]))
+
+    # Detect from CONDA_PREFIX (…/envs/<name> → install root)
+    if "CONDA_PREFIX" in os.environ:
+        current_path = Path(os.environ["CONDA_PREFIX"])
+        if "envs" in current_path.parts:
+            idx = current_path.parts.index("envs")
+            conda_bases.append(Path(*current_path.parts[:idx]))
+        elif current_path.name.lower() != conda_env.lower():
+            # Prefix is base env itself
+            conda_bases.append(current_path)
+
+    try:
+        from config import settings
+        conda_bases.extend(list(settings.conda_base_paths))
     except Exception:
         pass
-    
+
+    # Common Windows / macOS / Linux install roots
+    home = Path.home()
+    conda_bases.extend(
+        [
+            home / "Miniconda3",
+            home / "miniconda3",
+            home / "Anaconda3",
+            home / "anaconda3",
+            home / "Miniforge3",
+            home / "miniforge3",
+            home / "mambaforge",
+            home / "Mambaforge",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "miniconda3",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Miniconda3",
+            Path(os.environ.get("ProgramData", "")) / "miniconda3",
+            Path(os.environ.get("ProgramData", "")) / "Miniconda3",
+            Path("/opt/homebrew/Caskroom/miniconda/base"),
+            Path("/opt/miniconda3"),
+            Path("/opt/conda"),
+        ]
+    )
+
+    seen_bases = set()
+    for base in conda_bases:
+        if base is None:
+            continue
+        try:
+            key = str(base.resolve()) if base.exists() else str(base)
+        except Exception:
+            key = str(base)
+        if key in seen_bases:
+            continue
+        seen_bases.add(key)
+        if not base.exists():
+            continue
+        found = _resolve_from_base(base)
+        if found is not None:
+            return found
+
+    # Fallback: ask conda for sys.executable (works on Windows; `which` does not).
+    conda_exe = shutil.which("conda")
+    conda_cmds: List[List[str]] = []
+    if conda_exe:
+        conda_cmds.append([conda_exe, "run", "-n", conda_env, "python", "-c", "import sys; print(sys.executable)"])
+    # Also try conda.bat style via bare "conda" if PATH has condabin
+    if not conda_exe or Path(conda_exe).suffix.lower() != ".exe":
+        conda_cmds.append(["conda", "run", "-n", conda_env, "python", "-c", "import sys; print(sys.executable)"])
+
+    for cmd in conda_cmds:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                for line in reversed(result.stdout.strip().splitlines()):
+                    line = line.strip().strip('"')
+                    if not line:
+                        continue
+                    python_path = Path(line)
+                    if python_path.exists() and python_path.is_file():
+                        return python_path
+        except Exception:
+            continue
+
     return None
 
 
@@ -454,7 +537,10 @@ class CodeExecutor:
                 if python_path is None:
                     raise RuntimeError(
                         f"Unable to find Python interpreter in conda environment '{self.conda_env}'. "
-                        f"Please ensure the environment exists and is accessible."
+                        f"Please ensure the environment exists and is accessible. "
+                        f"On Windows, re-run MorphAgent_UI\\scripts\\setup_windows.bat "
+                        f"(it creates morphagent_sandbox with python.exe under "
+                        f"%USERPROFILE%\\Miniconda3\\envs\\{self.conda_env}\\python.exe)."
                     )
                 self._python_path = python_path
             else:
