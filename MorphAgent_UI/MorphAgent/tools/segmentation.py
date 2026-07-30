@@ -10,15 +10,6 @@ import subprocess
 import os
 
 
-def _seg_env() -> str:
-    """Resolve the conda env used for segmentation (configurable)."""
-    try:
-        from config import settings
-        return settings.segmentation_conda_env
-    except Exception:
-        return os.getenv("SEGMENTATION_CONDA_ENV", os.getenv("CONDA_ENV", "morphagent_allen"))
-
-
 def _segmentation_backend() -> str:
     """Return 'allen' or 'cellpose'."""
     try:
@@ -31,27 +22,53 @@ def _segmentation_backend() -> str:
     return os.getenv("SEGMENTATION_BACKEND", "allen").strip().lower() or "allen"
 
 
+def _seg_env() -> str:
+    """Resolve the conda env used for segmentation (configurable).
+
+    Allen must use ``morphagent_allen``; never silently reuse the agent env
+    (``CONDA_ENV`` / ``morphagent``), which lacks aicsimageio / aicssegmentation.
+    """
+    explicit = (os.getenv("SEGMENTATION_CONDA_ENV") or "").strip()
+    if explicit:
+        return explicit
+    try:
+        from config import settings
+        configured = str(getattr(settings, "segmentation_conda_env", "") or "").strip()
+        if configured:
+            return configured
+    except Exception:
+        pass
+    if _segmentation_backend() == "allen":
+        return "morphagent_allen"
+    return os.getenv("CONDA_ENV", "morphagent")
+
+
 def list_segmentation_files(sample_dir: Path) -> List[Tuple[str, Path]]:
-    """Scan all image files under sample_dir/segmentation/ and return (name, path) sorted by filename.
-    Uses the same image_extensions as data_path_selector to ensure a single consistent source.
+    """Scan mask files under sample_dir/segmentation/.
 
-    Args:
-        sample_dir: Path to the sample directory
-
-    Returns:
-        [(filename, Path), ...] sorted by filename, excluding directories
+    Includes TIFF/PNG/JPEG/etc. Excludes preview overlays such as
+    ``segmentation_visualization.png`` that Allen/Cellpose write beside masks.
     """
     try:
         from config import settings
         image_extensions = settings.image_extensions
     except Exception:
         image_extensions = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+    try:
+        from tools.image_io import is_segmentation_mask_filename
+    except Exception:
+        from .image_io import is_segmentation_mask_filename  # type: ignore
+
     seg_dir = sample_dir / "segmentation"
     out = []
     if not seg_dir.exists() or not seg_dir.is_dir():
         return out
     for seg_file in seg_dir.iterdir():
-        if seg_file.is_file() and seg_file.suffix.lower() in image_extensions:
+        if (
+            seg_file.is_file()
+            and seg_file.suffix.lower() in image_extensions
+            and is_segmentation_mask_filename(seg_file.name)
+        ):
             out.append((seg_file.name, seg_file))
     out.sort(key=lambda x: x[0])
     return out
@@ -107,11 +124,17 @@ def segment_image_with_allen(
                 print(f"  stderr: {result.stderr[-2000:]}")
             return False
 
-        # Allen writes nucleus_segmentation.tiff / cytoplasm_segmentation.tiff.
-        image_extensions = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+        # Allen writes nucleus_segmentation.tiff / cytoplasm_segmentation.tiff (no preview by default).
+        image_extensions = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp", ".gif"}
+        try:
+            from tools.image_io import is_segmentation_mask_filename
+        except Exception:
+            from .image_io import is_segmentation_mask_filename  # type: ignore
         out_files = [
             p for p in out_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in image_extensions
+            if p.is_file()
+            and p.suffix.lower() in image_extensions
+            and is_segmentation_mask_filename(p.name)
         ] if out_dir.is_dir() else []
         if out_files:
             print(f"  ✅ Allen segmentation complete; {len(out_files)} file(s) in {out_dir}")
@@ -225,14 +248,14 @@ def segment_image_with_cellpose(
             return False
             
     except subprocess.CalledProcessError as e:
-        print(f"  ❌ Segmentation failed: {e}")
+        print(f"  ⚠️  Segmentation failed (skipping): {e}")
         if e.stdout:
-            print(f"  stdout: {e.stdout}")
+            print(f"  stdout: {e.stdout[-2000:]}")
         if e.stderr:
-            print(f"  stderr: {e.stderr}")
+            print(f"  stderr: {e.stderr[-2000:]}")
         return False
     except Exception as e:
-        print(f"  ❌ Error during segmentation: {e}")
+        print(f"  ⚠️  Error during segmentation (skipping): {e}")
         return False
 
 
@@ -302,19 +325,57 @@ def get_segmentation_mask_path(sample_dir: Path) -> Path:
     return seg_dir / "cyto.tif"
 
 
-def load_segmentation_mask(mask_path: Path) -> Optional[Any]:
-    """Load a segmentation mask (for use in code features)
+def ensure_sample_segmentation(
+    sample_dir: Path,
+    image_path: str,
+    channels: Optional[List[int]] = None,
+    conda_env: Optional[str] = None,
+    *,
+    flow_threshold: float = 0.4,
+    cellprob_threshold: float = 0.0,
+) -> Optional[Path]:
+    """Reuse existing masks or run the configured backend (Allen / Cellpose).
 
-    Args:
-        mask_path: Mask file path
-
-    Returns:
-        The mask array, or None if loading fails
+    Returns a path to an existing or newly written mask file, or None on failure.
     """
+    sample_dir = Path(sample_dir)
+    existing = check_segmentation_exists(sample_dir)
+    if existing is not None:
+        return existing
+
+    backend = _segmentation_backend()
+    env = conda_env or _seg_env()
+    out_dir = sample_dir / "segmentation"
+
+    if backend == "allen":
+        ok = segment_image_with_allen(
+            input_image_path=str(image_path),
+            output_dir=str(out_dir),
+            channels=channels,
+            conda_env=env,
+        )
+        return check_segmentation_exists(sample_dir) if ok else None
+
+    mask_path = get_segmentation_mask_path(sample_dir)
+    ok = segment_image_with_cellpose(
+        input_image_path=str(image_path),
+        output_mask_path=str(mask_path),
+        channels=channels,
+        flow_threshold=flow_threshold,
+        cellprob_threshold=cellprob_threshold,
+        conda_env=env,
+    )
+    if ok and mask_path.exists():
+        return mask_path
+    return None
+
+
+def load_segmentation_mask(mask_path: Path) -> Optional[Any]:
+    """Load a segmentation mask (TIFF/PNG/JPEG/…)."""
     try:
-        import tifffile
-        mask = tifffile.imread(str(mask_path))
-        return mask
+        from tools.image_io import load_image_array
+
+        return load_image_array(mask_path)
     except Exception as e:
         print(f"  ⚠️  Failed to load segmentation mask: {e}")
         return None
@@ -418,20 +479,21 @@ def segment_all_samples(
                     print(f"  [{i}/{len(sample_ids)}] ✅ {sample_id}: segmentation complete")
                     results[sample_id] = "success"
                 else:
-                    print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: segmentation complete but files are incomplete")
-                    results[sample_id] = "failed"
+                    print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: segmentation incomplete; skipping sample")
+                    results[sample_id] = "skipped_seg_unavailable"
             else:
-                print(f"  [{i}/{len(sample_ids)}] ❌ {sample_id}: segmentation failed")
-                results[sample_id] = "failed"
+                print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: segmentation unavailable; skipping sample")
+                results[sample_id] = "skipped_seg_unavailable"
 
     success_count = sum(1 for v in results.values() if v == "success")
     skipped_user = sum(1 for v in results.values() if v == "skipped_user_seg")
     skipped_allen = sum(1 for v in results.values() if v == "skipped_allen_unavailable")
-    failed_count = len(sample_ids) - success_count - skipped_user - skipped_allen
+    skipped_seg = sum(1 for v in results.values() if v == "skipped_seg_unavailable")
+    failed_count = len(sample_ids) - success_count - skipped_user - skipped_allen - skipped_seg
     print(
         f"\n[Batch Segmentation] Done: {success_count} succeeded, "
         f"{skipped_user} skipped (already segmented), "
-        f"{skipped_allen} skipped (Allen unavailable), "
+        f"{skipped_allen + skipped_seg} skipped (segmentation unavailable), "
         f"{failed_count} failed"
     )
 

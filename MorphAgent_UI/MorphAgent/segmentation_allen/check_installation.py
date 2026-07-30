@@ -55,7 +55,6 @@ modules_to_check = [
     "aicssegmentation.core.pre_processing_utils",
     "aicssegmentation.core.MO_threshold",
     "aicssegmentation.core.seg_dot",
-    "aicssegmentation.core.output_utils",
 ]
 
 for module in modules_to_check:
@@ -69,12 +68,19 @@ print("\n" + "=" * 60)
 print("Check other dependencies")
 print("=" * 60)
 
-deps = ["numpy", "scipy", "skimage", "aicsimageio"]
+deps = ["numpy", "scipy", "skimage", "tifffile"]
 for dep in deps:
     try:
         mod = __import__(dep)
         print(f"✓ {dep}: {mod.__version__ if hasattr(mod, '__version__') else 'installed'}")
     except ImportError:
         print(f"✗ {dep}: NOT installed")
+
+# Optional: aicsimageio (not required for TIFF driver)
+try:
+    import aicsimageio  # noqa: F401
+    print("✓ aicsimageio: installed (optional)")
+except ImportError:
+    print("· aicsimageio: not installed (OK — TIFF path uses tifffile)")
 
 print("\n" + "=" * 60)

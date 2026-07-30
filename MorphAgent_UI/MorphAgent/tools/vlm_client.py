@@ -1071,6 +1071,7 @@ class OnlineVLMClient(VLMClient):
         self.gpu_id = None
         self._temp_dirs = []
         self._client = None
+        self._v1_fallback_tried = False
 
     def _load_model(self):
         """Online mode does not need to load a local model; lazily create the OpenAI client."""
@@ -1081,6 +1082,26 @@ class OnlineVLMClient(VLMClient):
                 kwargs["default_headers"] = self.default_headers
             self._client = OpenAI(**kwargs)
             print(f"[VLM-Online] Initialized the online client: base_url={self.base_url}, model={self.model}")
+
+    def _maybe_switch_to_v1_base_url(self, exc: Exception, log_fn) -> bool:
+        from utils_modules.openai_base_url import is_http_404_error, with_v1_suffix
+
+        if self._v1_fallback_tried or not is_http_404_error(exc):
+            return False
+        candidate = with_v1_suffix(str(self.base_url or ""))
+        if not candidate:
+            return False
+        self._v1_fallback_tried = True
+        self.base_url = candidate
+        self._client = None
+        log_fn(f"[VLM-Online] API returned 404; retrying with base_url={candidate}")
+        try:
+            from config import settings as _settings
+            _settings.vlm_online_base_url = candidate
+        except Exception:
+            pass
+        self._load_model()
+        return True
 
     def _images_to_content(self, image_paths: List[str]) -> List[Dict[str, Any]]:
         """Convert local images to valid PNG data URLs for the online API.
@@ -1186,6 +1207,16 @@ class OnlineVLMClient(VLMClient):
                 last_exc = exc
                 _log(f"[VLM-Online] Request failed (attempt {attempt}/{max_attempts}): {type(exc).__name__}: {exc}")
                 executor.shutdown(wait=False)
+                if self._maybe_switch_to_v1_base_url(exc, _log):
+                    # Immediate retry with corrected base_url (does not consume an extra backoff cycle).
+                    try:
+                        return _do_request()
+                    except Exception as retry_exc:
+                        last_exc = retry_exc
+                        _log(
+                            f"[VLM-Online] Retry after /v1 base_url still failed: "
+                            f"{type(retry_exc).__name__}: {retry_exc}"
+                        )
             if attempt < max_attempts:
                 time.sleep(min(60, 5 * (2 ** (attempt - 1))))
         raise last_exc if last_exc else RuntimeError("[VLM-Online] Unknown error")

@@ -66,12 +66,17 @@ class RunConfigTests(unittest.TestCase):
     def test_diagnose_dataset_selection_for_custom_images_only(self) -> None:
         from morphagent_ui.models import diagnose_dataset_selection
 
-        repo = Path(__file__).resolve().parents[1]
-        data_test = repo / "demo" / "data_test"
-        if data_test.is_dir():
-            self.assertIsNone(diagnose_dataset_selection(data_test))
-            self.assertIsNotNone(diagnose_dataset_selection(data_test / "dataset" / "WT_1"))
-        self.assertIsNotNone(diagnose_dataset_selection(repo / "does_not_exist"))
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            dataset = root / "dataset"
+            sample = dataset / "WT_1"
+            sample.mkdir(parents=True)
+            (sample / "image.tif").touch()
+            (dataset / "dataset_index.txt").write_text("custom images", encoding="utf-8")
+
+            self.assertIsNone(diagnose_dataset_selection(root))
+            self.assertIsNotNone(diagnose_dataset_selection(sample))
+        self.assertIsNotNone(diagnose_dataset_selection(Path("/does/not/exist")))
 
     def _ready_dataset(self, root: Path):
         sample = root / "sample_1"
@@ -140,6 +145,11 @@ class RunConfigTests(unittest.TestCase):
             (dataset / "dataset_index.txt").write_text("Tau demo", encoding="utf-8")
             (rag / "paper.pdf").write_bytes(b"reference")
             (precomputed / "rag_knowledge_summary.txt").write_text("cached knowledge", encoding="utf-8")
+            metadata_csv = demo / "data" / "metadata.csv"
+            metadata_csv.write_text(
+                "sample_id,group,genotype\nWT_1,WT,wild_type\n",
+                encoding="utf-8",
+            )
 
             config = RunConfig(repository_root=str(repo))
             self.assertTrue(hasattr(config, "apply_reference_demo"))
@@ -147,7 +157,8 @@ class RunConfigTests(unittest.TestCase):
 
             self.assertEqual(config.data_root, str((demo / "data").resolve()))
             self.assertEqual(config.description_path, str((dataset / "dataset_index.txt").resolve()))
-            self.assertEqual(config.metadata_path, "")
+            self.assertEqual(config.metadata_path, str(metadata_csv.resolve()))
+            self.assertTrue(config.enable_feature_analysis)
             self.assertEqual(config.results_dir, "")
             self.assertIn("Tau protein aggregation", config.query)
             self.assertEqual(config.method, "both")
@@ -163,11 +174,14 @@ class RunConfigTests(unittest.TestCase):
             self.assertTrue(cache_path.is_file())
             self.assertIn("cached knowledge", cache_path.read_text(encoding="utf-8"))
             command = config.build_command()
+            self.assertIn("--metadata-path", command)
+            self.assertNotIn("--disable-feature-analysis", command)
             self.assertNotIn("--auto-deep-research", command)
             self.assertNotIn("--auto-literature-retrieval", command)
             env = config.pipeline_environment()
             self.assertEqual(env["CODE_MAX_RETRIES"], "3")
             self.assertEqual(env["SEGMENTATION_BACKEND"], "allen")
+            self.assertEqual(env["SEGMENTATION_CONDA_ENV"], "morphagent_allen")
 
     def test_custom_dataset_passes_auto_knowledge_flags(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -1,8 +1,8 @@
 # MorphAgent Demo
 
 A tiny, self-contained example that runs the **full MorphAgent pipeline** on
-**10** neuron microscopy samples (`WT_1`–`WT_10`) for **1 round × 5 features**.
-Open the notebook and run the cells top to bottom:
+**10** neuron microscopy samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant)
+for **1 round × 5 features**. Open the notebook and run the cells top to bottom:
 
 ```bash
 conda activate morphagent          # the unified env from envs/environment.yml
@@ -15,7 +15,8 @@ jupyter lab                        # open demo/morphagent_demo.ipynb
 demo/
 ├── morphagent_demo.ipynb     # step-by-step runnable notebook
 ├── data/                     # project root passed to --data-root
-│   ├── dataset/              # 10 samples: image.tif + slices/ + segmentation/
+│   ├── dataset/              # 10 samples: WT_1–5 + MU_1–5 (image.tif + slices/ + segmentation/)
+│   ├── metadata.csv          # paired group labels for feature validation
 │   ├── expert_knowledge/     # notes + example image (summarized by the LLM)
 │   ├── deep_research/         # report.md (plain text — no PaddleX needed)
 │   └── RAG/                   # a few example PDFs

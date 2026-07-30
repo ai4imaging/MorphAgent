@@ -21,10 +21,12 @@ run_*/
 .morphagent_repro_cache/
 
 # ---- User data (do NOT commit datasets) ----
-# Anchored to repo root only, so bundled demo data (demo/data/,
-# MorphAgent_UI/MorphAgent/demo/data/) is still tracked.
+# Anchored to repo root only, so bundled UI demo data
+# (MorphAgent_UI/MorphAgent/demo/data/) is still tracked.
 /data/
 /datasets/
+/demo/
+MorphAgent_UI/MorphAgent/demo/data_test/
 
 # ---- Segmentation / model artifacts ----
 *.tif.out/

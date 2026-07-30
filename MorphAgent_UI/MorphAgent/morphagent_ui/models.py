@@ -224,7 +224,8 @@ class RunConfig:
 
         self.data_root = str(project_root)
         self.description_path = str(description)
-        self.metadata_path = ""
+        metadata_csv = project_root / "metadata.csv"
+        self.metadata_path = str(metadata_csv.resolve()) if metadata_csv.is_file() else ""
         self.results_dir = ""
         self.query = (
             "Generate unbiased morphological features that quantify Tau protein "
@@ -302,12 +303,19 @@ class RunConfig:
 
         if self.description_path and not Path(self.description_path).expanduser().is_file():
             issues.append(ValidationIssue(Severity.BLOCKER, "description_invalid", "The dataset description file was not found."))
-        if self.metadata_path:
+        if self.enable_feature_analysis and self.metadata_path.strip():
             metadata = Path(self.metadata_path).expanduser()
             if not metadata.is_file():
                 issues.append(ValidationIssue(Severity.BLOCKER, "metadata_invalid", "The metadata CSV was not found."))
             elif metadata.suffix.lower() != ".csv":
                 issues.append(ValidationIssue(Severity.WARNING, "metadata_format", "Metadata is expected to be a CSV file."))
+        elif self.enable_feature_analysis and not self.metadata_path.strip():
+            issues.append(ValidationIssue(
+                Severity.INFO,
+                "metadata_optional",
+                "Feature validation is on without metadata — unsupervised checks will run.",
+                "Optional: provide a metadata.csv with sample_id + group/label columns for paired validation.",
+            ))
 
         config_path = Path(self.repository_root).expanduser() / "config.py"
         source_llm = _configured_key_fallback(config_path, "DEFAULT_LLM_API_KEY")
@@ -381,7 +389,7 @@ class RunConfig:
         command = [self.python_executable, "-u", str(repo / "main.py"), self.query.strip(), "--data-root", str(Path(self.data_root).expanduser().resolve())]
         if self.description_path.strip():
             command.extend(["--description", str(Path(self.description_path).expanduser().resolve())])
-        if self.metadata_path.strip():
+        if self.enable_feature_analysis and self.metadata_path.strip():
             command.extend(["--metadata-path", str(Path(self.metadata_path).expanduser().resolve())])
         if self.results_dir.strip():
             command.extend(["--results-dir", str(Path(self.results_dir).expanduser().resolve())])
@@ -443,8 +451,10 @@ class RunConfig:
         deterministic = self.reproduce or self.temperature <= 0.0
         return {
             "CODE_MAX_RETRIES": "3",
+            # Always pin Allen + its isolated env for UI runs (ignore a polluted
+            # parent shell that may still have SEGMENTATION_CONDA_ENV=morphagent).
             "SEGMENTATION_BACKEND": "allen",
-            "SEGMENTATION_CONDA_ENV": os.getenv("SEGMENTATION_CONDA_ENV", "morphagent_allen"),
+            "SEGMENTATION_CONDA_ENV": "morphagent_allen",
             "NUM_ROUNDS": str(self.num_rounds),
             "FEATURES_PER_ITERATION": str(self.features_per_iteration),
             "TARGET_FEATURE_COUNT": str(self.target_feature_count),

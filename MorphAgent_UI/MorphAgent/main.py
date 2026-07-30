@@ -428,10 +428,13 @@ def _vlm_worker_process(
                         if seg_result.get("success"):
                             sample_seg_mask = seg_result.get("mask_path")
                         else:
+                            # Still score with VLM on the raw image; do not zero-out the sample.
                             if batch_log_fp:
-                                batch_log_fp.write(f"{sample_id}: ❌ Segmentation failed\n")
-                            result_queue.put((sample_index, sample_id, {}))
-                            continue
+                                batch_log_fp.write(
+                                    f"{sample_id}: ⚠️ Segmentation failed; "
+                                    f"continuing VLM scoring without mask\n"
+                                )
+                            sample_seg_mask = None
                 
                 # Build AgentState for batch VLM execution
                 state: AgentState = {
@@ -937,11 +940,14 @@ def execute_feature_on_all_samples(
                             if log_fp:
                                 log_fp.write(f"{sample_id}: ✅ Segmentation complete: {sample_seg_mask}\n")
                         else:
-                            error_msg = f"Segmentation failed: {seg_result.get('message', 'Unknown error')}"
+                            error_msg = (
+                                f"Segmentation failed: {seg_result.get('message', 'Unknown error')}; "
+                                f"continuing VLM scoring without mask"
+                            )
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                                log_fp.write(f"{sample_id}: ⚠️  {error_msg}\n")
                             print(f"    ⚠️  {sample_id}: {error_msg}")
-                            continue  # skip this sample
+                            sample_seg_mask = None
                 sample_dir = data_root / sample_id
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
@@ -1695,10 +1701,22 @@ Examples:
             skip_if_any_segmentation_exists=getattr(args, "segmentation_skip_if_present", True)
         )
         
-        # Tally the segmentation results (success / skipped_user_seg / failed)
+        # Tally the segmentation results (success / skipped / unavailable — never abort)
         success_count = sum(1 for v in segmentation_results.values() if v == "success")
-        skipped_count = sum(1 for v in segmentation_results.values() if v == "skipped_user_seg")
-        print(f"  Segmentation stats: {success_count} succeeded, {skipped_count} skipped (already segmented), {len(sample_ids) - success_count - skipped_count} failed")
+        skipped_count = sum(
+            1
+            for v in segmentation_results.values()
+            if v in {"skipped_user_seg", "skipped_allen_unavailable", "skipped_seg_unavailable"}
+        )
+        unavailable = sum(
+            1
+            for v in segmentation_results.values()
+            if v in {"skipped_allen_unavailable", "skipped_seg_unavailable", "failed"}
+        )
+        print(
+            f"  Segmentation stats: {success_count} succeeded, "
+            f"{skipped_count} skipped/reused, {unavailable} unavailable (warnings only; run continues)"
+        )
         
         # Get the mask order from the first sample that has any segmentation file (consistent with data_path_selector, including user uploads)
         first_sample_with_seg = None
@@ -2016,57 +2034,9 @@ Examples:
         elif args.method == "vlm":
             features = [{**f, "method": "vlm", "name": _feature_name_for_method(f.get("name", ""), "vlm")} for f in features]
             print(f"  📌 Method restricted to vlm: all {len(features)} features are computed using VLM (the vlm_ prefix has been added to names)")
-        
-        # Allocate features according to code-vlm-ratio (only effective when method=="both")
-        if args.method == "both" and len(features) > 0:
-            # Validate the ratio range
-            code_ratio = max(0.0, min(1.0, args.code_vlm_ratio))
-            vlm_ratio = 1.0 - code_ratio
-            
-            # Separate code and vlm features
-            code_features_list = [f for f in features if f.get("method", "code") == "code"]
-            vlm_features_list = [f for f in features if f.get("method", "code") == "vlm"]
-            
-            total_features = len(features)
-            target_code_count = int(total_features * code_ratio)
-            target_vlm_count = total_features - target_code_count
-            
-            # If the current allocation does not match the ratio, adjust it
-            current_code_count = len(code_features_list)
-            current_vlm_count = len(vlm_features_list)
-            
-            if current_code_count + current_vlm_count > 0:
-                # Compute how many need to be adjusted
-                code_diff = target_code_count - current_code_count
-                vlm_diff = target_vlm_count - current_vlm_count
-                
-                # If the difference is large, reallocate
-                if abs(code_diff) > 1 or abs(vlm_diff) > 1:
-                    print(f"  📊 Adjusting feature allocation according to code-vlm-ratio ({code_ratio:.1%} code, {vlm_ratio:.1%} vlm)...")
-                    print(f"     Current: {current_code_count} code, {current_vlm_count} vlm")
-                    print(f"     Target: {target_code_count} code, {target_vlm_count} vlm")
-                    
-                    # If there are too many code features, convert some to vlm
-                    if code_diff < 0:
-                        to_convert = min(abs(code_diff), len(code_features_list))
-                        for i in range(to_convert):
-                            code_features_list[i]["method"] = "vlm"
-                            vlm_features_list.append(code_features_list[i])
-                        code_features_list = code_features_list[to_convert:]
-                    # If there are too many vlm features, convert some to code
-                    elif vlm_diff < 0:
-                        to_convert = min(abs(vlm_diff), len(vlm_features_list))
-                        for i in range(to_convert):
-                            vlm_features_list[i]["method"] = "code"
-                            code_features_list.append(vlm_features_list[i])
-                        vlm_features_list = vlm_features_list[to_convert:]
-                    
-                    # Recombine
-                    features = code_features_list + vlm_features_list
-                    print(f"     After adjustment: {len(code_features_list)} code, {len(vlm_features_list)} vlm")
-                else:
-                    print(f"  📊 Feature allocation meets the ratio requirement: {current_code_count} code ({current_code_count/total_features:.1%}), {current_vlm_count} vlm ({current_vlm_count/total_features:.1%})")
-        
+
+        # Keep planner-assigned methods as-is (do not rebalance by code-vlm-ratio).
+
         if not features:
             print("  ⚠️  No features to extract")
             all_results: Dict[str, Dict[str, Any]] = {}
@@ -2392,8 +2362,11 @@ Examples:
                                         sample_seg_mask = seg_result.get("mask_path")
                                     else:
                                         if batch_log_fp:
-                                            batch_log_fp.write(f"{sample_id}: ❌ Segmentation failed\n")
-                                        continue
+                                            batch_log_fp.write(
+                                                f"{sample_id}: ⚠️ Segmentation failed; "
+                                                f"continuing VLM scoring without mask\n"
+                                            )
+                                        sample_seg_mask = None
                             
                             # Build AgentState for batch VLM execution
                             state: AgentState = {

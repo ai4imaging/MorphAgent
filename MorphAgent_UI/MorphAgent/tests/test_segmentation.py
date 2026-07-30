@@ -86,6 +86,32 @@ class SegmentAllSamplesTests(unittest.TestCase):
             self.assertEqual(result, {"sample_1": "skipped_allen_unavailable"})
             segment_allen.assert_called_once()
 
+    @patch("tools.segmentation._segmentation_backend", return_value="allen")
+    @patch("tools.segmentation.segment_image_with_allen", return_value=True)
+    def test_ensure_sample_segmentation_uses_allen(self, segment_allen, _backend) -> None:
+        from tools.segmentation import ensure_sample_segmentation
+
+        with tempfile.TemporaryDirectory() as raw:
+            sample = Path(raw) / "sample_1"
+            sample.mkdir()
+            image = sample / "image.tif"
+            image.touch()
+            (sample / "segmentation").mkdir()
+            mask = sample / "segmentation" / "nucleus_segmentation.tiff"
+            mask.touch()
+
+            # Existing mask → no call
+            path = ensure_sample_segmentation(sample, str(image))
+            self.assertEqual(path, mask)
+            segment_allen.assert_not_called()
+
+            # Missing mask → Allen
+            mask.unlink()
+            with patch("tools.segmentation.check_segmentation_exists", side_effect=[None, mask]):
+                path = ensure_sample_segmentation(sample, str(image), conda_env="morphagent_allen")
+            segment_allen.assert_called_once()
+            self.assertEqual(path, mask)
+
 
 if __name__ == "__main__":
     unittest.main()

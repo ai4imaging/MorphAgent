@@ -27,7 +27,7 @@
 - Add: `demo/` from the teacher-provided `github_demo/` source, excluding generated results.
 
 1. Add a failing temp-directory test for `RunConfig.apply_reference_demo()`.
-2. Assert it selects `<repo>/demo/data`, fills the Tau query, enables all three knowledge sources, reuses segmentation, clears metadata/results, and writes one valid `.rag_cache` file using `demo/precomputed/rag_knowledge_summary.txt`.
+2. Assert it selects `<MorphAgent>/demo/data`, fills the Tau query, enables all three knowledge sources, reuses segmentation, clears metadata/results, and writes one valid `.rag_cache` file using `demo/precomputed/rag_knowledge_summary.txt`.
 3. Implement the smallest method using `knowledge.rag._compute_rag_folder_hash`.
 4. Copy the source demo assets into `MorphAgent/demo/` without altering `github_demo/`.
 5. Run the focused model tests.

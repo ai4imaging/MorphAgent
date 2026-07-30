@@ -42,14 +42,14 @@
 
 ## Bundled demo
 
-- Five Tau-neuron samples.
-- Each sample contains `image.tif`, a VLM-ready slice, and five segmentation masks.
-- Expert notes, a deep-research report, three RAG PDFs, and a precomputed RAG cache are included.
+- Ten Tau-neuron samples: `WT_1`–`WT_5` (wild-type) and `MU_1`–`MU_5` (mutant pseudo-labels).
+- Each sample contains `image.tif`, a VLM-ready slice, and segmentation masks.
+- Expert notes, a deep-research report, three RAG PDFs, a precomputed RAG cache, and `metadata.csv` for paired validation are included.
 - `MorphAgent/demo/data/results/completed_demo_run` contains a completed two-round run with 10 feature cards.
 
 ## Demonstration video
 
-- `demo_video/MorphAgent_demo_english.mp4`
+- `demo_video/MorphAgent_demo_english.mp4` (compressed for repository size)
 - English narration and burned-in English subtitles.
 - The experiment segment is accelerated 15×.
 - A three-second silent visual hold separates the accelerated experiment from the next narration.

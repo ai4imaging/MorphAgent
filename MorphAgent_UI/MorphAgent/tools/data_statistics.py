@@ -99,25 +99,9 @@ def collect_data_statistics(
     
     # Load the image and collect statistics
     try:
-        import tifffile
-        from PIL import Image
-        
-        # Try to load the image
-        img = None
-        if image_path.suffix.lower() in ['.tif', '.tiff']:
-            try:
-                img = tifffile.imread(str(image_path))
-            except:
-                try:
-                    img = np.array(Image.open(str(image_path)))
-                except:
-                    pass
-        else:
-            try:
-                img = np.array(Image.open(str(image_path)))
-            except:
-                pass
-        
+        from tools.image_io import load_image_array
+
+        img = load_image_array(image_path)
         if img is not None:
             img_array = np.asarray(img)
             stats["image_shape"] = str(img_array.shape)
@@ -142,8 +126,9 @@ def collect_data_statistics(
                 continue
 
             try:
-                import tifffile
-                seg_mask = tifffile.imread(str(seg_path_obj))
+                from tools.image_io import load_image_array
+
+                seg_mask = load_image_array(seg_path_obj)
                 seg_array = np.asarray(seg_mask)
                 n_unique = len(np.unique(seg_array))
 

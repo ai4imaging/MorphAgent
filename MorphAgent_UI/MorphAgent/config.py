@@ -441,6 +441,7 @@ class RetryableChatLLM:
         max_attempts: int,
         base_retry_delay_seconds: int,
         max_retry_delay_seconds: int,
+        llm_params: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._llm = llm
         self._provider_name = provider_name or "unknown"
@@ -448,6 +449,8 @@ class RetryableChatLLM:
         self._max_attempts = max(1, max_attempts)
         self._base_retry_delay_seconds = max(1, base_retry_delay_seconds)
         self._max_retry_delay_seconds = max(self._base_retry_delay_seconds, max_retry_delay_seconds)
+        self._llm_params = dict(llm_params or {})
+        self._v1_fallback_tried = False
 
     def _total_message_chars(self, messages: Any) -> int:
         if not isinstance(messages, (list, tuple)):
@@ -489,6 +492,36 @@ class RetryableChatLLM:
         )
         return (new_messages,) + tuple(args[1:])
 
+    def _rebuild_llm(self, base_url: str) -> None:
+        from langchain_openai import ChatOpenAI
+
+        params = dict(self._llm_params)
+        params["base_url"] = base_url
+        self._llm_params = params
+        self._llm = ChatOpenAI(**params)
+
+    def _maybe_retry_with_v1_base_url(self, exc: Exception) -> bool:
+        """If the gateway returned 404 because ``/v1`` was missing, rebuild and retry once."""
+        from utils_modules.openai_base_url import is_http_404_error, with_v1_suffix
+
+        if self._v1_fallback_tried or not is_http_404_error(exc):
+            return False
+        current = str(self._llm_params.get("base_url") or settings.llm_base_url or "")
+        candidate = with_v1_suffix(current)
+        if not candidate:
+            return False
+        self._v1_fallback_tried = True
+        print(
+            f"  ⚠️  LLM API returned 404 (provider={self._provider_name}); "
+            f"retrying with base_url={candidate}"
+        )
+        self._rebuild_llm(candidate)
+        try:
+            settings.llm_base_url = candidate
+        except Exception:
+            pass
+        return True
+
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         """Uniformly handle retries for LLM timeout/524/connection errors; proactively compress over-long prompts before the call, and compress-then-retry when the prompt is too long (400/413)."""
         args = self._maybe_proactive_compact(args)
@@ -496,6 +529,12 @@ class RetryableChatLLM:
             try:
                 return self._llm.invoke(*args, **kwargs)
             except Exception as exc:
+                if self._maybe_retry_with_v1_base_url(exc):
+                    try:
+                        return self._llm.invoke(*args, **kwargs)
+                    except Exception as retry_exc:
+                        exc = retry_exc
+
                 # Prompt too long / request body too large: progressively compress the messages and retry to avoid crashing outright
                 if _is_context_length_error(exc) and args:
                     compressed_result = self._invoke_with_compression(args, kwargs, exc)
@@ -647,6 +686,7 @@ def make_chat_llm(**kwargs: Any):
         max_attempts=settings.llm_timeout_max_attempts,
         base_retry_delay_seconds=settings.llm_retry_base_delay_seconds,
         max_retry_delay_seconds=settings.llm_retry_max_delay_seconds,
+        llm_params=params,
     )
 
 
@@ -701,12 +741,13 @@ class MorphAgentConfig:
     reproduce_seed: int = int(os.getenv("REPRODUCE_SEED", "42"))
     reproduce_cache_dir: Optional[str] = None  # Set at runtime to data_root/.morphagent_repro_cache
     
-    # Segmentation Settings (Optional). The default auto-segmentation backend is
-    # Cellpose-SAM, run inside `segmentation_conda_env`. In the unified public
-    # environment this is the same env that runs the agent ("morphagent").
+    # Segmentation Settings (Optional). UI/demo default backend is Allen
+    # (classic aicssegmentation) in the isolated `morphagent_allen` env.
+    # Do NOT fall back to CONDA_ENV here — that is the agent env (`morphagent`)
+    # and is why Allen previously ran without aicsimageio.
     segmentation_backend: str = os.getenv("SEGMENTATION_BACKEND", "allen")  # "allen" or "cellpose"
     cellpose_model: str = "cyto2"  # Cellpose model name
-    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", os.getenv("CONDA_ENV", "morphagent_allen"))
+    segmentation_conda_env: str = os.getenv("SEGMENTATION_CONDA_ENV", "morphagent_allen")
     
     # Data Settings. Point this at your dataset with `--data-root`; the default
     # is a `data/` folder next to this file (see README for the expected layout).

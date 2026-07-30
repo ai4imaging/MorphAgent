@@ -17,7 +17,7 @@ MorphAgent_handoff_20260719/
 ├── dependencies/                       # Dependency manifests organized by purpose
 ├── scripts/                            # One-click install, launch, and self-check
 ├── demo_video/
-│   ├── MorphAgent_demo_english.mp4     # ~4 min 40 sec English demo
+│   ├── MorphAgent_demo_english.mp4     # ~4 min 40 sec English demo (compressed)
 │   └── MorphAgent_demo_english.srt     # Matching subtitle file
 ├── MANIFEST.md                         # Package contents and run strategy
 └── SHA256SUMS.txt                      # File integrity checksums
@@ -33,8 +33,7 @@ For a first review, the recipient should follow this order:
 2. Install the “UI + bundled demo” dependencies.
 3. Launch the UI, choose **Load a previous run**, load the completed results, and inspect Features and Evidence.
 4. On the Configure page, enter your own API credentials, then run the full pipeline with **Load demo dataset**.
-5. Install the optional Allen (`morphagent_allen`) environment only if you need automatic masks for custom data without existing segmentation/.
-
+5. `bash scripts/setup.sh` also creates **`morphagent_allen`** (UI default auto-mask backend for custom data). Set `MORPHAGENT_INSTALL_ALLEN=0` to skip.
 This lets you verify the UI and result views first, then external APIs, and only then the longer full computation path.
 
 ## 3. System Requirements
@@ -43,7 +42,7 @@ This lets you verify the UI and result views first, then external APIs, and only
 - Miniforge, Mambaforge, Miniconda, or Anaconda recommended.
 - Python 3.10; the install scripts create a dedicated environment named `morphagent`.
 - UI + bundled demo: at least 8 GB RAM and 5 GB free disk recommended; GPU not required.
-- Custom data without masks: optional Allen environment (`morphagent_allen`); if missing, segmentation is skipped gracefully.
+- Custom data without masks: `setup.sh` installs `morphagent_allen` by default; if missing, segmentation is skipped gracefully and VLM still scores images without masks.
 - A full new experiment needs a reachable OpenAI Chat Completions–compatible API.
 - Models used for the Code + VLM route must support both text and image input; if the model does not support images, use Code only or configure a separate VLM.
 
@@ -59,7 +58,7 @@ Open a terminal and enter the handoff directory:
 
 ```bash
 cd /path/to/MorphAgent_handoff_20260719
-bash scripts/setup_macos_linux.sh
+bash scripts/setup.sh
 ```
 
 After install, launch:
@@ -71,7 +70,7 @@ bash scripts/start_ui.sh
 To use a different environment name:
 
 ```bash
-MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup_macos_linux.sh
+MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup.sh
 MORPHAGENT_ENV_NAME=my_morphagent bash scripts/start_ui.sh
 ```
 
@@ -90,13 +89,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_ui.ps1
 Without the scripts:
 
 ```bash
-conda create -n morphagent python=3.10 pip -y
+# macOS/Linux: do NOT install conda pyqt — use pip PyQt5 from requirements-demo-ui.txt
+conda create -n morphagent -c conda-forge python=3.10 pip numpy -y
 conda activate morphagent
 python -m pip install -r dependencies/requirements-demo-ui.txt
 python -m pip install -e MorphAgent
-python scripts/verify_install.py --ui-smoke
+QT_QPA_PLATFORM=offscreen python scripts/verify_install.py --ui-smoke
 python MorphAgent/launch_ui.py
 ```
+
+On Windows, prefer `scripts/setup_windows.ps1` (conda `pyqt=5`, no pip PyQt5).
 
 `requirements-demo-ui.txt` is the recommended dependency set for handoff review: it runs the UI, LLM/VLM API routes, the Tau demo with existing masks, Features, and Evidence, without downloading segmentation stacks.
 
@@ -134,10 +136,11 @@ The window maximizes automatically on launch.
 
 1. On the home page, click **Start a discovery run**.
 2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue), or browse to a folder that contains `dataset/<sample>/*.tif`.
-3. The system fills in the demo samples (WT_1–WT_10), the data description, and a default biological question.
-4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Xiaomi MiMo platform](https://platform.xiaomimimo.com/).
-5. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
-6. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
+3. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.
+4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Free AI APIs 2026](https://aicosthub.com/guides/free-ai-apis-2026).
+5. Under **4 · Analysis**, optionally keep **Enable feature validation** on and point at a metadata CSV (`sample_id` + group/label). The demo already ships `demo/data/metadata.csv`.
+6. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
+7. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
 
 Do not forward the generated `.env` to others. For a second handoff, delete `MorphAgent/.env` and keep only `.env.example`.
 
@@ -232,11 +235,11 @@ Usually one of Data, Biological question, or API is incomplete. Click **Load dem
 
 ### API returns 404
 
-Check whether Base URL is missing `/v1`, and confirm the model name matches the provider console exactly.
+If Base URL is missing `/v1`, MorphAgent now retries once after appending `/v1`. Still confirm the model name matches the provider console exactly.
 
 ### Code route works, but VLM route fails
 
-The current model may not support image input. Configure a separate multimodal VLM, or temporarily choose **Code only**.
+Confirm the VLM Base URL / API key / model, and that the endpoint accepts image inputs. You can also temporarily choose **Code only**.
 
 ### Failure when Allen segmentation is missing
 
@@ -254,7 +257,24 @@ Confirm you launch with Python from the `morphagent` environment, not system Pyt
 conda run --no-capture-output -n morphagent python MorphAgent/launch_ui.py
 ```
 
-On Linux headless servers you can only run `--ui-smoke` offscreen checks; an interactive window cannot be shown.
+If setup/`verify_install --ui-smoke` aborts with duplicate `QtCore` / `Could not load the Qt platform plugin "offscreen"`, you have **both** conda `pyqt` and pip `PyQt5`. Keep **one** stack:
+
+```bash
+# macOS / Linux (recommended): pip-only PyQt5
+conda remove -y -n morphagent --force pyqt pyqt5-sip qt-main
+conda run -n morphagent python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip
+conda run -n morphagent python -m pip install --no-cache-dir "PyQt5==5.15.11" "qtpy==2.4.3"
+QT_QPA_PLATFORM=offscreen conda run -n morphagent python scripts/verify_install.py --ui-smoke
+```
+
+```powershell
+# Windows (recommended): conda-only pyqt
+conda run -n morphagent python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip
+conda install -y -n morphagent -c conda-forge "pyqt=5" qtpy
+$env:QT_QPA_PLATFORM="offscreen"; conda run -n morphagent python scripts\verify_install.py --ui-smoke
+```
+
+These scripts are intentionally different by platform: `setup.sh` → pip PyQt5; `setup_windows.ps1` → conda `pyqt=5`.
 
 ## 11. Run Strategy Summary
 

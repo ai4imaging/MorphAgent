@@ -267,7 +267,7 @@ python launch_ui.py --with-napari
 ```
 
 The repository includes the Tau-neuron reference workflow under
-[`demo/`](demo/). Its **10 samples** (`WT_1`–`WT_10`) already contain images,
+[`demo/`](demo/). Its **10 samples** (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant) already contain images,
 VLM slices, and segmentation masks per sample; its precomputed RAG digest also
 avoids reparsing the bundled PDFs. The shortest verified path is:
 
