@@ -3,6 +3,7 @@ setlocal EnableExtensions
 REM MorphAgent UI installer for Windows (double-click this file).
 REM Uses ExecutionPolicy Bypass so Explorer "Run with PowerShell" is not needed.
 REM Also sets UTF-8 for pip (PowerShell 5.1 otherwise writes UTF-16LE temp files).
+REM Creates: morphagent (UI) + morphagent_sandbox (feature code) + optional morphagent_allen.
 
 cd /d "%~dp0\.."
 title MorphAgent UI Setup
@@ -11,6 +12,10 @@ echo ============================================================
 echo  MorphAgent UI setup (Windows)
 echo  Working directory: %CD%
 echo  Scripts live under: MorphAgent_UI\scripts\
+echo  Will create:
+echo    - morphagent          (Qt UI + agent)
+echo    - morphagent_sandbox  (frozen extract() science stack)
+echo    - morphagent_allen    (optional Allen segmentation)
 echo ============================================================
 echo.
 
@@ -49,7 +54,9 @@ if not "%EXITCODE%"=="0" (
 )
 
 echo ============================================================
-echo  Setup finished. You can close this window, then double-click
+echo  Setup finished. Envs: morphagent + morphagent_sandbox
+echo  ^(plus morphagent_allen if Allen install succeeded^).
+echo  Close this window, then double-click
 echo  scripts\start_ui_windows.bat to launch MorphAgent.
 echo ============================================================
 echo.

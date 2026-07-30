@@ -31,7 +31,7 @@ def _sandbox_env_name() -> str:
         from config import settings
         return settings.conda_env
     except Exception:
-        return os.getenv("CONDA_ENV", "morphagent")
+        return os.getenv("CONDA_ENV", "morphagent_sandbox")
 
 
 def _find_conda_python(conda_env: str) -> Optional[Path]:
@@ -267,16 +267,41 @@ def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentat
         "        'np': np,  # Only numpy is pre-imported as a minimal convenience",
         "    }",
         "",
-        "    # Function to auto-install missing packages",
+        "    # Auto-install policy (inlined: sandbox env has no MorphAgent package).",
+        "    _CORE_SCIENCE = {",
+        "        'numpy', 'scipy', 'pandas', 'scikit-image', 'skimage', 'scikit-learn', 'sklearn',",
+        "        'opencv-python', 'opencv-python-headless', 'cv2', 'pillow', 'pil', 'matplotlib',",
+        "        'tifffile', 'networkx', 'mahotas', 'h5py', 'statsmodels', 'imageio', 'pywavelets',",
+        "        'pyyaml', 'yaml', 'tqdm', 'natsort', 'imagecodecs', 'seaborn',",
+        "    }",
+        "    def _norm_pkg(name):",
+        "        return (name or '').strip().lower().replace('_', '-')",
+        "    def _is_core_pkg(name):",
+        "        top = (name or '').split('.')[0]",
+        "        return _norm_pkg(name) in {_norm_pkg(p) for p in _CORE_SCIENCE} or top.lower() in _CORE_SCIENCE",
         "    def auto_install_package(package_name, conda_env=None):",
-        "        \"\"\"Try to install a missing package\"\"\"",
+        "        \"\"\"Try to install a missing non-core package into the code sandbox.\"\"\"",
+        "        import re",
         "        import subprocess",
         "        import sys",
+        "        name = (package_name or '').strip()",
+        "        if not name:",
+        "            return False",
+        "        if re.search(r'(==|!=|<=|>=|~=|===|<|>|=[0-9])', name):",
+        "            print(f'[Auto-install] Blocked version pin: {name!r}', file=sys.stderr)",
+        "            return False",
+        "        if _is_core_pkg(name):",
+        "            print(",
+        "                f'[Auto-install] Blocked core package {name!r} — '",
+        "                'use the frozen sandbox stack / current APIs (graycomatrix not greycomatrix)',",
+        "                file=sys.stderr,",
+        "            )",
+        "            return False",
         "        try:",
         "            if conda_env:",
-        f"                cmd = ['conda', 'run', '-n', conda_env, 'pip', 'install', package_name]",
+        f"                cmd = ['conda', 'run', '-n', conda_env, 'pip', 'install', name]",
         "            else:",
-        "                cmd = [sys.executable, '-m', 'pip', 'install', package_name]",
+        "                cmd = [sys.executable, '-m', 'pip', 'install', name]",
         "            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)",
         "            if result.returncode == 0:",
         "                return True",
@@ -284,7 +309,7 @@ def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentat
         "        except Exception:",
         "            return False",
         "",
-        "    # Get conda environment for auto-install",
+        "    # Get conda environment for auto-install (UI code sandbox, not the Qt UI env)",
         f"    conda_env_for_install = {repr(conda_env) if conda_env else repr(_sandbox_env_name())}",
         "    if conda_env_for_install is None:",
         f"        conda_env_for_install = os.environ.get('CONDA_ENV', {repr(_sandbox_env_name())})",
@@ -298,36 +323,31 @@ def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentat
         "            break  # Success, exit retry loop",
         "        except ImportError as e:",
         "            import_error_str = str(e)",
-        "            # Extract package name from ImportError message",
-        "            # Examples: \"No module named 'scipy.stats'\" -> \"scipy\"",
-        "            #          \"cannot import name 'stats' from 'scipy'\" -> \"scipy\"",
         "            package_name = None",
         "            if \"No module named\" in import_error_str:",
-        "                # Extract module name (e.g., \"scipy.stats\" -> \"scipy\")",
         "                import re",
         "                match = re.search(r\"No module named ['\\\"]([^'\\\"]+)['\\\"]\", import_error_str)",
         "                if match:",
-        "                    full_module = match.group(1)",
-        "                    # Get top-level package (e.g., \"scipy.stats\" -> \"scipy\")",
-        "                    package_name = full_module.split('.')[0]",
+        "                    package_name = match.group(1).split('.')[0]",
         "            elif \"cannot import name\" in import_error_str:",
-        "                # Extract module name (e.g., \"cannot import name 'stats' from 'scipy'\" -> \"scipy\")",
         "                import re",
         "                match = re.search(r\"from ['\\\"]([^'\\\"]+)['\\\"]\", import_error_str)",
         "                if match:",
         "                    package_name = match.group(1).split('.')[0]",
         "",
         "            if package_name and retry < max_import_retries - 1:",
-        "                # Try to install the package",
         "                print(f'[Auto-install] Attempting to install missing package: {package_name}', file=sys.stderr)",
         "                if auto_install_package(package_name, conda_env=conda_env_for_install):",
         "                    print(f'[Auto-install] Successfully installed {package_name}, retrying execution...', file=sys.stderr)",
-        "                    continue  # Retry execution",
+        "                    continue",
         "                else:",
-        "                    print(f'[Auto-install] Failed to install {package_name}', file=sys.stderr)",
+        "                    print(f'[Auto-install] Refused or failed to install {package_name}', file=sys.stderr)",
         "",
-        "            # If we can't install or this is the last retry, raise the error",
-        "            exec_error = f'Import error in extract.py: {e}. Tried to auto-install but failed.'",
+        "            exec_error = (",
+        "                f'Import error in extract.py: {e}. '",
+        "                'Sandbox policy: do not reinstall core science packages; '",
+        "                'use current APIs (e.g. graycomatrix not greycomatrix).'",
+        "            )",
         "            exec_error_tb = traceback.format_exc()",
         "            raise ValueError(f'{exec_error}\\nTraceback:\\n{exec_error_tb}')",
         "        except SyntaxError as e:",
@@ -1021,8 +1041,29 @@ def _handle_code_fix(plan: CodeFixPlan, feature_dir: Path, feature_name: str, co
     
     # Execute the install script
     if plan.install_script:
-        script = plan.install_script.strip()
-        
+        from tools.sandbox_install_policy import (
+            blocked_install_guidance,
+            validate_install_script,
+        )
+
+        ok, reason, script = validate_install_script(plan.install_script)
+        if not ok:
+            print(f"    🚫 Sandbox install blocked: {reason}")
+            guidance = blocked_install_guidance(reason)
+            existing = (plan.guidance_message or "").strip()
+            plan.guidance_message = (existing + "\n\n" + guidance).strip() if existing else guidance
+            (feature_dir / "code_fix_guidance.txt").write_text(plan.guidance_message, encoding="utf-8")
+            (feature_dir / "code_fix_install_blocked.txt").write_text(
+                f"blocked: {reason}\n\noriginal_script:\n{plan.install_script}\n",
+                encoding="utf-8",
+            )
+            script = ""
+        else:
+            script = script.strip()
+
+        if not script:
+            return
+
         # Get the target conda environment
         target_env = conda_env or settings.conda_env
         

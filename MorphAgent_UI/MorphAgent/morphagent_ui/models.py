@@ -454,6 +454,8 @@ class RunConfig:
         deterministic = self.reproduce or self.temperature <= 0.0
         env = {
             "CODE_MAX_RETRIES": "3",
+            # Feature extract() runs in an isolated sandbox env — never the Qt UI env.
+            "CONDA_ENV": "morphagent_sandbox",
             # Always pin Allen + its isolated env for UI runs (ignore a polluted
             # parent shell that may still have SEGMENTATION_CONDA_ENV=morphagent).
             "SEGMENTATION_BACKEND": "allen",

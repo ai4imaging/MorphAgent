@@ -2,6 +2,7 @@
 setlocal EnableExtensions
 REM MorphAgent UI launcher for Windows (double-click this file).
 REM Uses ExecutionPolicy Bypass; auto-finds conda when PATH is empty.
+REM UI runs in morphagent; feature extract() uses morphagent_sandbox (set by setup / UI).
 
 cd /d "%~dp0\.."
 title MorphAgent UI
@@ -9,6 +10,8 @@ title MorphAgent UI
 echo ============================================================
 echo  Starting MorphAgent UI
 echo  Working directory: %CD%
+echo  UI env: morphagent
+echo  Code sandbox ^(extract^): morphagent_sandbox
 echo ============================================================
 echo.
 
@@ -35,7 +38,8 @@ if not "%EXITCODE%"=="0" (
   echo  Common causes:
   echo    1^) setup_windows.bat was never run
   echo    2^) conda env "morphagent" is missing / broken
-  echo    3^) Qt / display driver issue — re-run setup_windows.bat
+  echo    3^) conda env "morphagent_sandbox" is missing — re-run setup_windows.bat
+  echo    4^) Qt / display driver issue — re-run setup_windows.bat
   echo ============================================================
   echo.
   pause

@@ -1,5 +1,8 @@
 # MorphAgent UI setup (Windows only — macOS/Linux use setup.sh).
-# Creates `morphagent` with Qt + scientific stack, then optional `morphagent_allen`.
+# Creates:
+#   - `morphagent`          — Qt UI + agent
+#   - `morphagent_sandbox`  — frozen scientific stack for extract() code
+#   - optional `morphagent_allen`
 #
 # Qt (Windows): conda `pyqt=5` only. Pip PyQt5 from requirements-demo-ui.txt is
 # filtered out on purpose — Windows is not meant to follow the Unix pip-Qt path.
@@ -9,6 +12,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 param(
     [string]$EnvName = "morphagent",
+    [string]$SandboxEnvName = "morphagent_sandbox",
     [string]$AllenEnvName = "morphagent_allen",
     [switch]$SkipAllen
 )
@@ -18,6 +22,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $HandoffRoot = Split-Path -Parent $ScriptDir
 $Repository = Join-Path $HandoffRoot "MorphAgent"
 $Requirements = Join-Path $HandoffRoot "dependencies\requirements-demo-ui.txt"
+$SandboxRequirements = Join-Path $HandoffRoot "dependencies\requirements-sandbox.txt"
 $Verifier = Join-Path $HandoffRoot "scripts\verify_install.py"
 $AllenYml = Join-Path $Repository "envs\environment_allen.yml"
 if (-not (Test-Path $AllenYml)) {
@@ -168,11 +173,55 @@ function Install-CoreCondaPackages([string]$Name) {
     }
 }
 
+function Install-SandboxCondaPackages([string]$Name) {
+    Write-Host "Installing sandbox conda packages into $Name (numpy / scipy / scikit-image / ..., no Qt)..."
+    & conda install -y -n $Name -c conda-forge `
+        "python=3.10" `
+        "pip>=24" `
+        "numpy>=1.26,<3" `
+        "scipy>=1.11" `
+        "pandas>=2.0" `
+        "pillow>=10" `
+        "matplotlib>=3.8" `
+        "scikit-image>=0.22" `
+        "scikit-learn>=1.3" `
+        "tifffile>=2023" `
+        "pyyaml>=6" `
+        "tqdm" `
+        "h5py" `
+        "networkx" `
+        "imageio" `
+        "requests" `
+        "lxml"
+    if ($LASTEXITCODE -ne 0) {
+        throw "conda install of sandbox packages failed for env '$Name' (exit $LASTEXITCODE)"
+    }
+}
+
 function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
     & conda run --no-capture-output -n $Name @PythonArgs
     if ($LASTEXITCODE -ne 0) {
         throw "conda run -n $Name failed (exit $LASTEXITCODE): $($PythonArgs -join ' ')"
     }
+}
+
+function Repair-Pip([string]$Name) {
+    Write-Host "Repairing pip in $Name via conda (no pip self-upgrade)..."
+    $sp = & conda run -n $Name python -c "import site; print(site.getsitepackages()[0])"
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sp)) {
+        throw "Could not resolve site-packages for '$Name'"
+    }
+    Write-Host "  cleaning pip leftovers under $sp"
+    $pipDir = Join-Path $sp "pip"
+    if (Test-Path $pipDir) { Remove-Item -Recurse -Force $pipDir }
+    Get-ChildItem -Path $sp -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'pip-*.dist-info' -or $_.Name -like 'pip-*.egg-info' } |
+        ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
+    & conda install -y -n $Name -c conda-forge --force-reinstall "pip>=24" "setuptools" "wheel"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to repair pip in '$Name'"
+    }
+    Invoke-CondaRun $Name @("python", "-m", "pip", "--version")
 }
 
 function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
@@ -189,7 +238,7 @@ from pathlib import Path
 import os, re
 src = Path(os.environ['MORPHAGENT_REQ_SRC'])
 dst = Path(os.environ['MORPHAGENT_REQ_DST'])
-pat = re.compile(r'^\s*PyQt5([=<>!].*)?\s*(#.*)?$')
+pat = re.compile(r'^\s*PyQt5([=<>!\.].*)?\s*(#.*)?$', re.I)
 lines = [ln for ln in src.read_text(encoding='utf-8').splitlines() if not pat.match(ln)]
 dst.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 print('[OK] wrote', dst, 'lines=', len(lines), 'encoding=utf-8')
@@ -199,27 +248,27 @@ print('[OK] wrote', dst, 'lines=', len(lines), 'encoding=utf-8')
     Remove-Item Env:MORPHAGENT_REQ_DST -ErrorAction SilentlyContinue
 
     Write-Host "Installing pip packages from $(Split-Path $ReqFile -Leaf) (PyQt5 skipped)..."
-    # Prefer UTF-8 I/O inside the env for any remaining locale edge cases.
     $prevPyUtf8 = $env:PYTHONUTF8
     $prevPyIo = $env:PYTHONIOENCODING
     $env:PYTHONUTF8 = "1"
     $env:PYTHONIOENCODING = "utf-8"
     try {
-        Invoke-CondaRun $Name @("python", "-m", "pip", "install", "--upgrade", "pip")
+        Repair-Pip $Name
         Invoke-CondaRun $Name @("python", "-m", "pip", "install", "-r", $filtered)
     } finally {
         if ($null -eq $prevPyUtf8) { Remove-Item Env:PYTHONUTF8 -ErrorAction SilentlyContinue } else { $env:PYTHONUTF8 = $prevPyUtf8 }
         if ($null -eq $prevPyIo) { Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue } else { $env:PYTHONIOENCODING = $prevPyIo }
         Remove-Item $filtered -ErrorAction SilentlyContinue
     }
-    Write-Host "Removing any pip-installed PyQt5 wheels that conflict with conda pyqt..."
-    & conda run --no-capture-output -n $Name python -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip 2>$null
+    # Only drop pip-bundled Qt runtime; Ensure-SingleQtStack reinstalls conda pyqt.
+    Write-Host "Removing pip-bundled Qt runtime PyQt5-Qt5 if present..."
+    & conda run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>$null
 }
 
 
 function Ensure-SingleQtStack([string]$Name) {
     Write-Host "Reaffirming single conda Qt stack in $Name..."
-    & conda install -y -n $Name -c conda-forge "pyqt=5" "qtpy>=2.4"
+    & conda install -y -n $Name -c conda-forge --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to reinstall conda pyqt for '$Name'"
     }
@@ -233,7 +282,7 @@ import qtpy, numpy
 print('[OK] single Qt stack: PyQt5=%s, qtpy=%s, numpy=%s' % (QtCore.PYQT_VERSION_STR, qtpy.__version__, numpy.__version__))
 pip_qt = Path(PyQt5.__file__).resolve().parent / 'Qt5' / 'lib'
 if pip_qt.exists():
-    raise SystemExit('Pip PyQt5 Qt binaries still present; uninstall PyQt5/PyQt5-Qt5/PyQt5-sip and reinstall conda pyqt=5')
+    raise SystemExit('Pip PyQt5 Qt binaries still present; uninstall PyQt5-Qt5 and reinstall conda pyqt=5')
 "@
     )
 }
@@ -247,6 +296,9 @@ try {
 
     if (-not (Test-Path $Requirements)) {
         throw "Missing requirements file: $Requirements"
+    }
+    if (-not (Test-Path $SandboxRequirements)) {
+        throw "Missing sandbox requirements file: $SandboxRequirements"
     }
     if (-not (Test-Path $Repository)) {
         throw "Missing MorphAgent repository folder: $Repository"
@@ -267,6 +319,24 @@ try {
     Invoke-CondaRun $EnvName @("python", "-m", "pip", "install", "-e", $Repository)
     Ensure-SingleQtStack $EnvName
 
+    if (-not (Test-CondaEnv $SandboxEnvName)) {
+        Write-Host "Creating code-sandbox conda environment: $SandboxEnvName"
+        & conda create -y -n $SandboxEnvName -c conda-forge python=3.10 pip
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create conda env '$SandboxEnvName'"
+        }
+    } else {
+        Write-Host "Using existing conda environment: $SandboxEnvName"
+    }
+    Install-SandboxCondaPackages $SandboxEnvName
+    Write-Host "Installing frozen sandbox pip stack from requirements-sandbox.txt..."
+    Repair-Pip $SandboxEnvName
+    Invoke-CondaRun $SandboxEnvName @("python", "-m", "pip", "install", "-r", $SandboxRequirements)
+    Invoke-CondaRun $SandboxEnvName @(
+        "python", "-c",
+        "import numpy, skimage, cv2, mahotas; print('[OK] sandbox numpy', numpy.__version__, 'skimage', skimage.__version__)"
+    )
+
     $EnvFile = Join-Path $Repository ".env"
     $EnvExample = Join-Path $Repository ".env.example"
     if (-not (Test-Path $EnvFile)) {
@@ -275,6 +345,16 @@ try {
         } else {
             Write-Warning ".env.example missing; skipped creating .env"
         }
+    }
+    if (Test-Path $EnvFile) {
+        $envText = Get-Content -Raw -Path $EnvFile
+        if ($envText -match '(?m)^CONDA_ENV=') {
+            $envText = [regex]::Replace($envText, '(?m)^CONDA_ENV=.*$', 'CONDA_ENV=morphagent_sandbox')
+        } else {
+            if (-not $envText.EndsWith("`n")) { $envText += "`n" }
+            $envText += "CONDA_ENV=morphagent_sandbox`n"
+        }
+        Set-Content -Path $EnvFile -Value $envText -NoNewline
     }
 
     if (-not $SkipAllen) {
@@ -331,6 +411,8 @@ try {
     }
 
     Write-Host "Installation verified. Double-click scripts\start_ui_windows.bat to launch MorphAgent."
+    Write-Host "UI / agent env: $EnvName"
+    Write-Host "Code sandbox env (feature extract): $SandboxEnvName"
     Write-Host "Allen segmentation env (optional): $AllenEnvName"
 } catch {
     $scriptExit = 1

@@ -41,11 +41,14 @@ MorphAgent/                         # git clone root
    Relative paths like `scripts/setup.sh` mean `MorphAgent_UI/scripts/setup.sh`.
 2. **No local LLM/VLM weights.** All model calls go through an OpenAI-compatible
    HTTP API (configured in the UI or via `MorphAgent_UI/MorphAgent/.env`).
-3. **UI segmentation default is Allen** (`SEGMENTATION_BACKEND=allen`, env
-   `morphagent_allen`), not Cellpose-SAM. Demo samples already ship masks, so a
-   first demo run does not need Allen to succeed.
-4. **UI code / both runs disable the VLM critic** (`--disable-critic-agent`) to
-   avoid noisy false failures during code feature generation.
+3. **Two conda envs for the UI path (plus optional Allen):**
+   - `morphagent` — Qt desktop UI + agent (`main.py` orchestration, LangChain).
+   - `morphagent_sandbox` — **frozen** scientific stack for agent-generated
+     `extract()` code only. Runtime fix scripts must **not** pin/change versions
+     or reinstall numpy/scikit-image/scipy/….
+   - `morphagent_allen` — optional Allen segmentation.
+4. **UI segmentation default is Allen** (`SEGMENTATION_BACKEND=allen`).
+5. **UI code / both runs disable the VLM critic** (`--disable-critic-agent`).
 
 ## 1. Prerequisites
 
@@ -105,13 +108,15 @@ bash scripts/setup.sh
 What this does:
 
 - Creates / updates conda env **`morphagent`** (Python 3.10) with conda-forge
-  **PyQt5 / qtpy / numpy / scipy / …**, then pip-installs
-  `dependencies/requirements-demo-ui.txt` and editable
-  `MorphAgent_UI/MorphAgent`.
+  **PyQt5 / qtpy**, then pip-installs `dependencies/requirements-demo-ui.txt`
+  and editable `MorphAgent_UI/MorphAgent` (UI + agent).
+- Creates / updates conda env **`morphagent_sandbox`** with the frozen
+  scientific stack from `dependencies/requirements-sandbox.txt` (feature
+  `extract()` only — no Qt / LangChain).
 - By default also creates optional **`morphagent_allen`** (Allen segmentation).
   Skip with: `MORPHAGENT_INSTALL_ALLEN=0 bash scripts/setup.sh`
-- Custom env name: `MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup.sh`
-  (then use the same name when starting).
+- Custom UI env name: `MORPHAGENT_ENV_NAME=my_morphagent bash scripts/setup.sh`
+- Custom sandbox name: `MORPHAGENT_SANDBOX_ENV_NAME=my_sandbox bash scripts/setup.sh`
 
 ### 3b. Windows (preferred: double-click / `.bat`)
 
@@ -243,12 +248,15 @@ env vars such as:
 
 - `SEGMENTATION_BACKEND=allen`
 - `SEGMENTATION_CONDA_ENV=morphagent_allen`
+- `CONDA_ENV=morphagent_sandbox` (feature code sandbox; never the Qt UI env)
 - `ENABLE_CRITIC_AGENT=false` when method is `code` or `both`
 - scale: `NUM_ROUNDS` / `FEATURES_PER_ITERATION` / `TARGET_FEATURE_COUNT`
 
 Do **not** re-enable the critic for UI demos unless the user explicitly asks.
 Do **not** switch the UI path to Cellpose unless asked — CLI Cellpose setup is
 documented in `installation_skill.md`, not here.
+Do **not** let fix agents reinstall numpy/scikit-image into `morphagent` or
+`morphagent_sandbox`; the UI blocks version pins and core-stack mutations.
 
 ## 8. Troubleshooting / known pitfalls
 

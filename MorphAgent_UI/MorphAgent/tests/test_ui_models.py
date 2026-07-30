@@ -399,6 +399,11 @@ class CriticDisableTests(unittest.TestCase):
         self.assertNotIn("--disable-critic-agent", vlm.build_command())
         self.assertNotIn("ENABLE_CRITIC_AGENT", vlm.pipeline_environment())
 
+    def test_ui_pipeline_uses_isolated_code_sandbox_env(self) -> None:
+        env = RunConfig(method="code").pipeline_environment()
+        self.assertEqual(env.get("CONDA_ENV"), "morphagent_sandbox")
+        self.assertEqual(env.get("SEGMENTATION_CONDA_ENV"), "morphagent_allen")
+
 
 if __name__ == "__main__":
     unittest.main()

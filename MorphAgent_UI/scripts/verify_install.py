@@ -131,6 +131,52 @@ def check_allen_environment() -> None:
     print(f"[OK] Allen environment '{allen_env}' passes check_installation.py")
 
 
+def check_sandbox_environment() -> None:
+    """Verify the isolated morphagent_sandbox env used for feature extract()."""
+    import shutil
+    import subprocess
+
+    sandbox_env = os.environ.get("MORPHAGENT_SANDBOX_ENV_NAME", "morphagent_sandbox")
+    if shutil.which("conda") is None:
+        print("[WARN] conda not found; cannot verify code sandbox environment")
+        return
+
+    listed = subprocess.run(
+        ["conda", "env", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    names = {line.split()[0] for line in listed.stdout.splitlines() if line.strip() and not line.startswith("#")}
+    if sandbox_env not in names:
+        print(
+            f"[WARN] Code sandbox env '{sandbox_env}' is missing. "
+            "UI feature code expects this env. Install with: bash scripts/setup.sh"
+        )
+        return
+
+    result = subprocess.run(
+        [
+            "conda",
+            "run",
+            "-n",
+            sandbox_env,
+            "python",
+            "-c",
+            "import numpy, skimage, cv2; print(numpy.__version__, skimage.__version__)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(f"[WARN] Code sandbox env '{sandbox_env}' exists but imports failed; re-run setup.sh")
+        if result.stderr:
+            print(result.stderr[-500:])
+        return
+    print(f"[OK] Code sandbox environment '{sandbox_env}' imports numpy/skimage ({result.stdout.strip()})")
+
+
 def ui_smoke_test() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     sys.path.insert(0, str(REPOSITORY))
@@ -156,6 +202,7 @@ def main() -> int:
     check_completed_run()
     check_optional_segmentation()
     check_allen_environment()
+    check_sandbox_environment()
     if args.ui_smoke:
         ui_smoke_test()
     print("[PASS] MorphAgent handoff verification completed")

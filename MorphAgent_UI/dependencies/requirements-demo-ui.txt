@@ -36,5 +36,6 @@ statsmodels==0.14.6
 h5py==3.16.0
 
 qtpy==2.4.3
-PyQt5==5.15.11
+# PyQt5: install ONLY via conda-forge `pyqt=5` in scripts/setup.sh / setup_windows.ps1.
+# Pip PyQt5 bundles a second Qt tree and crashes macOS/Windows (duplicate libQt5Core).
 
