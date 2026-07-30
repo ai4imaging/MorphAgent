@@ -7,6 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from morphagent_ui.demo_api import (
+    FREE_DEMO_CANDIDATES,
+    FREE_DEMO_ROUNDS,
+    FREE_DEMO_TARGET,
+    is_free_demo_connection,
+    load_free_demo_credentials,
+)
+
 from morphagent_ui.models import (
     RunConfig,
     RunPreset,
@@ -366,6 +374,30 @@ class FeatureArtifactTests(unittest.TestCase):
             self.assertEqual(cards[0].status, "retained")
             self.assertAlmostEqual(cards[0].validation_score or 0, 0.87)
             self.assertIn("skeletonize", cards[0].candidate_operators)
+
+class FreeDemoApiTests(unittest.TestCase):
+    def test_obfuscated_credentials_decode_for_morphagent_ui(self) -> None:
+        creds = load_free_demo_credentials()
+        self.assertEqual(creds["base_url"], "https://api.gpugeek.com/v1")
+        self.assertEqual(creds["model"], "Vendor2/GPT-4o")
+        self.assertTrue(creds["api_key"])
+        self.assertTrue(is_free_demo_connection(creds["base_url"], creds["api_key"]))
+        self.assertFalse(is_free_demo_connection("https://api.openai.com/v1", creds["api_key"]))
+        self.assertEqual(FREE_DEMO_ROUNDS, 1)
+        self.assertEqual(FREE_DEMO_CANDIDATES, 5)
+        self.assertEqual(FREE_DEMO_TARGET, 5)
+
+
+class CriticDisableTests(unittest.TestCase):
+    def test_ui_disables_critic_for_code_and_both(self) -> None:
+        for method in ("code", "both"):
+            config = RunConfig(method=method, dataset_source="custom")
+            command = config.build_command()
+            self.assertIn("--disable-critic-agent", command)
+            self.assertEqual(config.pipeline_environment().get("ENABLE_CRITIC_AGENT"), "false")
+        vlm = RunConfig(method="vlm", dataset_source="custom")
+        self.assertNotIn("--disable-critic-agent", vlm.build_command())
+        self.assertNotIn("ENABLE_CRITIC_AGENT", vlm.pipeline_environment())
 
 
 if __name__ == "__main__":

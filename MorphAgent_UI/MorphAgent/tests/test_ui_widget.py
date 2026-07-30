@@ -12,6 +12,7 @@ from dotenv import dotenv_values
 from qtpy.QtWidgets import QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QLabel, QLineEdit, QPlainTextEdit, QRadioButton
 
 from launch_ui import build_parser, create_standalone_window
+from morphagent_ui.demo_api import FREE_DEMO_CANDIDATES, FREE_DEMO_ROUNDS, FREE_DEMO_TARGET
 from morphagent_ui.main import MorphAgentWidget
 from morphagent_ui.models import FeatureCard
 from morphagent_ui.theme import STYLESHEET, apply_theme
@@ -170,6 +171,35 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertTrue(widget.config.segmentation_skip_if_present)
         self.assertIn("--segmentation-skip-if-present", widget.config.build_command())
         self.assertNotIn("--segmentation-run-even-if-present", widget.config.build_command())
+        widget.close()
+
+    def test_free_restricted_api_button_fills_and_locks_scale(self) -> None:
+        widget = MorphAgentWidget()
+        page = widget.configure_page
+        page.rounds_spin.setValue(3)
+        page.candidates_spin.setValue(10)
+        page.target_spin.setValue(20)
+
+        page.free_api_button.click()
+        self.app.processEvents()
+
+        self.assertEqual(page.llm_base_url_edit.text(), "https://api.gpugeek.com/v1")
+        self.assertEqual(page.llm_model_edit.text(), "Vendor2/GPT-4o")
+        self.assertTrue(page.llm_api_key_edit.text())
+        self.assertTrue(page.reuse_llm_for_vlm.isChecked())
+        self.assertEqual(page.rounds_spin.value(), FREE_DEMO_ROUNDS)
+        self.assertEqual(page.candidates_spin.value(), FREE_DEMO_CANDIDATES)
+        self.assertEqual(page.target_spin.value(), FREE_DEMO_TARGET)
+        self.assertFalse(page.rounds_spin.isEnabled())
+        self.assertFalse(page.candidates_spin.isEnabled())
+        self.assertFalse(page.target_spin.isEnabled())
+        self.assertIn("token", page.free_api_note.text().lower())
+
+        page.llm_base_url_edit.setText("https://api.openai.com/v1")
+        self.app.processEvents()
+        self.assertTrue(page.rounds_spin.isEnabled())
+        self.assertTrue(page.candidates_spin.isEnabled())
+        self.assertTrue(page.target_spin.isEnabled())
         widget.close()
 
     def test_configure_saves_masked_model_api_to_repository_env(self) -> None:

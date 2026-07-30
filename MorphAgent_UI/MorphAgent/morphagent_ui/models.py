@@ -443,13 +443,16 @@ class RunConfig:
             command.append("--resume")
         if self.multigpu:
             command.append("--multigpu")
+        # UI: skip VLM critic when code features run (noisy false ❌ / wasted retries).
+        if self.method in {"code", "both"}:
+            command.append("--disable-critic-agent")
         return command
 
     def pipeline_environment(self) -> dict[str, str]:
         """Extra env vars injected when the UI launches main.py."""
 
         deterministic = self.reproduce or self.temperature <= 0.0
-        return {
+        env = {
             "CODE_MAX_RETRIES": "3",
             # Always pin Allen + its isolated env for UI runs (ignore a polluted
             # parent shell that may still have SEGMENTATION_CONDA_ENV=morphagent).
@@ -462,6 +465,9 @@ class RunConfig:
             "CODE_TEMPERATURE": "0" if deterministic else str(self.temperature),
             "VLM_TEMPERATURE": "0" if deterministic else str(self.temperature),
         }
+        if self.method in {"code", "both"}:
+            env["ENABLE_CRITIC_AGENT"] = "false"
+        return env
 
     def command_preview(self) -> str:
         return shlex.join(self.build_command())

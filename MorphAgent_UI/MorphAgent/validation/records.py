@@ -47,6 +47,8 @@ class FeatureMetrics:
     metadata_best_anova_field: Optional[str] = None
     metadata_max_eta_squared: float = 0.0
     metadata_best_eta_field: Optional[str] = None
+    metadata_max_classifier_auc: float = 0.5
+    metadata_best_classifier_field: Optional[str] = None
     metadata_alignment_score: float = 0.0
     redundancy_penalty: float = 0.0
     base_validation_score: float = 0.0

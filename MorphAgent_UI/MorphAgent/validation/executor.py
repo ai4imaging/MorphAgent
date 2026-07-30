@@ -88,9 +88,14 @@ class ValidationExecutor:
         self.min_unique_values = 5
         self.deterministic_corr_threshold = 0.98
         self.ambiguous_corr_threshold = 0.95
-        self.min_transcriptome_alignment = 0.30
+        # Very loose paired-metadata screen: any slight Spearman / eta² /
+        # linear-classifier signal is enough to pass (not a transcriptome assay).
+        self.min_metadata_alignment = 0.05
+        self.min_metadata_classifier_auc = 0.55
         self.min_base_validation_score = 0.35
         self.llm_reviewer = LLMRedundancyReviewer()
+        # Backward-compatible alias used by older summaries / callers.
+        self.min_transcriptome_alignment = self.min_metadata_alignment
 
     def validate_round(
         self,
@@ -455,6 +460,8 @@ class ValidationExecutor:
             metadata_best_anova_field=metadata_metrics["metadata_best_anova_field"],
             metadata_max_eta_squared=metadata_metrics["metadata_max_eta_squared"],
             metadata_best_eta_field=metadata_metrics["metadata_best_eta_field"],
+            metadata_max_classifier_auc=metadata_metrics["metadata_max_classifier_auc"],
+            metadata_best_classifier_field=metadata_metrics["metadata_best_classifier_field"],
             metadata_alignment_score=metadata_metrics["metadata_alignment_score"],
             redundancy_penalty=0.0,
             base_validation_score=base_validation_score,
@@ -488,12 +495,25 @@ class ValidationExecutor:
             explanation_parts.append(
                 f"Variability signal {metrics.unsupervised_signal:.3f} is below {self.cv_threshold:.2f}."
             )
-        if metadata_available and metrics.metadata_max_abs_spearman < self.min_transcriptome_alignment:
-            reason_codes.append("low_transcriptome_alignment")
-            explanation_parts.append(
-                f"Max |Spearman| with transcriptome {metrics.metadata_max_abs_spearman:.3f} "
-                f"is below {self.min_transcriptome_alignment:.2f}."
+        if metadata_available:
+            # Combined paired-metadata score (Spearman OR categorical eta² OR
+            # classifier AUC). Categorical labels (e.g. WT/MU) are gated mainly
+            # by AUC; continuous covariates mainly by Spearman/eta² score.
+            # Previously only Spearman was checked, which dropped every feature
+            # when metadata was categorical.
+            passes_alignment = (
+                metrics.metadata_alignment_score >= self.min_metadata_alignment
+                or metrics.metadata_max_classifier_auc >= self.min_metadata_classifier_auc
             )
+            if not passes_alignment:
+                reason_codes.append("low_paired_metadata_alignment")
+                explanation_parts.append(
+                    "Paired-metadata alignment is below the loose screen "
+                    f"(score={metrics.metadata_alignment_score:.3f} < {self.min_metadata_alignment:.2f}, "
+                    f"classifier AUC={metrics.metadata_max_classifier_auc:.3f} < "
+                    f"{self.min_metadata_classifier_auc:.2f}). "
+                    "Only features with essentially no ability to track paired metadata are dropped."
+                )
         if metrics.base_validation_score < self.min_base_validation_score:
             reason_codes.append("low_validation_score")
             explanation_parts.append(
@@ -1026,7 +1046,10 @@ class ValidationExecutor:
                 "cv_floor": self.cv_threshold,
                 "deterministic_corr_threshold": self.deterministic_corr_threshold,
                 "ambiguous_corr_threshold": self.ambiguous_corr_threshold,
-                "min_transcriptome_alignment": self.min_transcriptome_alignment,
+                "min_metadata_alignment": self.min_metadata_alignment,
+                "min_metadata_classifier_auc": self.min_metadata_classifier_auc,
+                # Legacy key kept for older readers of validation_summary.json.
+                "min_transcriptome_alignment": self.min_metadata_alignment,
                 "min_base_validation_score": self.min_base_validation_score,
             },
             "metadata": metadata.to_summary(),

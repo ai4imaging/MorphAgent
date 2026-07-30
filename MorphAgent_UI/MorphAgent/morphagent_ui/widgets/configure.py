@@ -28,6 +28,14 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from ..demo_api import (
+    FREE_DEMO_CANDIDATES,
+    FREE_DEMO_NOTICE,
+    FREE_DEMO_ROUNDS,
+    FREE_DEMO_TARGET,
+    is_free_demo_connection,
+    load_free_demo_credentials,
+)
 from ..models import (
     DatasetSummary,
     RunConfig,
@@ -46,8 +54,6 @@ METHOD_LABELS = {
     "code": "Code only",
     "vlm": "VLM only",
 }
-
-FREE_API_URL = "https://aicosthub.com/guides/free-ai-apis-2026"
 
 DATASET_LAYOUT_HELP = (
     "Required input path layout:\n"
@@ -331,13 +337,24 @@ class ConfigurePage(QWidget):
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
 
-        free_api = QLabel(
-            f'<a href="{FREE_API_URL}">Free OpenAI-compatible APIs available here</a>'
+        free_row = QHBoxLayout()
+        free_row.setSpacing(10)
+        self.free_api_button = QPushButton("Use free restricted API")
+        self.free_api_button.setProperty("choiceAction", True)
+        self.free_api_button.setToolTip(
+            "Fill a token-limited MorphAgent test endpoint. Locks scale to 1 round × 5 candidates."
         )
-        free_api.setOpenExternalLinks(True)
-        free_api.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        free_api.setProperty("role", "muted")
-        layout.addWidget(free_api)
+        free_row.addWidget(self.free_api_button)
+        free_row.addStretch(1)
+        layout.addLayout(free_row)
+
+        self.free_api_note = QLabel(
+            "Optional · free restricted API for testing only (token-limited). "
+            "Your own Base URL / API key is unrestricted."
+        )
+        self.free_api_note.setProperty("role", "muted")
+        self.free_api_note.setWordWrap(True)
+        layout.addWidget(self.free_api_note)
 
         self.llm_form = QFormLayout()
         self.llm_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -437,6 +454,7 @@ class ConfigurePage(QWidget):
         ):
             spin.valueChanged.connect(self._fields_changed)
         self.run_button.clicked.connect(self._request_run)
+        self.free_api_button.clicked.connect(self._apply_free_demo_api)
         self.reuse_llm_for_vlm.toggled.connect(self._toggle_vlm_fields)
         for edit in (
             self.llm_base_url_edit,
@@ -446,7 +464,7 @@ class ConfigurePage(QWidget):
             self.vlm_api_key_edit,
             self.vlm_model_edit,
         ):
-            edit.textChanged.connect(self._fields_changed)
+            edit.textChanged.connect(self._api_fields_changed)
         self.reuse_llm_for_vlm.toggled.connect(self._fields_changed)
         self.save_api_button.clicked.connect(self._persist_api_settings)
 
@@ -456,6 +474,58 @@ class ConfigurePage(QWidget):
 
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
+
+    def _apply_free_demo_api(self) -> None:
+        try:
+            creds = load_free_demo_credentials()
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "Free restricted API unavailable", str(exc))
+            return
+
+        self._loading = True
+        self.llm_base_url_edit.setText(creds["base_url"])
+        self.llm_api_key_edit.setText(creds["api_key"])
+        self.llm_model_edit.setText(creds["model"])
+        self.reuse_llm_for_vlm.setChecked(True)
+        self._toggle_vlm_fields(True)
+        self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
+        self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
+        self.target_spin.setValue(FREE_DEMO_TARGET)
+        self._loading = False
+        self._set_free_demo_scale_locked(True)
+        self.api_status_label.setText("Free restricted API filled · applied automatically on Run")
+        self.api_status_label.setProperty("role", "success")
+        self.api_status_label.style().unpolish(self.api_status_label)
+        self.api_status_label.style().polish(self.api_status_label)
+        self._fields_changed()
+
+    def _api_fields_changed(self) -> None:
+        if self._loading:
+            return
+        using_free = is_free_demo_connection(
+            self.llm_base_url_edit.text(),
+            self.llm_api_key_edit.text(),
+        )
+        self._set_free_demo_scale_locked(using_free)
+        self._fields_changed()
+
+    def _set_free_demo_scale_locked(self, locked: bool) -> None:
+        if locked:
+            self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
+            self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
+            self.target_spin.setValue(FREE_DEMO_TARGET)
+            self.free_api_note.setText(FREE_DEMO_NOTICE)
+            self.free_api_note.setProperty("role", "warning")
+        else:
+            self.free_api_note.setText(
+                "Optional · free restricted API for testing only (token-limited). "
+                "Your own Base URL / API key is unrestricted."
+            )
+            self.free_api_note.setProperty("role", "muted")
+        for spin in (self.rounds_spin, self.candidates_spin, self.target_spin):
+            spin.setEnabled(not locked)
+        self.free_api_note.style().unpolish(self.free_api_note)
+        self.free_api_note.style().polish(self.free_api_note)
 
     def _toggle_validation_fields(self, enabled: bool) -> None:
         self.metadata_picker.setEnabled(enabled)
@@ -703,6 +773,14 @@ class ConfigurePage(QWidget):
         self.config.temperature = float(self.temperature_spin.value())
         # Temperature 0 ⇒ reproducible Code + VLM (seed, deterministic decoding, cache).
         self.config.reproduce = self.config.temperature <= 0.0
+        using_free = is_free_demo_connection(
+            self.llm_base_url_edit.text(),
+            self.llm_api_key_edit.text(),
+        )
+        if using_free:
+            self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
+            self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
+            self.target_spin.setValue(FREE_DEMO_TARGET)
         self.config.num_rounds = int(self.rounds_spin.value())
         self.config.features_per_iteration = int(self.candidates_spin.value())
         self.config.target_feature_count = int(self.target_spin.value())

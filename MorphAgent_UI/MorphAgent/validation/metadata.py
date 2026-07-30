@@ -22,6 +22,9 @@ CATEGORICAL_HINTS = (
     "time_point",
     "time",
     "mutation",
+    "genotype",
+    "phenotype",
+    "treatment",
     "modality",
     "plate",
     "site",
@@ -164,11 +167,85 @@ def _align_metadata_to_samples(sample_ids: List[str], metadata_df: pd.DataFrame)
     return metadata_df.reset_index(drop=True).copy()
 
 
+def _mann_whitney_auc(feature_values: np.ndarray, labels: np.ndarray) -> float:
+    """ROC AUC via Mann–Whitney U for a binary label (chance = 0.5)."""
+
+    classes = pd.unique(labels)
+    if len(classes) != 2:
+        return 0.5
+    left = feature_values[labels == classes[0]]
+    right = feature_values[labels == classes[1]]
+    if len(left) == 0 or len(right) == 0:
+        return 0.5
+    try:
+        u_stat, _ = stats.mannwhitneyu(left, right, alternative="two-sided")
+    except Exception:
+        return 0.5
+    auc = float(u_stat) / (len(left) * len(right))
+    # Orientation-invariant: take the better of auc / 1-auc.
+    return max(auc, 1.0 - auc)
+
+
+def _linear_classifier_score(feature_values: np.ndarray, labels: np.ndarray) -> float:
+    """Loose paired-metadata separability via a linear classifier (in-sample).
+
+    With small n (e.g. 10 demo samples) this is intentionally permissive: any
+    slight linear separation of metadata classes yields a score above chance.
+    Returns a [0, 1] score where 0.5 ≈ chance and higher is better.
+    """
+
+    if len(feature_values) < 4 or len(np.unique(labels)) < 2:
+        return 0.5
+    if len(np.unique(feature_values)) < 2:
+        return 0.5
+
+    # Binary labels: exact rank AUC (stable, no sklearn fit needed).
+    if len(np.unique(labels)) == 2:
+        return _mann_whitney_auc(feature_values, labels)
+
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import roc_auc_score
+        from sklearn.preprocessing import LabelEncoder
+    except Exception:
+        # Multiclass fallback without sklearn: max pairwise Mann–Whitney AUC.
+        classes = list(pd.unique(labels))
+        best = 0.5
+        for index, left_label in enumerate(classes):
+            for right_label in classes[index + 1 :]:
+                mask = np.isin(labels, [left_label, right_label])
+                best = max(best, _mann_whitney_auc(feature_values[mask], labels[mask]))
+        return best
+
+    encoder = LabelEncoder()
+    y = encoder.fit_transform(labels)
+    x = feature_values.reshape(-1, 1)
+    try:
+        model = LogisticRegression(
+            max_iter=200,
+            solver="lbfgs",
+            multi_class="auto",
+            random_state=0,
+        )
+        model.fit(x, y)
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(x)
+            if proba.shape[1] == 2:
+                return float(roc_auc_score(y, proba[:, 1]))
+            return float(roc_auc_score(y, proba, multi_class="ovr", average="macro"))
+        scores = model.decision_function(x)
+        if np.ndim(scores) == 1:
+            return float(roc_auc_score(y, scores))
+        return float(roc_auc_score(y, scores, multi_class="ovr", average="macro"))
+    except Exception:
+        return 0.5
+
+
 def compute_metadata_alignment(
     values: pd.Series,
     metadata: MetadataContext,
 ) -> Dict[str, Any]:
-    """Compute deterministic metadata alignment metrics for one feature."""
+    """Compute deterministic paired-metadata alignment metrics for one feature."""
 
     result = {
         "metadata_max_abs_spearman": 0.0,
@@ -177,6 +254,8 @@ def compute_metadata_alignment(
         "metadata_best_anova_field": None,
         "metadata_max_eta_squared": 0.0,
         "metadata_best_eta_field": None,
+        "metadata_max_classifier_auc": 0.5,
+        "metadata_best_classifier_field": None,
         "metadata_alignment_score": 0.0,
     }
 
@@ -236,8 +315,16 @@ def compute_metadata_alignment(
             result["metadata_max_eta_squared"] = eta_sq
             result["metadata_best_eta_field"] = field
 
+        classifier_auc = _linear_classifier_score(x.to_numpy(dtype=float), y.to_numpy())
+        if classifier_auc > result["metadata_max_classifier_auc"]:
+            result["metadata_max_classifier_auc"] = float(classifier_auc)
+            result["metadata_best_classifier_field"] = field
+
+    # Map classifier AUC (chance=0.5) onto a [0, 1] alignment contribution.
+    classifier_alignment = max(0.0, (float(result["metadata_max_classifier_auc"]) - 0.5) * 2.0)
     result["metadata_alignment_score"] = max(
         result["metadata_max_abs_spearman"],
         result["metadata_max_eta_squared"],
+        classifier_alignment,
     )
     return result

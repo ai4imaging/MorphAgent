@@ -405,17 +405,20 @@ def fill_template(template: str, state: AgentState) -> str:
     analysis_guidance = ""
 
     # Validation Design Spec: injected only when deterministic feature validation (with-validation) is enabled,
-    # explicitly telling the planner how features will be validated/filtered, so it can design stronger,
-    # more transcriptome-aligned features accordingly.
+    # so the planner can design features that pass the paired-metadata screen.
     validation_spec = ""
     if state.get("enable_feature_analysis"):
         validation_spec = (
-            "## Validation Design Spec (features will be deterministically validated and aggressively filtered)\n"
+            "## Validation Design Spec (features will be deterministically validated)\n"
             "Every feature you propose will be extracted and then screened by a deterministic validator. "
             "Features that fail ANY of the following criteria are DROPPED, so design features that are built to pass:\n"
-            "- **Transcriptome alignment (primary goal)**: each feature is correlated against the paired transcriptome. "
-            "A feature is dropped if its maximum |Spearman| across all genes is below 0.30. "
-            "Design features whose biological meaning is expected to track gene expression (i.e. likely to align strongly with at least one gene).\n"
+            "- **Paired-metadata alignment (loose screen)**: when a metadata CSV is provided, each feature is checked "
+            "against paired sample metadata (group / genotype / continuous covariates — NOT a transcriptome assay). "
+            "Choose the metric by metadata type: use |Spearman| for continuous covariates; for categorical labels "
+            "(e.g. WT/MU group or genotype) use classifier AUC as the primary criterion (eta² / ANOVA are also computed). "
+            "The screen is intentionally loose: only features with essentially no metadata-tracking ability are dropped "
+            "(alignment score < 0.05 and classifier AUC < 0.55). "
+            "Prefer features whose biology is expected to differ across metadata groups or track continuous covariates.\n"
             "- **Coverage**: availability rate must be >= 0.70 (the feature must be computable on at least 70% of samples). "
             "Avoid features that frequently yield NaN/None or require masks that are often missing.\n"
             "- **Variability**: variability signal (CV or robust dispersion) must be >= 0.10. Avoid near-constant features.\n"
@@ -424,10 +427,10 @@ def fill_template(template: str, state: AgentState) -> str:
             "feature is >= 0.98 (ambiguous at >= 0.95 or high semantic-name overlap, then adjudicated). "
             "Make each new feature measure a genuinely different aspect; do not re-propose near-duplicates with cosmetic renaming.\n"
             "- **Composite score gate**: a base validation score combining coverage (0.45), variability (0.35) and "
-            "transcriptome alignment (0.20) must be >= 0.35.\n"
+            "paired-metadata alignment (0.20) must be >= 0.35.\n"
             "**Design imperative**: prioritize features that (a) are robustly computable on most samples, (b) have meaningful "
-            "biological variability, (c) are likely to align with transcriptomic signal, and (d) are complementary (low correlation) "
-            "to already-retained features.\n"
+            "biological variability, (c) show at least slight alignment with paired metadata, and (d) are complementary "
+            "(low correlation) to already-retained features.\n"
         )
 
     if previous_analysis_summary:
@@ -472,15 +475,18 @@ def fill_template(template: str, state: AgentState) -> str:
                     )
                     analysis_guidance_parts.append(
                         "\n**Guidance**: Avoid proposing features with the same failure modes. In particular: "
-                        "`low_transcriptome_alignment` means the feature did not correlate with any gene (max |Spearman| < 0.30) "
-                        "-- redesign so the measurement tracks biological/transcriptomic signal; "
+                        "`low_paired_metadata_alignment` means the feature showed essentially no ability to track paired "
+                        "sample metadata (group/genotype/covariates) under a loose Spearman (continuous) / "
+                        "AUC (categorical) screen "
+                        "-- redesign so the measurement differs across metadata groups or tracks a continuous covariate; "
                         "`low_validation_score` means weak combined coverage/variability/alignment; "
                         "`low_availability`/`low_unique_values`/`low_unsupervised_variability` mean the feature was rarely computable, "
                         "near-constant, or quasi-binary; redundancy reasons mean it duplicated an existing feature."
                     )
                     analysis_guidance_parts.append(
-                        "\n**Priority for NEW features**: prefer features that are likely to align with the transcriptome "
-                        "(high |Spearman| with some genes) AND are complementary (low correlation) to the already-retained features above."
+                        "\n**Priority for NEW features**: prefer features that show at least slight paired-metadata "
+                        "alignment (AUC for categorical labels like WT/MU; Spearman for continuous covariates) "
+                        "AND are complementary (low correlation) to the already-retained features above."
                     )
 
             if redundancy_resolutions:
