@@ -375,6 +375,29 @@ class FeatureArtifactTests(unittest.TestCase):
             self.assertAlmostEqual(cards[0].validation_score or 0, 0.87)
             self.assertIn("skeletonize", cards[0].candidate_operators)
 
+    def test_feature_status_collapses_to_retained_or_dropped(self) -> None:
+        from morphagent_ui.models import normalize_feature_status
+
+        self.assertEqual(normalize_feature_status("reviewed_keep_both"), "retained")
+        self.assertEqual(normalize_feature_status("reviewed_keep_new"), "retained")
+        self.assertEqual(normalize_feature_status("planned"), "dropped")
+        self.assertEqual(normalize_feature_status("superseded_by_new_feature"), "dropped")
+        self.assertEqual(normalize_feature_status("dropped"), "dropped")
+
+    def test_plan_only_features_are_omitted_until_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "round_1").mkdir()
+            (root / "round_1" / "feature_plan.json").write_text(json.dumps({
+                "features": [{
+                    "name": "only_planned",
+                    "method": "code",
+                    "category": "spatial",
+                }]
+            }), encoding="utf-8")
+            cards = load_feature_cards(root)
+            self.assertEqual(cards, [])
+
 class FreeDemoApiTests(unittest.TestCase):
     def test_obfuscated_credentials_decode_for_morphagent_ui(self) -> None:
         creds = load_free_demo_credentials()

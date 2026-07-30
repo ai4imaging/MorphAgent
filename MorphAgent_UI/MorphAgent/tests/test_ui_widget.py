@@ -305,7 +305,7 @@ class WidgetSmokeTests(unittest.TestCase):
             FeatureCard("code-retained", "code_retained", "code", status="retained"),
             FeatureCard("vlm-retained", "vlm_retained", "vlm", status="retained"),
             FeatureCard("vlm-dropped", "vlm_dropped", "vlm", status="dropped"),
-            FeatureCard("code-planned", "code_planned", "code", status="planned"),
+            FeatureCard("code-dropped", "code_dropped", "code", status="dropped"),
         ]
         page._update_filters()
         page._filter()
@@ -313,7 +313,7 @@ class WidgetSmokeTests(unittest.TestCase):
 
         self.assertEqual(page.findChildren(QComboBox), [])
         self.assertEqual(set(page.route_buttons), {"all", "code", "vlm"})
-        self.assertEqual(set(page.status_buttons), {"all", "retained", "dropped", "planned"})
+        self.assertEqual(set(page.status_buttons), {"all", "retained", "dropped"})
         nonhidden_filter_buttons = [
             button for button in page.findChildren(QRadioButton)
             if button.property("filterChoice") and not button.isHidden()
@@ -339,8 +339,8 @@ class WidgetSmokeTests(unittest.TestCase):
 
         page.route_buttons["code"].click()
         self.app.processEvents()
-        self.assertEqual(page.table.rowCount(), 0)
-        self.assertEqual(page.detail.name.text(), "No matching feature")
+        self.assertEqual(page.table.rowCount(), 1)
+        self.assertEqual([card.name for card in page.filtered_cards], ["code_dropped"])
         widget.close()
 
     def test_feature_table_and_detail_use_equal_splitter_widths(self) -> None:

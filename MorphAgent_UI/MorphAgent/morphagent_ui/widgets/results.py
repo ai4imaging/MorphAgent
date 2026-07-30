@@ -267,20 +267,19 @@ class FeaturesPage(QWidget):
 
     def _update_filters(self) -> None:
         selected = self._selected_filter(self.status_buttons)
-        priority = {"retained": 0, "dropped": 1, "planned": 2}
-        states = sorted(
-            {card.status for card in self.cards if card.status},
-            key=lambda state: (priority.get(state, 99), state),
-        )
+        # Only two feature states are exposed in the UI.
+        present = {card.status for card in self.cards if card.status in {"retained", "dropped"}}
         choices = {"all": "All"}
-        choices.update({state: state.replace("_", " ").title() for state in states})
+        for state in ("retained", "dropped"):
+            if state in present:
+                choices[state] = state.title()
         self._replace_status_choices(choices, selected)
 
     def _update_metrics(self) -> None:
         self.total_metric.set_value(str(len(self.cards)))
         self.code_metric.set_value(str(sum(card.method.lower() == "code" for card in self.cards)))
         self.vlm_metric.set_value(str(sum(card.method.lower() == "vlm" for card in self.cards)))
-        self.live_metric.set_value(str(sum(card.status.lower() not in {"dropped", "rejected", "failed"} for card in self.cards)))
+        self.live_metric.set_value(str(sum(card.status == "retained" for card in self.cards)))
 
     def _filter(self, *_args) -> None:
         query = self.search_edit.text().strip().lower()
@@ -322,7 +321,7 @@ class FeaturesPage(QWidget):
         self.cards = [
             FeatureCard("f1", "mitochondrial_network_fragmentation", "code", "spatial", "Measures discontinuity and branch loss in the mitochondrial network.", "retained", 1, 0.91, ("high_unsupervised_signal",), candidate_operators="skeletonize, connected components", summary_statistics="fragment count / network length"),
             FeatureCard("f2", "perinuclear_puncta_enrichment", "vlm", "distribution", "Scores whether punctate structures concentrate around the nucleus.", "retained", 1, 0.86, ("metadata_alignment",), expected_visual_signature="Bright puncta enriched in a perinuclear ring", required_channels="mitochondria + nucleus"),
-            FeatureCard("f3", "reticular_bundle_coherence", "vlm", "architecture", "Semantic evidence for coherent reticular bundles across the cell.", "planned", 1, None, (), expected_visual_signature="Long connected bundles with aligned orientation"),
+            FeatureCard("f3", "reticular_bundle_coherence", "vlm", "architecture", "Semantic evidence for coherent reticular bundles across the cell.", "dropped", 1, None, (), expected_visual_signature="Long connected bundles with aligned orientation"),
             FeatureCard("f4", "cell_edge_intensity_gradient", "code", "intensity", "Radial intensity change from cell center to boundary.", "retained", 1, 0.79, (), candidate_operators="distance transform, radial binning"),
             FeatureCard("f5", "organelle_clusteredness_variogram", "code", "texture", "Captures the spatial scale of organelle clustering.", "retained", 1, 0.88, (), candidate_operators="semivariogram"),
         ]

@@ -298,7 +298,7 @@ class ValidationExecutor:
         retained_ids = [
             record.feature_id
             for record in records
-            if decisions_by_id[record.feature_id].status in {"retained", "reviewed_keep_new", "reviewed_keep_both"}
+            if decisions_by_id[record.feature_id].status == "retained"
         ]
         dropped_ids = [
             record.feature_id
@@ -851,16 +851,17 @@ class ValidationExecutor:
                     decisions_by_id[feature_id].compared_feature_ids = [candidate for candidate in keep_ids]
                     decisions_by_id[feature_id].llm_reviewed = success
                 elif len(keep_ids) > 1:
-                    decisions_by_id[feature_id].status = "reviewed_keep_both"
+                    # Keep both still counts as retained; nuance lives in reason_codes.
+                    decisions_by_id[feature_id].status = "retained"
                     decisions_by_id[feature_id].reason_codes = ["reviewed_complementary_keep_both"]
                     decisions_by_id[feature_id].explanation = rationale
                     decisions_by_id[feature_id].compared_feature_ids = [candidate for candidate in feature_ids if candidate != feature_id]
                     decisions_by_id[feature_id].llm_reviewed = success
                 else:
-                    decisions_by_id[feature_id].status = (
+                    decisions_by_id[feature_id].status = "retained"
+                    decisions_by_id[feature_id].reason_codes = [
                         "reviewed_keep_old" if feature_id in live_entries else "reviewed_keep_new"
-                    )
-                    decisions_by_id[feature_id].reason_codes = ["reviewed_retained"]
+                    ]
                     decisions_by_id[feature_id].explanation = rationale
                     decisions_by_id[feature_id].compared_feature_ids = drop_ids
                     decisions_by_id[feature_id].llm_reviewed = success
@@ -921,12 +922,12 @@ class ValidationExecutor:
         for superseded_id in superseded_live_ids:
             if superseded_id in registry_entries:
                 registry_entries[superseded_id].live = False
-                registry_entries[superseded_id].current_status = "superseded_by_new_feature"
+                registry_entries[superseded_id].current_status = "dropped"
                 registry_entries[superseded_id].decision_history.append(
                     {
                         "feature_id": superseded_id,
                         "feature_name": registry_entries[superseded_id].actual_column_name,
-                        "status": "superseded_by_new_feature",
+                        "status": "dropped",
                         "reason_codes": ["superseded_by_new_feature"],
                         "explanation": "A newer feature replaced this live retained feature during redundancy resolution.",
                         "compared_feature_ids": [],
@@ -1086,7 +1087,7 @@ class ValidationExecutor:
         retained_records = [
             record
             for record in records
-            if decisions_by_id[record.feature_id].status in {"retained", "reviewed_keep_new", "reviewed_keep_both"}
+            if decisions_by_id[record.feature_id].status == "retained"
         ]
         dropped_records = [
             record

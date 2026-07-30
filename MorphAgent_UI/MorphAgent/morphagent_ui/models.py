@@ -673,7 +673,7 @@ class FeatureCard:
     method: str = "unknown"
     category: str = "other"
     description: str = ""
-    status: str = "planned"
+    status: str = "retained"
     round_number: int = 0
     validation_score: float | None = None
     reason_codes: tuple[str, ...] = ()
@@ -684,6 +684,34 @@ class FeatureCard:
     candidate_operators: str = ""
     summary_statistics: str = ""
     source_paths: Mapping[str, str] = field(default_factory=dict)
+
+
+def normalize_feature_status(raw: Any) -> str:
+    """Collapse validation / registry states to the only two UI statuses: retained | dropped.
+
+    Historical aliases such as reviewed_keep_both / planned / superseded_* map into these two.
+    """
+    text = _as_text(raw).strip().lower().replace("-", "_").replace(" ", "_")
+    if not text:
+        return "dropped"
+    retained_aliases = {
+        "retained",
+        "reviewed_keep_both",
+        "reviewed_keep_new",
+        "reviewed_keep_old",
+        "reviewed_retained",
+        "validated",
+        "matrix_column",
+        "live",
+        "kept",
+        "keep",
+        "keep_both",
+        "keep_new",
+        "keep_old",
+    }
+    if text in retained_aliases:
+        return "retained"
+    return "dropped"
 
 
 def _as_text(value: Any) -> str:
@@ -697,7 +725,11 @@ def _as_text(value: Any) -> str:
 
 
 def load_feature_cards(results_dir: str | Path) -> list[FeatureCard]:
-    """Load feature cards from registry, plans, or matrix headers in that order."""
+    """Load feature cards from registry, plans, or matrix headers in that order.
+
+    Card ``status`` is always one of ``retained`` / ``dropped``. Plan-only features
+    (not yet in the registry) are omitted — they are not a third state.
+    """
     root = Path(results_dir)
     planned: dict[str, dict[str, Any]] = {}
     for plan_path in sorted(root.glob("round_*/feature_plan.json")):
@@ -731,7 +763,6 @@ def load_feature_cards(results_dir: str | Path) -> list[FeatureCard]:
             registry_entries = []
 
     cards: list[FeatureCard] = []
-    consumed: set[str] = set()
     for entry in registry_entries:
         name = _as_text(entry.get("actual_column_name") or entry.get("name")).strip()
         if not name:
@@ -750,7 +781,7 @@ def load_feature_cards(results_dir: str | Path) -> list[FeatureCard]:
             method=_as_text(entry.get("method") or plan.get("method")) or "unknown",
             category=_as_text(entry.get("category") or plan.get("category")) or "other",
             description=_as_text(entry.get("description") or plan.get("description")),
-            status=_as_text(entry.get("current_status") or latest.get("status")) or "validated",
+            status=normalize_feature_status(entry.get("current_status") or latest.get("status")),
             round_number=int(entry.get("latest_round") or plan.get("round_number") or 0),
             validation_score=score,
             reason_codes=tuple(_as_text(item) for item in latest.get("reason_codes", []) if item),
@@ -762,32 +793,15 @@ def load_feature_cards(results_dir: str | Path) -> list[FeatureCard]:
             summary_statistics=_as_text(plan.get("summary_statistics") or plan.get("statistics")),
             source_paths=entry.get("source_paths", {}) if isinstance(entry.get("source_paths"), dict) else {},
         ))
-        consumed.add(name)
-
-    for name, plan in planned.items():
-        if name in consumed:
-            continue
-        cards.append(FeatureCard(
-            feature_id=_as_text(plan.get("feature_id")) or name,
-            name=name,
-            method=_as_text(plan.get("method")) or "unknown",
-            category=_as_text(plan.get("category")) or "other",
-            description=_as_text(plan.get("description")),
-            status="planned",
-            round_number=int(plan.get("round_number") or 0),
-            method_rationale=_as_text(plan.get("method_rationale")),
-            expected_visual_signature=_as_text(plan.get("expected_visual_signature") or plan.get("visual_signature")),
-            required_channels=_as_text(plan.get("required_channels") or plan.get("channels")),
-            required_masks=_as_text(plan.get("required_masks") or plan.get("segmentation_prompt")),
-            candidate_operators=_as_text(plan.get("candidate_operators") or plan.get("operators")),
-            summary_statistics=_as_text(plan.get("summary_statistics") or plan.get("statistics")),
-        ))
 
     if not cards:
         csv_path = root / "retained_features.csv"
         if not csv_path.is_file():
             csv_path = root / "features.csv"
-        cards = [FeatureCard(name=name, feature_id=name, status="matrix column") for name in discover_feature_names(csv_path)]
+        cards = [
+            FeatureCard(name=name, feature_id=name, status="retained")
+            for name in discover_feature_names(csv_path)
+        ]
     return sorted(cards, key=lambda card: (card.round_number, card.category, card.name))
 
 
