@@ -420,6 +420,23 @@ function Repair-Pip([string]$Name) {
     Invoke-CondaRun $Name @("python", "-m", "pip", "--version")
 }
 
+function Remove-PipPyQt5Qt5IfPresent([string]$Name) {
+    # pip prints "WARNING: Skipping PyQt5-Qt5 as it is not installed" to stderr and may
+    # exit non-zero. With $ErrorActionPreference=Stop, PowerShell treats that as fatal
+    # and aborts setup before morphagent_sandbox is created. Always ignore failure here.
+    Write-Host "Removing pip-bundled Qt runtime PyQt5-Qt5 if present (ignore if absent)..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $null = & $script:CondaExe run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>&1
+    } catch {
+        # absent package / native stderr noise — safe to ignore
+    } finally {
+        $ErrorActionPreference = $prevEap
+        $global:LASTEXITCODE = 0
+    }
+}
+
 function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
     # Build filtered requirements as UTF-8 (no BOM) in PowerShell - never UTF-16LE,
     # and never multiline `conda run python -c` (broken on conda 4.14).
@@ -440,8 +457,7 @@ function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
         if ($null -eq $prevPyIo) { Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue } else { $env:PYTHONIOENCODING = $prevPyIo }
         Remove-Item $filtered -ErrorAction SilentlyContinue
     }
-    Write-Host "Removing pip-bundled Qt runtime PyQt5-Qt5 if present..."
-    & $script:CondaExe run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>$null | Out-Null
+    Remove-PipPyQt5Qt5IfPresent $Name
 }
 
 function Ensure-SingleQtStack([string]$Name) {
