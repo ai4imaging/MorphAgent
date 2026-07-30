@@ -235,6 +235,28 @@ class RunConfigTests(unittest.TestCase):
             })
             self.assertFalse(any(issue.severity is Severity.BLOCKER for issue in ready))
 
+    def test_preflight_does_not_guess_image_support_from_model_name(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            summary = self._ready_dataset(root)
+            config = RunConfig(
+                data_root=str(root),
+                query="Profile nuclear texture",
+                python_executable=sys.executable,
+                enable_segmentation=False,
+            )
+
+            issues = config.validate(summary, {
+                "LLM_API_KEY": "test-only",
+                "LLM_BASE_URL": "https://example.com/v1",
+                "LLM_MODEL": "mimo-v2.5",
+                "VLM_API_KEY": "test-only",
+                "VLM_BASE_URL": "https://example.com/v1",
+                "VLM_MODEL": "mimo-v2.5",
+            })
+
+            self.assertNotIn("vlm_model_uncertain", {issue.code for issue in issues})
+
     def test_command_is_explicit_and_manifest_has_no_secret(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

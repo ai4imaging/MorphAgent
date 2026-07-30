@@ -160,6 +160,20 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertFalse(hasattr(page, "scan_button"))
         widget.close()
 
+    def test_model_name_does_not_disable_vlm_routes(self) -> None:
+        widget = MorphAgentWidget()
+        page = widget.configure_page
+        page.method_buttons["both"].setChecked(True)
+        page.reuse_llm_for_vlm.setChecked(True)
+
+        page.llm_model_edit.setText("mimo-v2.5")
+        self.app.processEvents()
+
+        self.assertTrue(page.method_buttons["both"].isEnabled())
+        self.assertTrue(page.method_buttons["vlm"].isEnabled())
+        self.assertTrue(page.method_buttons["both"].isChecked())
+        widget.close()
+
     def test_mask_preparation_is_internal_skip_if_present(self) -> None:
         widget = MorphAgentWidget()
         page = widget.configure_page
