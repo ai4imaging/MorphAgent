@@ -4,6 +4,9 @@
 > MorphAgent from scratch** on a new machine. Follow the steps in order. Each
 > step has a concrete verification you MUST run before moving on. Do not skip
 > verifications. Prefer failing loudly and fixing, over guessing.
+>
+> Related: for the **desktop Qt UI** under `MorphAgent_UI/`, use
+> [`installation_skill_UI.md`](installation_skill_UI.md) instead of this file.
 
 ## 0. What MorphAgent is (mental model)
 
