@@ -7,6 +7,9 @@ REM UI runs in morphagent; feature extract() uses morphagent_sandbox (set by set
 cd /d "%~dp0\.."
 title MorphAgent UI
 
+REM Prefer UTF-8 console; ignore failure on old systems.
+chcp 65001 >nul 2>&1
+
 echo ============================================================
 echo  Starting MorphAgent UI
 echo  Working directory: %CD%
@@ -38,8 +41,8 @@ if not "%EXITCODE%"=="0" (
   echo  Common causes:
   echo    1^) setup_windows.bat was never run
   echo    2^) conda env "morphagent" is missing / broken
-  echo    3^) conda env "morphagent_sandbox" is missing — re-run setup_windows.bat
-  echo    4^) Qt / display driver issue — re-run setup_windows.bat
+  echo    3^) conda env "morphagent_sandbox" is missing - re-run setup_windows.bat
+  echo    4^) Qt / display driver issue - re-run setup_windows.bat
   echo ============================================================
   echo.
   pause

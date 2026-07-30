@@ -2,11 +2,15 @@
 setlocal EnableExtensions
 REM MorphAgent UI installer for Windows (double-click this file).
 REM Uses ExecutionPolicy Bypass so Explorer "Run with PowerShell" is not needed.
-REM Also sets UTF-8 for pip (PowerShell 5.1 otherwise writes UTF-16LE temp files).
+REM Sets UTF-8 (chcp 65001) so GBK consoles do not mojibake, and so pip gets UTF-8
+REM (PowerShell 5.1 Set-Content otherwise writes UTF-16LE).
 REM Creates: morphagent (UI) + morphagent_sandbox (feature code) + optional morphagent_allen.
 
 cd /d "%~dp0\.."
 title MorphAgent UI Setup
+
+REM Prefer UTF-8 console; ignore failure on old systems.
+chcp 65001 >nul 2>&1
 
 echo ============================================================
 echo  MorphAgent UI setup (Windows)
@@ -41,12 +45,14 @@ if not "%EXITCODE%"=="0" (
   echo  Common causes:
   echo    1^) Miniconda / Miniforge / Anaconda is not installed
   echo    2^) Network blocked while downloading packages
-  echo    3^) conda not on PATH — this script auto-finds common installs;
+  echo    3^) conda not on PATH - this script auto-finds common installs;
   echo       if it still fails, install Miniconda and reopen this .bat
+  echo    4^) Old scripts used conda.bat with specs containing "^<" which
+  echo       cmd treats as file redirection ("file not found"). Pull latest.
   echo  Install Miniconda: https://docs.conda.io/en/latest/miniconda.html
   echo  Or Miniforge:      https://github.com/conda-forge/miniforge
   echo  Then double-click this file again.
-  echo  Do NOT use Explorer "Run with PowerShell" on the .ps1 — use this .bat.
+  echo  Do NOT use Explorer "Run with PowerShell" on the .ps1 - use this .bat.
   echo ============================================================
   echo.
   pause

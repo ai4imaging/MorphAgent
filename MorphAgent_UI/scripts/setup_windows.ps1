@@ -1,11 +1,14 @@
-# MorphAgent UI setup (Windows only — macOS/Linux use setup.sh).
+﻿# MorphAgent UI setup (Windows only - macOS/Linux use setup.sh).
 # Creates:
-#   - `morphagent`          — Qt UI + agent
-#   - `morphagent_sandbox`  — frozen scientific stack for extract() code
-#   - optional `morphagent_allen`
+#   - morphagent          = Qt UI + agent
+#   - morphagent_sandbox  = frozen scientific stack for extract() code
+#   - optional morphagent_allen
 #
-# Qt (Windows): conda `pyqt=5` only. Pip PyQt5 from requirements-demo-ui.txt is
-# filtered out on purpose — Windows is not meant to follow the Unix pip-Qt path.
+# Qt (Windows): conda pyqt=5 only. Pip PyQt5 from requirements-demo-ui.txt is
+# filtered out on purpose - Windows is not meant to follow the Unix pip-Qt path.
+#
+# IMPORTANT (Windows): never invoke conda.bat with specs containing "<" or ">".
+# cmd.exe treats those as redirection ("系统找不到指定的文件"). Always use conda.exe.
 #
 # Silky path for non-dev machines: double-click scripts\setup_windows.bat
 # (bypasses ExecutionPolicy and auto-finds conda). Advanced:
@@ -32,10 +35,31 @@ $AllenReq = Join-Path $Repository "envs\requirements-allen.txt"
 $AllenPkg = Join-Path $Repository "segmentation_allen"
 $AllenCheck = Join-Path $AllenPkg "check_installation.py"
 
+# Script-scoped path to conda.exe (NOT conda.bat).
+$script:CondaExe = $null
+
+function Initialize-Utf8Console {
+    # Reduce GBK/CP936 mojibake when .bat/.ps1 print ASCII + Chinese together.
+    try { cmd /c "chcp 65001 >nul" | Out-Null } catch {}
+    try {
+        $utf8 = New-Object System.Text.UTF8Encoding $false
+        [Console]::InputEncoding = $utf8
+        [Console]::OutputEncoding = $utf8
+        $global:OutputEncoding = $utf8
+    } catch {}
+    if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
+    if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
+}
+
+function Write-Utf8NoBomFile([string]$Path, [string]$Content) {
+    # PowerShell 5.1 Set-Content defaults to UTF-16LE - never use it for .env / req files.
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8)
+}
+
 function Wait-IfInteractive {
     param([int]$ExitCode = 0)
     if ($env:MORPHAGENT_NO_PAUSE -eq "1") { return }
-    # Keep the window readable when launched via Explorer "Run with PowerShell".
     try {
         $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction SilentlyContinue).ParentProcessId
         $parentName = if ($parent) {
@@ -52,10 +76,39 @@ function Wait-IfInteractive {
     }
 }
 
+function Resolve-CondaExeFromRoot([string]$Root) {
+    if (-not $Root) { return $null }
+    foreach ($c in @(
+        (Join-Path $Root "Scripts\conda.exe"),
+        (Join-Path $Root "condabin\conda.exe"),
+        (Join-Path $Root "Library\bin\conda.exe")
+    )) {
+        if (Test-Path $c) { return $c }
+    }
+    return $null
+}
+
 function Initialize-Conda {
-    if (Get-Command conda -ErrorAction SilentlyContinue) {
-        Write-Host "[OK] conda is on PATH: $((Get-Command conda).Source)"
-        return
+    # Prefer conda.exe everywhere. conda.bat + specs with "<" break under cmd redirection.
+    $cmd = Get-Command conda -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $src = $cmd.Source
+        if ($src -like '*.exe') {
+            $script:CondaExe = $src
+        } else {
+            $dir = Split-Path -Parent $src
+            $root = Split-Path -Parent $dir
+            $script:CondaExe = Resolve-CondaExeFromRoot $root
+            if (-not $script:CondaExe) {
+                $script:CondaExe = Resolve-CondaExeFromRoot (Split-Path -Parent $root)
+            }
+        }
+        if ($script:CondaExe) {
+            Write-Host "[OK] conda.exe: $($script:CondaExe)"
+            return
+        }
+        Write-Host "[WARN] conda is on PATH as $src but conda.exe was not found nearby."
+        throw "Could not resolve conda.exe next to $src. Reinstall Miniconda or add Scripts\conda.exe to PATH."
     }
 
     $candidates = @(
@@ -82,18 +135,17 @@ function Initialize-Conda {
     ) | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -Unique
 
     foreach ($root in $candidates) {
-        $condaExe = Join-Path $root "Scripts\conda.exe"
+        $condaExe = Resolve-CondaExeFromRoot $root
         $condaBat = Join-Path $root "condabin\conda.bat"
-        if (-not (Test-Path $condaExe) -and -not (Test-Path $condaBat)) {
-            # When CONDA_PREFIX points at an env, try its parent install root.
+        if (-not $condaExe -and -not (Test-Path $condaBat)) {
             $parentRoot = Split-Path (Split-Path $root -Parent) -Parent
             if ($parentRoot) {
-                $condaExe = Join-Path $parentRoot "Scripts\conda.exe"
+                $condaExe = Resolve-CondaExeFromRoot $parentRoot
                 $condaBat = Join-Path $parentRoot "condabin\conda.bat"
                 $root = $parentRoot
             }
         }
-        if (-not (Test-Path $condaExe) -and -not (Test-Path $condaBat)) { continue }
+        if (-not $condaExe -and -not (Test-Path $condaBat)) { continue }
 
         $prepend = @(
             (Join-Path $root "condabin"),
@@ -102,8 +154,14 @@ function Initialize-Conda {
             $root
         ) -join ";"
         $env:Path = "$prepend;$env:Path"
-        if (Get-Command conda -ErrorAction SilentlyContinue) {
-            Write-Host "[OK] Found conda under $root and added it to PATH for this session."
+
+        if (-not $condaExe) {
+            $condaExe = Resolve-CondaExeFromRoot $root
+        }
+        if ($condaExe) {
+            $script:CondaExe = $condaExe
+            Write-Host "[OK] Found conda.exe under $root"
+            Write-Host "     $($script:CondaExe)"
             return
         }
     }
@@ -116,7 +174,7 @@ English:
        https://docs.conda.io/en/latest/miniconda.html
        https://github.com/conda-forge/miniforge
   2. Close this window, then double-click scripts\setup_windows.bat again.
-     (Do not use Explorer 'Run with PowerShell' — Windows blocks .ps1 by default.)
+     (Do not use Explorer 'Run with PowerShell' - Windows blocks .ps1 by default.)
 
 中文:
   1. 请先安装 Miniconda 或 Miniforge（只需一次）。
@@ -126,9 +184,8 @@ English:
 }
 
 function Test-CondaEnv([string]$Name) {
-    # Prefer JSON; fall back to plain `conda env list` (warnings can break JSON on some Windows setups).
     try {
-        $jsonText = & conda env list --json 2>$null | Out-String
+        $jsonText = & $script:CondaExe env list --json 2>$null | Out-String
         $listed = $jsonText | ConvertFrom-Json
         if ($null -ne $listed.envs) {
             return [bool]($listed.envs | Where-Object { (Split-Path $_ -Leaf) -eq $Name })
@@ -136,7 +193,7 @@ function Test-CondaEnv([string]$Name) {
     } catch {
         # fall through
     }
-    $lines = & conda env list 2>$null
+    $lines = & $script:CondaExe env list 2>$null
     foreach ($line in $lines) {
         if (-not $line -or $line.StartsWith("#")) { continue }
         $token = ($line -split "\s+")[0]
@@ -147,14 +204,17 @@ function Test-CondaEnv([string]$Name) {
 
 function Install-CoreCondaPackages([string]$Name) {
     Write-Host "Installing core conda packages into $Name (PyQt5 / numpy / scipy / ...)..."
-    # conda-forge PyQt wheels are far more reliable on Windows than pip-only PyQt5.
-    & conda install -y -n $Name -c conda-forge `
+    # Specs keep "<"/">="; calling conda.exe (not .bat) so cmd does not treat "<" as redirect.
+    & $script:CondaExe install -y -n $Name -c conda-forge `
         "python=3.10" `
         "pip>=24" `
+        "setuptools" `
+        "wheel" `
         "numpy>=1.26,<3" `
         "scipy>=1.11" `
         "pandas>=2.0" `
         "pyqt=5" `
+        "pyqt5-sip" `
         "qtpy>=2.4" `
         "pillow>=10" `
         "matplotlib>=3.8" `
@@ -169,15 +229,17 @@ function Install-CoreCondaPackages([string]$Name) {
         "requests" `
         "lxml"
     if ($LASTEXITCODE -ne 0) {
-        throw "conda install of core packages failed for env '$Name' (exit $LASTEXITCODE)"
+        throw "conda install of core packages failed for env '$Name' (exit $LASTEXITCODE). If you still see '系统找不到指定的文件', conda.bat was used; this script must call Scripts\conda.exe."
     }
 }
 
 function Install-SandboxCondaPackages([string]$Name) {
     Write-Host "Installing sandbox conda packages into $Name (numpy / scipy / scikit-image / ..., no Qt)..."
-    & conda install -y -n $Name -c conda-forge `
+    & $script:CondaExe install -y -n $Name -c conda-forge `
         "python=3.10" `
         "pip>=24" `
+        "setuptools" `
+        "wheel" `
         "numpy>=1.26,<3" `
         "scipy>=1.11" `
         "pandas>=2.0" `
@@ -199,7 +261,7 @@ function Install-SandboxCondaPackages([string]$Name) {
 }
 
 function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
-    & conda run --no-capture-output -n $Name @PythonArgs
+    & $script:CondaExe run --no-capture-output -n $Name @PythonArgs
     if ($LASTEXITCODE -ne 0) {
         throw "conda run -n $Name failed (exit $LASTEXITCODE): $($PythonArgs -join ' ')"
     }
@@ -207,17 +269,23 @@ function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
 
 function Repair-Pip([string]$Name) {
     Write-Host "Repairing pip in $Name via conda (no pip self-upgrade)..."
-    $sp = & conda run -n $Name python -c "import site; print(site.getsitepackages()[0])"
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sp)) {
+    $spOut = & $script:CondaExe run -n $Name python -c "import site; print(site.getsitepackages()[0])"
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($spOut | Out-String))) {
         throw "Could not resolve site-packages for '$Name'"
     }
+    if ($spOut -is [array]) {
+        $sp = ($spOut | Where-Object { $_ -and $_.ToString().Trim() } | Select-Object -Last 1)
+    } else {
+        $sp = $spOut
+    }
+    $sp = "$sp".Trim()
     Write-Host "  cleaning pip leftovers under $sp"
     $pipDir = Join-Path $sp "pip"
     if (Test-Path $pipDir) { Remove-Item -Recurse -Force $pipDir }
     Get-ChildItem -Path $sp -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like 'pip-*.dist-info' -or $_.Name -like 'pip-*.egg-info' } |
         ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
-    & conda install -y -n $Name -c conda-forge --force-reinstall "pip>=24" "setuptools" "wheel"
+    & $script:CondaExe install -y -n $Name -c conda-forge --force-reinstall "pip>=24" "setuptools" "wheel"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to repair pip in '$Name'"
     }
@@ -230,7 +298,7 @@ function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
     $filtered = Join-Path $env:TEMP ("morphagent-req-no-pyqt-" + [guid]::NewGuid().ToString() + ".txt")
     $env:MORPHAGENT_REQ_SRC = $ReqFile
     $env:MORPHAGENT_REQ_DST = $filtered
-    Write-Host "Writing UTF-8 pip requirements (PyQt5 lines skipped — using conda pyqt)..."
+    Write-Host "Writing UTF-8 pip requirements (PyQt5 lines skipped - using conda pyqt)..."
     Invoke-CondaRun $Name @(
         "python", "-c",
         @"
@@ -260,15 +328,13 @@ print('[OK] wrote', dst, 'lines=', len(lines), 'encoding=utf-8')
         if ($null -eq $prevPyIo) { Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue } else { $env:PYTHONIOENCODING = $prevPyIo }
         Remove-Item $filtered -ErrorAction SilentlyContinue
     }
-    # Only drop pip-bundled Qt runtime; Ensure-SingleQtStack reinstalls conda pyqt.
     Write-Host "Removing pip-bundled Qt runtime PyQt5-Qt5 if present..."
-    & conda run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>$null
+    & $script:CondaExe run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>$null | Out-Null
 }
-
 
 function Ensure-SingleQtStack([string]$Name) {
     Write-Host "Reaffirming single conda Qt stack in $Name..."
-    & conda install -y -n $Name -c conda-forge --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
+    & $script:CondaExe install -y -n $Name -c conda-forge --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to reinstall conda pyqt for '$Name'"
     }
@@ -289,6 +355,7 @@ if pip_qt.exists():
 
 $scriptExit = 0
 try {
+    Initialize-Utf8Console
     Set-Location $HandoffRoot
     Write-Host "MorphAgent handoff root: $HandoffRoot"
 
@@ -306,7 +373,7 @@ try {
 
     if (-not (Test-CondaEnv $EnvName)) {
         Write-Host "Creating conda environment: $EnvName"
-        & conda create -y -n $EnvName -c conda-forge python=3.10 pip
+        & $script:CondaExe create -y -n $EnvName -c conda-forge "python=3.10" "pip"
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to create conda env '$EnvName'"
         }
@@ -321,7 +388,7 @@ try {
 
     if (-not (Test-CondaEnv $SandboxEnvName)) {
         Write-Host "Creating code-sandbox conda environment: $SandboxEnvName"
-        & conda create -y -n $SandboxEnvName -c conda-forge python=3.10 pip
+        & $script:CondaExe create -y -n $SandboxEnvName -c conda-forge "python=3.10" "pip"
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to create conda env '$SandboxEnvName'"
         }
@@ -347,14 +414,18 @@ try {
         }
     }
     if (Test-Path $EnvFile) {
-        $envText = Get-Content -Raw -Path $EnvFile
+        try {
+            $envText = [System.IO.File]::ReadAllText($EnvFile, [System.Text.UTF8Encoding]::new($false))
+        } catch {
+            $envText = Get-Content -Raw -Path $EnvFile
+        }
         if ($envText -match '(?m)^CONDA_ENV=') {
             $envText = [regex]::Replace($envText, '(?m)^CONDA_ENV=.*$', 'CONDA_ENV=morphagent_sandbox')
         } else {
             if (-not $envText.EndsWith("`n")) { $envText += "`n" }
             $envText += "CONDA_ENV=morphagent_sandbox`n"
         }
-        Set-Content -Path $EnvFile -Value $envText -NoNewline
+        Write-Utf8NoBomFile -Path $EnvFile -Content $envText
     }
 
     if (-not $SkipAllen) {
@@ -363,10 +434,9 @@ try {
             if (-not (Test-Path $AllenReq)) { throw "Allen requirements not found: $AllenReq" }
             if (-not (Test-Path $AllenPkg)) { throw "Allen package not found: $AllenPkg" }
 
-            # Windows uses native win-64 Python 3.6 builds (no CONDA_SUBDIR / Rosetta).
             if (-not (Test-CondaEnv $AllenEnvName)) {
                 Write-Host "Creating Allen segmentation environment: $AllenEnvName (win-64 / Python 3.6)"
-                & conda env create -y -n $AllenEnvName -f $AllenYml
+                & $script:CondaExe env create -y -n $AllenEnvName -f $AllenYml
                 if ($LASTEXITCODE -ne 0) {
                     throw "conda env create failed for '$AllenEnvName'"
                 }
@@ -375,15 +445,16 @@ try {
             }
 
             Write-Host "Installing Allen scientific stack..."
-            & conda run --no-capture-output -n $AllenEnvName python -m pip install --upgrade "pip<22" "setuptools<59" "wheel"
+            # pip<22 MUST go through conda.exe (same "<" redirection trap via conda.bat).
+            & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install --upgrade "pip<22" "setuptools<59" "wheel"
             if ($LASTEXITCODE -ne 0) { throw "Allen pip bootstrap failed" }
-            & conda run --no-capture-output -n $AllenEnvName python -m pip install -r $AllenReq
+            & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install -r $AllenReq
             if ($LASTEXITCODE -ne 0) { throw "Allen requirements install failed" }
             Write-Host "Installing vendored aicssegmentation..."
-            & conda run --no-capture-output -n $AllenEnvName python -m pip install -e $AllenPkg --no-deps
+            & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install -e $AllenPkg --no-deps
             if ($LASTEXITCODE -ne 0) { throw "aicssegmentation editable install failed" }
             Write-Host "Verifying Allen installation..."
-            & conda run --no-capture-output -n $AllenEnvName python $AllenCheck
+            & $script:CondaExe run --no-capture-output -n $AllenEnvName python $AllenCheck
             if ($LASTEXITCODE -ne 0) { throw "Allen check_installation.py failed" }
             Write-Host "[OK] Allen environment $AllenEnvName is ready"
         } catch {
@@ -398,7 +469,7 @@ try {
     $prevQt = $env:QT_QPA_PLATFORM
     $env:QT_QPA_PLATFORM = "offscreen"
     try {
-        & conda run --no-capture-output -n $EnvName python $Verifier --ui-smoke
+        & $script:CondaExe run --no-capture-output -n $EnvName python $Verifier --ui-smoke
         if ($LASTEXITCODE -ne 0) {
             throw "verify_install.py failed (exit $LASTEXITCODE)"
         }
