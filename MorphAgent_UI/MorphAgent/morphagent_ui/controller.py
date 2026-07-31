@@ -74,7 +74,6 @@ def artifact_snapshot(results_dir: str | Path) -> dict[str, Any]:
         "retained_features.csv",
         "feature_registry.json",
         "segmentation_summary.json",
-        "first_sample_visualization.png",
     )
     files = {name: (root / name).is_file() for name in names}
     rounds = find_completed_rounds(root)

@@ -212,7 +212,6 @@ class RunPage(QWidget):
             "retained_features.csv": "Validated feature subset",
             "feature_registry.json": "Feature validation registry",
             "segmentation_summary.json": "Segmentation audit",
-            "first_sample_visualization.png": "First-sample visual check",
         }
         for filename, exists in snapshot.get("files", {}).items():
             prefix = "READY" if exists else "WAIT"
@@ -274,7 +273,6 @@ class RunPage(QWidget):
                 "retained_features.csv": False,
                 "feature_registry.json": False,
                 "segmentation_summary.json": True,
-                "first_sample_visualization.png": True,
             },
             "completed_rounds": [],
         })
