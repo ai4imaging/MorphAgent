@@ -22,11 +22,36 @@ https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 
 ### Try it
 
-**Prerequisite:** install [Miniforge](https://github.com/conda-forge/miniforge) / Miniconda / Anaconda so `conda` is available on your PATH.
+**Prerequisite (Setup path):** install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda so `conda` is available on your PATH. Prefer **Docker** below if you do not want a local conda install.
+
+#### Docker
+
+One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC).
+
+**Download:** [MorphAgent-UI-Docker.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker.zip)
+
+**Use:**
+
+1. Install and start Docker.
+2. Unzip → run `start.command` (macOS) / `start.bat` (Windows) / `bash start.sh` (Linux).
+3. Browser opens [http://localhost:6080/morphagent.html](http://localhost:6080/morphagent.html).
+
+First launch builds the image (several minutes). Later starts are fast. Quick review without an API key: **Home → Load a previous run →** `completed_demo_run`. Stop with `docker compose down`.
+
+From this repo after cloning (developers):
+
+```bash
+cd MorphAgent/MorphAgent_UI
+bash docker/start.sh
+```
+
+More Docker notes: [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
+
+#### Setup
 
 All setup and launch scripts live under **`MorphAgent_UI/scripts/`**. After cloning, you must `cd` into `MorphAgent_UI` before running them.
 
-#### 1. Clone the repo and enter `MorphAgent_UI`
+##### 1. Clone the repo and enter `MorphAgent_UI`
 
 ```bash
 git clone https://github.com/ai4imaging/MorphAgent.git
@@ -35,7 +60,7 @@ cd MorphAgent/MorphAgent_UI
 
 Stay in this directory for the platform-specific steps below. Relative paths such as `scripts/setup.sh` refer to files inside `MorphAgent_UI/scripts/`.
 
-#### 2a. macOS / Linux
+##### 2a. macOS / Linux
 
 From `MorphAgent_UI/`:
 
@@ -51,14 +76,14 @@ bash scripts/start_ui.sh
 - `scripts/start_ui.sh` starts `MorphAgent/launch_ui.py` via that conda env.
 - First-time setup needs a network connection (conda/pip downloads). Re-run `scripts/setup.sh` if packages fail to install.
 
-#### 2b. Windows
+##### 2b. Windows
 
 **Easiest:** after finishing step 1, open `MorphAgent_UI\scripts\` in Explorer and double-click these files (they bypass ExecutionPolicy and auto-find conda when PATH is empty):
 
 1. `setup_windows.bat` — one-click env setup (`morphagent`, optional `morphagent_allen`)
 2. `start_ui_windows.bat` — launch the desktop Qt app
 
-Or from **Anaconda Prompt** / **Miniforge Prompt** / PowerShell, still inside `MorphAgent_UI\`:
+Or from **Anaconda Prompt** / PowerShell, still inside `MorphAgent_UI\`:
 
 ```powershell
 # One-click env setup
@@ -69,8 +94,8 @@ Or from **Anaconda Prompt** / **Miniforge Prompt** / PowerShell, still inside `M
 ```
 
 - Prefer the `.bat` wrappers over “Run with PowerShell” on the `.ps1` files — Windows blocks unsigned scripts by default; the `.bat` files call PowerShell with `-ExecutionPolicy Bypass`.
-- The `.bat` / `.ps1` pair also auto-discovers common Miniconda / Miniforge / Anaconda installs when `conda` is not on PATH, uses conda `pyqt=5` (not pip PyQt5) for a single Qt stack, and sets UTF-8 for pip on PowerShell 5.1.
-- You still need Miniconda/Miniforge/Anaconda installed once beforehand: https://docs.conda.io/en/latest/miniconda.html or https://github.com/conda-forge/miniforge
+- The `.bat` / `.ps1` pair also auto-discovers common Miniconda / Anaconda installs when `conda` is not on PATH, uses conda `pyqt=5` (not pip PyQt5) for a single Qt stack, and sets UTF-8 for pip on PowerShell 5.1.
+- You still need [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda installed once beforehand.
 
 #### After the UI opens
 
@@ -102,28 +127,10 @@ If you are an autonomous agent asked to **install or run MorphAgent**, read the 
 
 ---
 
-## MorphAgent (software)
-
-MorphAgent is an **automatic microscopy image feature extraction agent** built on large language models (LLMs) and multimodal vision-language models (VLMs). Given a batch of microscopy images and a one-sentence natural-language task description, it automatically:
-
-1. **Understands the dataset** (dimensions, channels, markers, naming conventions);
-2. **Automatically segments** cells / nuclei / cytoplasm and other structures (Allen by default in the UI path; Cellpose-SAM available);
-3. **Plans features** (morphology, intensity, texture, distribution, spatial, and other categories);
-4. Extracts scalar features via two complementary paths:
-   - **Code features**: the LLM generates an `extract()` Python function that runs in an isolated sandbox environment, self-debugs, and executes in batch;
-   - **VLM features**: a multimodal model scores images feature by feature (a continuous score of 0–100);
-5. (Optional) injects external knowledge: **expert_knowledge** (expert materials), **auto_deep_research** (deep research reports), **auto_literature_retrieval / RAG** (literature corpus);
-6. **Deterministically validates** and filters features, and outputs a feature table CSV.
-
-> This repository is the **public, general-purpose build**: it accesses models only through an **OpenAI-compatible API** (**no local model deployment whatsoever**), and it contains no paper-analysis code beyond the bundled UI demo. You only need to prepare your own dataset and configure an API to run it on any microscopy dataset.
-
----
-
 ## Table of Contents
 
 - [UI Demo](#ui-demo)
 - [For coding agents (Codex / Claude Code / Cursor)](#for-coding-agents-codex--claude-code--cursor)
-- [MorphAgent (software)](#morphagent-software)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
 - [Environment & Installation](#environment--installation)
@@ -228,12 +235,12 @@ cp .env.example .env      # edit .env and fill in your values
 source .env               # or export manually
 
 export LLM_BASE_URL="https://api.openai.com/v1"
-export LLM_API_KEY="sk-..."
-export LLM_MODEL="gpt-4o"          # text model used for planning/writing code/review
+export LLM_API_KEY="******"
+export LLM_MODEL="gpt-5.5"          # text model used for planning/writing code/review
 
 export VLM_BASE_URL="https://api.openai.com/v1"
-export VLM_API_KEY="sk-..."
-export VLM_MODEL="gpt-4o"          # multimodal (vision) model used for scoring
+export VLM_API_KEY="******"
+export VLM_MODEL="gpt-5.5"          # multimodal (vision) model used for scoring
 ```
 
 In the **UI**, fill the same fields on Configure → Model API; they are applied automatically on **Run MorphAgent** and written to `MorphAgent/.env` (no manual editing required).
@@ -504,9 +511,11 @@ Markdown/text/XML sources are read directly.
 
 ## FAQ
 
-- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo reuses bundled masks and does not require a GPU. Cellpose-SAM (optional) generally needs a GPU; without one, reuse your own masks, use Allen (CPU), or disable segmentation.
+- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo / Docker image reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU; UI default when masks are missing), or disable segmentation.
+- **Docker vs Setup?** Docker is the one-click path (browser UI via noVNC). Setup installs a local conda desktop Qt app under `MorphAgent_UI/scripts/`. You only need one of them.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
 - **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
 - **UI: where do I put my own images?** Select the parent folder that contains `dataset/<sample>/image.tif` (see [Input Data Format](#input-data-format-important)). If the path is wrong, the UI shows a dialog with the expected layout.
+- **Windows setup hangs / ToS / libmamba errors?** The setup scripts set `CONDA_NO_PLUGINS=true` and `CONDA_SOLVER=classic` for that process only. Pull the latest `main` and re-run `setup_windows.bat`.
