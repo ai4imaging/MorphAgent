@@ -517,7 +517,7 @@ Markdown/text/XML sources are read directly.
 ## FAQ
 
 - **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo / Docker image reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU; UI default when masks are missing), or disable segmentation.
-- **Docker vs Setup?** Docker is the one-click path (browser UI via noVNC). Setup installs a local conda desktop Qt app under `MorphAgent_UI/scripts/`. You only need one of them.
+- **Docker vs manual install?** Docker is the one-click path (browser UI via noVNC). Manual install creates a local conda desktop Qt app under `MorphAgent_UI/scripts/`. You only need one of them.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
 - **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
