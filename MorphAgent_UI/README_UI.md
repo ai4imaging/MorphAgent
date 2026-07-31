@@ -2,6 +2,38 @@
 
 This directory is a reviewable handoff package for the MorphAgent graphical interface. It includes the current UI source, backend pipeline, dependency manifests, install/launch/self-check scripts, Tau neuron demo data provided by the instructor, one completed run result, and the final English demo video.
 
+## 0. Docker one-click (recommended)
+
+No conda install needed. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). Double-click the starter; the MorphAgent Qt UI opens in the browser via noVNC.
+
+| Platform | Download |
+|----------|----------|
+| macOS | [MorphAgent-UI-Docker-macOS.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-macOS.zip) |
+| Windows | [MorphAgent-UI-Docker-Windows.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-Windows.zip) |
+| Linux | [MorphAgent-UI-Docker-Linux.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-Linux.zip) |
+
+After download: unzip → double-click `MorphAgent-UI.command` (Mac) / `MorphAgent-UI.bat` (Windows) / run `MorphAgent-UI.sh` (Linux) → browser opens at `http://localhost:6080/vnc.html?autoconnect=true&resize=remote`.
+
+First launch builds the image (several minutes). Later starts are fast. For a quick review without an API key: **Home → Load a previous run →** `completed_demo_run`.
+
+From this repo (developers):
+
+```bash
+# macOS
+open docker/mac/MorphAgent-UI.command
+# Linux
+bash docker/linux/MorphAgent-UI.sh
+# Windows
+docker\win\MorphAgent-UI.bat
+
+# Rebuild the three downloadable zip packages locally (does not push):
+bash scripts/build_docker_packages.sh
+# Optional: embed a pre-built image tarball into each zip (much larger):
+bash scripts/build_docker_packages.sh --with-image
+```
+
+Packages are written to `docker/dist/` for manual upload to the GitHub Release above.
+
 ## 1. Package Contents
 
 ```text

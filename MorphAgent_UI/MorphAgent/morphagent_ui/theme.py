@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import re
+from pathlib import Path
+
 from qtpy.QtGui import QColor, QPalette
 from qtpy.QtWidgets import QApplication
 
@@ -371,8 +375,85 @@ QScrollBar::handle:horizontal {{ background: {COLORS['slate_700']}; border-radiu
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 """
 
+# Unscaled reference stylesheet (scale = 1.0). Prefer build_stylesheet(scale).
+_BASE_STYLESHEET = STYLESHEET
 
-def apply_theme(application: QApplication) -> None:
+UI_FONT_SCALE_MIN = 0.85
+UI_FONT_SCALE_MAX = 2.0
+UI_FONT_SCALE_STEP = 0.1
+
+
+def clamp_ui_font_scale(scale: float) -> float:
+    return round(min(UI_FONT_SCALE_MAX, max(UI_FONT_SCALE_MIN, float(scale))), 2)
+
+
+def build_stylesheet(scale: float = 1.0) -> str:
+    """Return the MorphAgent stylesheet with font sizes multiplied by ``scale``."""
+
+    scale = clamp_ui_font_scale(scale)
+    if abs(scale - 1.0) < 0.01:
+        return _BASE_STYLESHEET
+
+    def _scale_font(match: re.Match[str]) -> str:
+        value = int(match.group(1))
+        return f"font-size: {max(8, int(round(value * scale)))}px"
+
+    return re.sub(r"font-size:\s*(\d+)px", _scale_font, _BASE_STYLESHEET)
+
+
+def detect_display_scale(application: QApplication | None = None) -> float:
+    """Choose an initial UI font scale from the primary screen DPI / size."""
+
+    app = application or QApplication.instance()
+    if app is None:
+        return 1.0
+    screen = app.primaryScreen()
+    if screen is None:
+        return 1.0
+
+    # 96 DPI ~= 100% on Windows / typical desktop baselines.
+    dpi = float(screen.logicalDotsPerInch() or 96.0)
+    scale = dpi / 96.0
+    width = int(screen.availableGeometry().width())
+    dpr = float(screen.devicePixelRatio() or 1.0)
+
+    # Large/high-res monitors often report ~96 DPI while UI still looks tiny.
+    if width >= 3200 and scale < 1.4:
+        scale = 1.4
+    elif width >= 2560 and scale < 1.25:
+        scale = 1.25
+    elif width >= 1920 and scale < 1.1:
+        scale = 1.1
+    if dpr >= 2.0:
+        scale = max(scale, 1.15)
+    return clamp_ui_font_scale(scale)
+
+
+def resolve_ui_font_scale(
+    application: QApplication | None = None,
+    repository_root: str | Path | None = None,
+) -> float:
+    """Prefer saved UI_FONT_SCALE, otherwise detect from the display."""
+
+    raw = ""
+    if repository_root is not None:
+        try:
+            from .environment import read_ui_preference_environment
+
+            raw = read_ui_preference_environment(repository_root).get("UI_FONT_SCALE", "").strip()
+        except Exception:
+            raw = ""
+    if not raw:
+        raw = str(os.environ.get("UI_FONT_SCALE", "")).strip()
+    if raw:
+        try:
+            return clamp_ui_font_scale(float(raw))
+        except ValueError:
+            pass
+    return detect_display_scale(application)
+
+
+def apply_theme(application: QApplication, scale: float | None = None) -> None:
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(COLORS["ink_950"]))
     palette.setColor(QPalette.WindowText, QColor(COLORS["text"]))
@@ -383,4 +464,5 @@ def apply_theme(application: QApplication) -> None:
     palette.setColor(QPalette.Highlight, QColor(COLORS["aqua_dark"]))
     palette.setColor(QPalette.HighlightedText, QColor("#FFFFFF"))
     application.setPalette(palette)
-    application.setStyleSheet(STYLESHEET)
+    resolved = detect_display_scale(application) if scale is None else clamp_ui_font_scale(scale)
+    application.setStyleSheet(build_stylesheet(resolved))

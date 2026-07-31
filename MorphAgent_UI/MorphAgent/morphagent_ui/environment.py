@@ -28,6 +28,11 @@ RUN_SCALE_ENV_KEYS = (
     "UI_TEMPERATURE",
 )
 
+# UI display preferences (font zoom, etc.).
+UI_PREFERENCE_ENV_KEYS = (
+    "UI_FONT_SCALE",
+)
+
 
 def repository_env_path(repository_root: str | Path) -> Path:
     return Path(repository_root).expanduser().resolve() / ".env"
@@ -94,3 +99,18 @@ def save_run_scale_environment(
     """Persist run-scale knobs used by the Configure page (own API)."""
 
     return _save_env_keys(repository_root, values, RUN_SCALE_ENV_KEYS)
+
+
+def read_ui_preference_environment(repository_root: str | Path) -> dict[str, str]:
+    """Return saved UI display preferences from `.env` / process env."""
+
+    return _read_env_keys(repository_root, UI_PREFERENCE_ENV_KEYS)
+
+
+def save_ui_preference_environment(
+    repository_root: str | Path,
+    values: Mapping[str, str],
+) -> Path:
+    """Persist UI display preferences such as font scale."""
+
+    return _save_env_keys(repository_root, values, UI_PREFERENCE_ENV_KEYS)

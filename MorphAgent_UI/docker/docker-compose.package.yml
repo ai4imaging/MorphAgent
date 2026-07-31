@@ -1,0 +1,27 @@
+# Used inside platform zip packages (build context = package root = ".")
+services:
+  morphagent-ui:
+    image: morphagent-ui:latest
+    container_name: morphagent-ui
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    ports:
+      - "${MORPHAGENT_NOVNC_PORT:-6080}:6080"
+    environment:
+      RESOLUTION: ${MORPHAGENT_RESOLUTION:-1920x1080x24}
+      MORPHAGENT_DATA: /data
+    volumes:
+      - morphagent-data:/data
+    shm_size: "1gb"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6080/"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  morphagent-data:

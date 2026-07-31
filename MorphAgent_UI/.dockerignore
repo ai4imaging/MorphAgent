@@ -1,0 +1,13 @@
+# Keep Docker build context lean
+docker/dist/
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/.env
+**/logs/
+*.log
+demo_video/
+knowledge/
+.git/
+.gitignore
+SHA256SUMS.txt

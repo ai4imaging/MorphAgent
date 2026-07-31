@@ -5,20 +5,29 @@ from __future__ import annotations
 from pathlib import Path
 
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QShortcut,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from .controller import RunController
+from .environment import save_ui_preference_environment
 from .models import RunConfig
-from .theme import STYLESHEET
+from .theme import (
+    UI_FONT_SCALE_STEP,
+    build_stylesheet,
+    clamp_ui_font_scale,
+    detect_display_scale,
+    resolve_ui_font_scale,
+)
 from .widgets.configure import ConfigurePage
 from .widgets.home import HomePage
 from .widgets.results import EvidencePage, FeaturesPage
@@ -39,32 +48,33 @@ class MorphAgentWidget(QWidget):
 
     def __init__(self, viewer=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        # Keep MorphAgent's visual identity scoped to this dock. Applying the
-        # stylesheet to QApplication would restyle napari and other plugins.
-        self.setStyleSheet(STYLESHEET)
         self.viewer = viewer
         self.config = RunConfig()
         self.controller = RunController(self)
+        self._repository_root = Path(__file__).resolve().parents[1]
+        self._display_font_scale = detect_display_scale()
+        self._font_scale = resolve_ui_font_scale(
+            repository_root=self._repository_root,
+        )
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        sidebar = QWidget()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(188)
-        sidebar.setStyleSheet("QWidget#Sidebar { background: #0B1626; border-right: 1px solid #29405E; }")
-        side_layout = QVBoxLayout(sidebar)
+        self.sidebar = QWidget()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setStyleSheet(
+            "QWidget#Sidebar { background: #0B1626; border-right: 1px solid #29405E; }"
+        )
+        side_layout = QVBoxLayout(self.sidebar)
         side_layout.setContentsMargins(10, 16, 10, 12)
         side_layout.setSpacing(12)
-        mark = QLabel("M")
-        mark.setAlignment(Qt.AlignCenter)
-        mark.setFixedSize(34, 34)
-        mark.setStyleSheet("background: #0891B2; color: #F0FDFF; border: 1px solid #22D3EE; border-radius: 9px; font-size: 18px; font-weight: 800;")
+        self.mark = QLabel("M")
+        self.mark.setAlignment(Qt.AlignCenter)
         brand = QLabel("MorphAgent")
         brand.setProperty("role", "title")
         brand_row = QHBoxLayout()
-        brand_row.addWidget(mark)
+        brand_row.addWidget(self.mark)
         brand_row.addWidget(brand)
         brand_row.addStretch(1)
         side_layout.addLayout(brand_row)
@@ -81,8 +91,9 @@ class MorphAgentWidget(QWidget):
         version = QLabel("v0.1 · manuscript UI")
         version.setProperty("role", "muted")
         version.setAlignment(Qt.AlignCenter)
+        version.setToolTip("Font size: Ctrl + / Ctrl − / Ctrl 0")
         side_layout.addWidget(version)
-        root.addWidget(sidebar)
+        root.addWidget(self.sidebar)
 
         self.pages = QStackedWidget()
         self.home_page = HomePage()
@@ -101,7 +112,70 @@ class MorphAgentWidget(QWidget):
         root.addWidget(self.pages, 1)
         self._connect()
         self.navigate(0)
+        self._apply_font_scale(persist=False)
+        self._install_font_shortcuts()
         self.setMinimumSize(1050, 700)
+
+    def _scaled_px(self, base: int) -> int:
+        return max(8, int(round(base * self._font_scale)))
+
+    def _apply_font_scale(self, *, persist: bool = True) -> None:
+        """Keep MorphAgent styles scoped to this dock (not the whole QApplication)."""
+
+        self._font_scale = clamp_ui_font_scale(self._font_scale)
+        self.setStyleSheet(build_stylesheet(self._font_scale))
+        mark_size = self._scaled_px(34)
+        self.mark.setFixedSize(mark_size, mark_size)
+        self.mark.setStyleSheet(
+            "background: #0891B2; color: #F0FDFF; border: 1px solid #22D3EE; "
+            f"border-radius: {self._scaled_px(9)}px; font-size: {self._scaled_px(18)}px; font-weight: 800;"
+        )
+        self.sidebar.setFixedWidth(self._scaled_px(188))
+        if hasattr(self.configure_page, "demo_guide"):
+            self.configure_page.demo_guide.setStyleSheet(
+                f"font-size: {self._scaled_px(22)}px;"
+            )
+        if hasattr(self.run_page, "log_view"):
+            self.run_page.log_view.setStyleSheet(
+                'font-family: "Fira Code", "SFMono-Regular", monospace; '
+                f"font-size: {self._scaled_px(11)}px;"
+            )
+        if persist:
+            try:
+                save_ui_preference_environment(
+                    self._repository_root,
+                    {"UI_FONT_SCALE": f"{self._font_scale:.2f}"},
+                )
+            except Exception:
+                pass
+
+    def _install_font_shortcuts(self) -> None:
+        bindings = (
+            (QKeySequence.ZoomIn, self._zoom_font_in),
+            (QKeySequence("Ctrl+="), self._zoom_font_in),
+            (QKeySequence("Ctrl++"), self._zoom_font_in),
+            (QKeySequence.ZoomOut, self._zoom_font_out),
+            (QKeySequence("Ctrl+-"), self._zoom_font_out),
+            (QKeySequence("Ctrl+0"), self._zoom_font_reset),
+        )
+        self._font_shortcuts = []
+        for sequence, slot in bindings:
+            shortcut = QShortcut(sequence, self)
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(slot)
+            self._font_shortcuts.append(shortcut)
+
+    def _zoom_font_in(self) -> None:
+        self._font_scale = clamp_ui_font_scale(self._font_scale + UI_FONT_SCALE_STEP)
+        self._apply_font_scale()
+
+    def _zoom_font_out(self) -> None:
+        self._font_scale = clamp_ui_font_scale(self._font_scale - UI_FONT_SCALE_STEP)
+        self._apply_font_scale()
+
+    def _zoom_font_reset(self) -> None:
+        self._font_scale = self._display_font_scale
+        self._apply_font_scale()
 
     def _connect(self) -> None:
         self.navigation.currentRowChanged.connect(self.pages.setCurrentIndex)

@@ -1,0 +1,33 @@
+# MorphAgent UI — one-click browser desktop
+# Usage (from this directory or via platform starters):
+#   docker compose up -d --build
+# Then open: http://localhost:6080/vnc.html?autoconnect=true&resize=remote
+services:
+  morphagent-ui:
+    image: morphagent-ui:latest
+    container_name: morphagent-ui
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    ports:
+      - "${MORPHAGENT_NOVNC_PORT:-6080}:6080"
+    environment:
+      RESOLUTION: ${MORPHAGENT_RESOLUTION:-1920x1080x24}
+      MORPHAGENT_DATA: /data
+    volumes:
+      # Persist API .env and extra results across restarts
+      - morphagent-data:/data
+      # Optional: bind-mount a host folder for custom datasets
+      # - ${MORPHAGENT_HOST_DATA:-./host_data}:/data/workspace
+    shm_size: "1gb"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6080/"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  morphagent-data:

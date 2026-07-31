@@ -1,3 +1,6 @@
 # Local Windows/macOS setup transcripts (kept on disk for the user; not committed)
 logs/
 *.log
+
+# Local Docker package build output (upload to Releases manually; do not commit)
+docker/dist/
