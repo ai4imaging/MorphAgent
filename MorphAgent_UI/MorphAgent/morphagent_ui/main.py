@@ -31,7 +31,7 @@ from .theme import (
     resolve_ui_font_scale,
 )
 from .widgets.configure import ConfigurePage
-from .widgets.home import HomePage
+from .widgets.home import HomePage, bundled_demo_results_dir
 from .widgets.results import EvidencePage, FeaturesPage
 from .widgets.run import RunPage
 
@@ -129,16 +129,27 @@ class MorphAgentWidget(QWidget):
             self.pages.addWidget(page)
         root.addWidget(self.pages, 1)
         self._font_actions: list[QAction] = []
+        self._sample_results_active = False
         self._connect()
         self.navigate(0)
         self._install_font_controls()
         self._apply_font_scale(persist=False)
+        self._preload_demo_sample_results()
         self.setMinimumSize(1050, 700)
         self.setFocusPolicy(Qt.StrongFocus)
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)
         self._attach_font_actions_to_window()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        app = QApplication.instance()
+        if app is not None:
+            try:
+                app.removeEventFilter(self)
+            except RuntimeError:
+                pass
+        super().closeEvent(event)
 
     def _scaled_px(self, base: int) -> int:
         return max(8, int(round(base * self._font_scale)))
@@ -326,16 +337,71 @@ class MorphAgentWidget(QWidget):
         self.navigation.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.home_page.new_run_requested.connect(self._new_run)
         self.home_page.previous_run_requested.connect(self._load_previous_results)
+        self.home_page.demo_sample_requested.connect(self._load_demo_sample_results)
         self.configure_page.run_requested.connect(self._start_run)
         self.run_page.cancel_requested.connect(self.controller.cancel)
         self.run_page.edit_requested.connect(lambda: self.navigate(1))
         self.run_page.review_requested.connect(self._show_results)
         self.features_page.feature_selected.connect(self.evidence_page.select_feature)
-        self.controller.run_finished.connect(lambda _success, _path: self._refresh_results())
+        self.controller.run_finished.connect(self._on_run_finished)
 
     def navigate(self, index: int) -> None:
         self.navigation.setCurrentRow(index)
         self.pages.setCurrentIndex(index)
+
+    @staticmethod
+    def _is_bundled_demo_sample(path: str | Path | None) -> bool:
+        if not path:
+            return False
+        try:
+            return Path(path).expanduser().resolve() == bundled_demo_results_dir().resolve()
+        except OSError:
+            return False
+
+    def _preload_demo_sample_results(self) -> None:
+        """Warm Features/Evidence with the bundled sample so reviewers can browse immediately."""
+
+        sample = bundled_demo_results_dir()
+        if not sample.is_dir():
+            self.home_page.set_sample_offer_visible(False)
+            return
+        self.features_page.load_results(str(sample))
+        self.evidence_page.set_results(str(sample), self.features_page.cards)
+        self._sample_results_active = True
+        self.home_page.set_sample_offer_visible(True)
+
+    def _dismiss_demo_sample_offer(self, *, clear_pages: bool = False) -> None:
+        """Hide the Home sample CTA; optionally clear sample data from result pages."""
+
+        self._sample_results_active = False
+        self.home_page.set_sample_offer_visible(False)
+        if clear_pages and self._is_bundled_demo_sample(getattr(self.features_page, "results_dir", "")):
+            self.features_page.load_results("")
+            self.evidence_page.set_results("", [])
+
+    def _load_demo_sample_results(self) -> None:
+        sample = bundled_demo_results_dir()
+        if not sample.is_dir():
+            QMessageBox.warning(
+                self,
+                "Demo sample missing",
+                "The bundled completed demo run was not found under demo/data/results/.",
+            )
+            self.home_page.set_sample_offer_visible(False)
+            return
+        self.features_page.load_results(str(sample))
+        self.evidence_page.set_results(str(sample), self.features_page.cards)
+        if not self.features_page.cards and not self.evidence_page.artifacts:
+            QMessageBox.warning(
+                self,
+                "Demo sample incomplete",
+                "The bundled demo folder does not contain recognizable MorphAgent results.",
+            )
+            return
+        self._sample_results_active = True
+        self.home_page.set_sample_offer_visible(True)
+        # Do not pin config.results_dir to the sample; keep Configure ready for a real run.
+        self.navigate(3)
 
     def _new_run(self) -> None:
         if self.controller.running:
@@ -364,22 +430,41 @@ class MorphAgentWidget(QWidget):
                 "This folder does not contain feature cards or recognizable run artifacts.",
             )
             return
-        self.config.results_dir = str(path)
+        if self._is_bundled_demo_sample(path):
+            self._sample_results_active = True
+            self.home_page.set_sample_offer_visible(True)
+            # Sample browse: do not treat as the active configure results_dir.
+        else:
+            self._dismiss_demo_sample_offer(clear_pages=False)
+            self.config.results_dir = str(path)
         self.navigate(3)
 
     def _start_run(self, config: RunConfig, dataset_summary) -> None:
+        # Clear sample output as soon as a real pipeline starts.
+        self._dismiss_demo_sample_offer(clear_pages=True)
         try:
             results_dir = self.controller.start(config, dataset_summary)
         except (RuntimeError, OSError) as exc:
+            # Restore the sample offer if launch failed and no real results exist.
+            if bundled_demo_results_dir().is_dir() and not self.config.results_dir:
+                self._preload_demo_sample_results()
             QMessageBox.critical(self, "Could not launch MorphAgent", str(exc))
             return
         self.run_page.begin(results_dir)
         self.navigate(2)
 
+    def _on_run_finished(self, success: bool, results_path: str) -> None:
+        if success and results_path and not self._is_bundled_demo_sample(results_path):
+            self._dismiss_demo_sample_offer(clear_pages=False)
+            self.config.results_dir = results_path
+        self._refresh_results()
+
     def _refresh_results(self) -> None:
         results_dir = self.run_page.results_dir or self.config.results_dir
         if not results_dir:
             return
+        if not self._is_bundled_demo_sample(results_dir):
+            self._dismiss_demo_sample_offer(clear_pages=False)
         self.features_page.load_results(results_dir)
         self.evidence_page.set_results(results_dir, self.features_page.cards)
 

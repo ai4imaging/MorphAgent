@@ -19,15 +19,55 @@ from qtpy.QtWidgets import (
 from .common import Card
 
 
+def bundled_demo_results_dir() -> Path:
+    """Packaged Tau demo standard output (completed run), if present."""
+
+    return Path(__file__).resolve().parents[2] / "demo" / "data" / "results" / "completed_demo_run"
+
+
+def default_results_browse_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "demo" / "data" / "results"
+
+
 class HomePage(QWidget):
     new_run_requested = Signal()
     previous_run_requested = Signal(str)
+    demo_sample_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(30, 28, 30, 28)
-        outer.setSpacing(0)
+        outer.setSpacing(14)
+
+        self.sample_panel = Card()
+        self.sample_panel.setObjectName("DemoSamplePanel")
+        sample_layout = QHBoxLayout(self.sample_panel)
+        sample_layout.setContentsMargins(20, 16, 20, 16)
+        sample_layout.setSpacing(16)
+        sample_copy = QVBoxLayout()
+        sample_copy.setSpacing(6)
+        sample_eyebrow = QLabel("DEMO STANDARD OUTPUT")
+        sample_eyebrow.setProperty("role", "eyebrow")
+        sample_title = QLabel("Browse a completed Tau demo run without running the pipeline")
+        sample_title.setProperty("role", "title")
+        sample_title.setWordWrap(True)
+        sample_body = QLabel(
+            "Load the bundled standard output sample to explore Features and Evidence. "
+            "This sample is cleared automatically once you produce your own run results."
+        )
+        sample_body.setProperty("role", "muted")
+        sample_body.setWordWrap(True)
+        sample_copy.addWidget(sample_eyebrow)
+        sample_copy.addWidget(sample_title)
+        sample_copy.addWidget(sample_body)
+        sample_layout.addLayout(sample_copy, 1)
+        self.demo_sample_button = QPushButton("Load demo standard output")
+        self.demo_sample_button.setProperty("homeSecondary", True)
+        self.demo_sample_button.setMinimumWidth(220)
+        self.demo_sample_button.setAccessibleName("Load the bundled demo standard output sample")
+        sample_layout.addWidget(self.demo_sample_button, 0, Qt.AlignVCenter)
+        outer.addWidget(self.sample_panel, 0)
 
         hero = Card()
         hero.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -75,9 +115,14 @@ class HomePage(QWidget):
 
         self.new_button.clicked.connect(self.new_run_requested)
         self.previous_run_button.clicked.connect(self._choose_previous_run)
+        self.demo_sample_button.clicked.connect(self.demo_sample_requested)
+        self.set_sample_offer_visible(bundled_demo_results_dir().is_dir())
+
+    def set_sample_offer_visible(self, visible: bool) -> None:
+        self.sample_panel.setVisible(bool(visible) and bundled_demo_results_dir().is_dir())
 
     def _choose_previous_run(self) -> None:
-        default_results = Path(__file__).resolve().parents[2] / "demo" / "data" / "results"
+        default_results = default_results_browse_dir()
         start = default_results if default_results.is_dir() else Path.home()
         selected = QFileDialog.getExistingDirectory(
             self,

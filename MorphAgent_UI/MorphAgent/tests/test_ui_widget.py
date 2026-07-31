@@ -65,17 +65,46 @@ class WidgetSmokeTests(unittest.TestCase):
         home = widget.home_page
         labels = {label.text() for label in home.findChildren(QLabel)}
 
-        self.assertEqual(len(home.findChildren(Card)), 1)
+        # Hero card + optional bundled demo-sample panel.
+        self.assertGreaterEqual(len(home.findChildren(Card)), 1)
         self.assertEqual(home.new_button.text(), "Start a discovery run")
         self.assertTrue(home.new_button.property("homePrimary"))
         self.assertEqual(home.previous_run_button.text(), "Load a previous run")
         self.assertTrue(home.previous_run_button.property("homeSecondary"))
+        self.assertEqual(home.demo_sample_button.text(), "Load demo standard output")
         self.assertFalse(hasattr(home, "resume_button"))
         self.assertIn("From microscopy to biologically grounded features", labels)
         self.assertFalse(any("interpretable features" in label.lower() for label in labels))
         self.assertNotIn("Configure", labels)
         self.assertNotIn("Run", labels)
         self.assertNotIn("Review", labels)
+        widget.close()
+
+    def test_home_demo_sample_preloads_and_clears_after_own_results(self) -> None:
+        from morphagent_ui.widgets.home import bundled_demo_results_dir
+
+        sample = bundled_demo_results_dir()
+        if not sample.is_dir():
+            self.skipTest("bundled completed_demo_run is not present")
+
+        widget = MorphAgentWidget()
+        self.app.processEvents()
+        # isVisible() is False until the window is shown; isHidden() tracks our flag.
+        self.assertFalse(widget.home_page.sample_panel.isHidden())
+        self.assertTrue(widget._sample_results_active)
+        self.assertTrue(widget.features_page.cards)
+
+        with tempfile.TemporaryDirectory() as raw:
+            own = Path(raw)
+            (own / "features.csv").write_text(
+                "sample_id,own_feature\nWT_1,0.1\n",
+                encoding="utf-8",
+            )
+            widget.home_page.previous_run_requested.emit(str(own))
+            self.app.processEvents()
+            self.assertTrue(widget.home_page.sample_panel.isHidden())
+            self.assertFalse(widget._sample_results_active)
+            self.assertEqual([card.name for card in widget.features_page.cards], ["own_feature"])
         widget.close()
 
     def test_home_loads_previous_results_without_starting_pipeline(self) -> None:

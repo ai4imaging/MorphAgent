@@ -164,13 +164,14 @@ Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation u
 
 The window maximizes automatically on launch.
 
-1. On the home page, click **Start a discovery run**.
-2. Under **1 · Data**, click **Load demo dataset**, or browse to a folder that contains `dataset/<sample>/*.tif`.
-3. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.
-4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Free AI APIs 2026](https://aicosthub.com/guides/free-ai-apis-2026).
-5. Under **4 · Analysis**, optionally keep **Enable feature validation** on and point at a metadata CSV (`sample_id` + group/label). The demo already ships `demo/data/metadata.csv`.
-6. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
-7. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
+1. On the home page, click **Load demo standard output** to browse the bundled completed Tau run (Features / Evidence) without starting the pipeline. That sample is cleared automatically once you produce your own results.
+2. To run yourself: click **Start a discovery run**.
+3. Under **1 · Data**, click **Load demo dataset**, or browse to a folder that contains `dataset/<sample>/*.tif`.
+4. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.
+5. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Free AI APIs 2026](https://aicosthub.com/guides/free-ai-apis-2026).
+6. Under **4 · Analysis**, optionally keep **Enable feature validation** on and point at a metadata CSV (`sample_id` + group/label). The demo already ships `demo/data/metadata.csv`.
+7. **Use the same connection for image scoring** is unchecked by default; check it to hide separate VLM fields.
+8. Advanced **Config** defaults to temperature **0** (reproducible Code + VLM).
 
 Do not forward the generated `.env` to others. For a second handoff, delete `MorphAgent/.env` and keep only `.env.example`.
 
@@ -204,7 +205,7 @@ After clicking **Run MorphAgent** in the lower right, the Run page shows **Live 
 Inspect → Prepare → Plan → Quantify → Validate → Export
 ```
 
-Expect roughly **5–30 minutes** for one demo round; slower APIs or higher concurrency contention sit toward the upper end. For a quick UI review without waiting, load `completed_demo_run` from Home instead.
+Expect roughly **5–30 minutes** for one demo round; slower APIs or higher concurrency contention sit toward the upper end. For a quick UI review without waiting, use **Load demo standard output** on Home (bundled `completed_demo_run`).
 
 Logs are continuously written to `ui_console.log` in the current results directory. Default results location:
 
