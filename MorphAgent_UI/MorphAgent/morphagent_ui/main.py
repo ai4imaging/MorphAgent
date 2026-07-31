@@ -371,10 +371,14 @@ class MorphAgentWidget(QWidget):
         self.home_page.set_sample_offer_visible(True)
 
     def _dismiss_demo_sample_offer(self, *, clear_pages: bool = False) -> None:
-        """Hide the Home sample CTA; optionally clear sample data from result pages."""
+        """Stop treating the bundled sample as the active results view.
+
+        The Home CTA stays available whenever ``completed_demo_run`` is on disk
+        so reviewers can reload the standard output after their own runs.
+        """
 
         self._sample_results_active = False
-        self.home_page.set_sample_offer_visible(False)
+        self.home_page.set_sample_offer_visible(bundled_demo_results_dir().is_dir())
         if clear_pages and self._is_bundled_demo_sample(getattr(self.features_page, "results_dir", "")):
             self.features_page.load_results("")
             self.evidence_page.set_results("", [])

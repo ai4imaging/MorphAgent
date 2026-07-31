@@ -238,7 +238,10 @@ class RunConfig:
         # only the free restricted API lock in Configure does that.
         self.method = "both"
         self.dataset_source = "demo"
-        # Knowledge / validation stay off by default; user can opt in on Configure.
+        # Knowledge sources stay off by default; user can opt in on Configure.
+        # Validation is on when demo metadata.csv is present so Features gets
+        # route/category/score via feature_registry.json (same as completed_demo_run).
+        self.enable_feature_analysis = bool(self.metadata_path)
         self.enable_background_knowledge_in_planning = True
         self.enable_segmentation = True
         self.segmentation_skip_if_present = True
@@ -797,13 +800,33 @@ def load_feature_cards(results_dir: str | Path) -> list[FeatureCard]:
         ))
 
     if not cards:
+        # No registry yet (validation off / incomplete run): still surface matrix
+        # columns, enriched from feature_plan.json when present so Route/Category
+        # are not lost. Validation score stays empty until feature_registry exists.
         csv_path = root / "retained_features.csv"
         if not csv_path.is_file():
             csv_path = root / "features.csv"
-        cards = [
-            FeatureCard(name=name, feature_id=name, status="retained")
-            for name in discover_feature_names(csv_path)
-        ]
+        for name in discover_feature_names(csv_path):
+            plan = planned.get(name, {})
+            cards.append(
+                FeatureCard(
+                    feature_id=_as_text(plan.get("feature_id")) or name,
+                    name=name,
+                    method=_as_text(plan.get("method")) or "unknown",
+                    category=_as_text(plan.get("category")) or "other",
+                    description=_as_text(plan.get("description")),
+                    status="retained",
+                    round_number=int(plan.get("round_number") or 0),
+                    method_rationale=_as_text(plan.get("method_rationale")),
+                    expected_visual_signature=_as_text(
+                        plan.get("expected_visual_signature") or plan.get("visual_signature")
+                    ),
+                    required_channels=_as_text(plan.get("required_channels") or plan.get("channels")),
+                    required_masks=_as_text(plan.get("required_masks") or plan.get("segmentation_prompt")),
+                    candidate_operators=_as_text(plan.get("candidate_operators") or plan.get("operators")),
+                    summary_statistics=_as_text(plan.get("summary_statistics") or plan.get("statistics")),
+                )
+            )
     return sorted(cards, key=lambda card: (card.round_number, card.category, card.name))
 
 

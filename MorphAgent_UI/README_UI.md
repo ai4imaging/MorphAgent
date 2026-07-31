@@ -156,7 +156,7 @@ Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation u
 
 The window maximizes automatically on launch.
 
-1. On the home page, click **Load demo standard output** to browse the bundled completed Tau run (Features / Evidence) without starting the pipeline. That sample is cleared automatically once you produce your own results.
+1. On the home page, click **Load demo standard output** to browse the bundled completed Tau run (Features / Evidence) without starting the pipeline. You can reload it anytime; starting your own run replaces the Features view.
 2. To run yourself: click **Start a discovery run**.
 3. Under **1 · Data**, click **Load demo dataset**, or browse to a folder that contains `dataset/<sample>/*.tif`.
 4. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.

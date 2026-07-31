@@ -80,7 +80,7 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertNotIn("Review", labels)
         widget.close()
 
-    def test_home_demo_sample_preloads_and_clears_after_own_results(self) -> None:
+    def test_home_demo_sample_preloads_and_stays_available_after_own_results(self) -> None:
         from morphagent_ui.widgets.home import bundled_demo_results_dir
 
         sample = bundled_demo_results_dir()
@@ -102,7 +102,8 @@ class WidgetSmokeTests(unittest.TestCase):
             )
             widget.home_page.previous_run_requested.emit(str(own))
             self.app.processEvents()
-            self.assertTrue(widget.home_page.sample_panel.isHidden())
+            # CTA remains so the standard output sample can be reloaded.
+            self.assertFalse(widget.home_page.sample_panel.isHidden())
             self.assertFalse(widget._sample_results_active)
             self.assertEqual([card.name for card in widget.features_page.cards], ["own_feature"])
         widget.close()
@@ -778,10 +779,18 @@ class WidgetSmokeTests(unittest.TestCase):
             (dataset / "dataset_index.txt").write_text("Tau demo", encoding="utf-8")
             (rag / "paper.pdf").write_bytes(b"reference")
             (precomputed / "rag_knowledge_summary.txt").write_text("cached knowledge", encoding="utf-8")
+            (demo / "data" / "metadata.csv").write_text(
+                "sample_id,group,genotype\nWT_1,WT,wild_type\n",
+                encoding="utf-8",
+            )
 
             widget = MorphAgentWidget()
             widget.config.repository_root = str(repo)
             page = widget.configure_page
+            # Process env / real .env may still hold free-demo creds; ignore for this test.
+            page._using_free_demo_api = lambda: False  # type: ignore[method-assign]
+            page._form_is_free_demo_api = lambda: False  # type: ignore[method-assign]
+            page._set_free_demo_scale_locked(False)
             page.rounds_spin.setValue(2)
             page.candidates_spin.setValue(10)
             page.target_spin.setValue(10)
@@ -798,9 +807,14 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertEqual(widget.config.target_feature_count, 10)
             self.assertEqual(widget.config.num_rounds, 2)
             self.assertEqual(widget.config.dataset_source, "demo")
+            self.assertTrue(page.validation_check.isChecked())
+            self.assertTrue(widget.config.enable_feature_analysis)
+            self.assertTrue(widget.config.metadata_path.endswith("metadata.csv"))
             command = widget.config.build_command()
             self.assertNotIn("--auto-deep-research", command)
             self.assertNotIn("--auto-literature-retrieval", command)
+            self.assertNotIn("--disable-feature-analysis", command)
+            self.assertIn("--metadata-path", command)
             widget.close()
 
     def test_custom_dataset_auto_detects_context_and_clears_demo_paths(self) -> None:

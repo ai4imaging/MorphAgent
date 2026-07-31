@@ -174,7 +174,7 @@ class RunConfigTests(unittest.TestCase):
             self.assertEqual(config.data_root, str((demo / "data").resolve()))
             self.assertEqual(config.description_path, str((dataset / "dataset_index.txt").resolve()))
             self.assertEqual(config.metadata_path, str(metadata_csv.resolve()))
-            self.assertFalse(config.enable_feature_analysis)
+            self.assertTrue(config.enable_feature_analysis)
             self.assertEqual(config.results_dir, "")
             self.assertIn("Tau protein aggregation", config.query)
             self.assertEqual(config.method, "both")
@@ -191,8 +191,8 @@ class RunConfigTests(unittest.TestCase):
             self.assertTrue(cache_path.is_file())
             self.assertIn("cached knowledge", cache_path.read_text(encoding="utf-8"))
             command = config.build_command()
-            self.assertNotIn("--metadata-path", command)
-            self.assertIn("--disable-feature-analysis", command)
+            self.assertIn("--metadata-path", command)
+            self.assertNotIn("--disable-feature-analysis", command)
             self.assertIn("--disable-expert-knowledge", command)
             self.assertIn("--disable-deep-research", command)
             self.assertIn("--disable-rag", command)
@@ -409,6 +409,29 @@ class FeatureArtifactTests(unittest.TestCase):
             }), encoding="utf-8")
             cards = load_feature_cards(root)
             self.assertEqual(cards, [])
+
+    def test_csv_fallback_enriches_route_and_category_from_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "round_1").mkdir()
+            (root / "round_1" / "feature_plan.json").write_text(json.dumps({
+                "features": [{
+                    "name": "tau_bead_density",
+                    "description": "Bead-like Tau enrichments along neurites.",
+                    "method": "vlm",
+                    "category": "morphology",
+                }]
+            }), encoding="utf-8")
+            (root / "features.csv").write_text(
+                "sample_id,tau_bead_density\nWT_1,0.42\n",
+                encoding="utf-8",
+            )
+            cards = load_feature_cards(root)
+            self.assertEqual(len(cards), 1)
+            self.assertEqual(cards[0].method, "vlm")
+            self.assertEqual(cards[0].category, "morphology")
+            self.assertIn("Bead-like", cards[0].description)
+            self.assertIsNone(cards[0].validation_score)
 
 class FreeDemoApiTests(unittest.TestCase):
     def test_obfuscated_credentials_decode_for_morphagent_ui(self) -> None:

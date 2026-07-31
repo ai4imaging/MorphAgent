@@ -54,7 +54,7 @@ class HomePage(QWidget):
         sample_title.setWordWrap(True)
         sample_body = QLabel(
             "Load the bundled standard output sample to explore Features and Evidence. "
-            "This sample is cleared automatically once you produce your own run results."
+            "You can reload it anytime; starting your own run replaces the Features view."
         )
         sample_body.setProperty("role", "muted")
         sample_body.setWordWrap(True)
