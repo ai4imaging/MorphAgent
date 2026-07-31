@@ -84,6 +84,8 @@ if not "%EXITCODE%"=="0" (
   echo    1^) Network blocked while downloading Miniconda / conda packages
   echo    2^) Antivirus blocked the silent Miniconda installer
   echo    3^) Old scripts - git pull latest and retry
+  echo    4^) Stale CONDA_ROOT/CONDA_PREFIX pointing at a missing drive
+  echo        ^(clear those env vars, then retry^)
   echo  Note: if conda is missing, setup_windows.ps1 auto-installs Miniconda
   echo        into %%USERPROFILE%%\miniconda3 ^(needs network once^).
   echo  Manual Miniconda: https://docs.conda.io/en/latest/miniconda.html

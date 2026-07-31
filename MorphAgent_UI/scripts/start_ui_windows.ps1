@@ -10,6 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "conda_windows.ps1")
 $HandoffRoot = Split-Path -Parent $ScriptDir
 $Launcher = Join-Path $HandoffRoot "MorphAgent\launch_ui.py"
 $script:CondaExe = $null
@@ -32,35 +33,8 @@ function Wait-IfInteractive {
     }
 }
 
-function Resolve-CondaExeFromRoot([string]$Root) {
-    if (-not $Root) { return $null }
-    foreach ($c in @(
-        (Join-Path $Root "Scripts\conda.exe"),
-        (Join-Path $Root "condabin\conda.exe"),
-        (Join-Path $Root "Library\bin\conda.exe")
-    )) {
-        if (Test-Path $c) { return $c }
-    }
-    return $null
-}
-
-function Use-CondaRoot([string]$Root) {
-    $condaExe = Resolve-CondaExeFromRoot $Root
-    if (-not $condaExe) { return $false }
-    $prepend = @(
-        (Join-Path $Root "condabin"),
-        (Join-Path $Root "Scripts"),
-        (Join-Path $Root "Library\bin"),
-        $Root
-    ) -join ";"
-    $env:Path = "$prepend;$env:Path"
-    $env:CONDA_ROOT = $Root
-    $script:CondaExe = $condaExe
-    Write-Host "[OK] conda.exe: $($script:CondaExe)"
-    return $true
-}
-
 function Install-MinicondaSilent {
+    Ensure-CondaNonInteractiveEnv
     if ($env:MORPHAGENT_SKIP_MINICONDA_INSTALL -eq "1") {
         throw "conda was not found, and MORPHAGENT_SKIP_MINICONDA_INSTALL=1 disables auto-install."
     }
@@ -117,6 +91,7 @@ function Install-MinicondaSilent {
 
 function Initialize-Conda {
     # Prefer conda.exe (not conda.bat) so args with < > = are not eaten by cmd.
+    Ensure-CondaNonInteractiveEnv
     $cmd = Get-Command conda -ErrorAction SilentlyContinue
     if ($cmd) {
         $src = $cmd.Source
@@ -137,47 +112,10 @@ function Initialize-Conda {
         }
     }
 
-    $candidates = @(
-        $env:CONDA_ROOT,
-        $env:CONDA_PREFIX,
-        (Join-Path $env:USERPROFILE "miniconda3"),
-        (Join-Path $env:USERPROFILE "Miniconda3"),
-        (Join-Path $env:USERPROFILE "anaconda3"),
-        (Join-Path $env:USERPROFILE "Anaconda3"),
-        (Join-Path $env:USERPROFILE "miniforge3"),
-        (Join-Path $env:USERPROFILE "Miniforge3"),
-        (Join-Path $env:USERPROFILE "mambaforge"),
-        (Join-Path $env:USERPROFILE "Mambaforge"),
-        (Join-Path $env:LOCALAPPDATA "miniconda3"),
-        (Join-Path $env:LOCALAPPDATA "Miniconda3"),
-        (Join-Path $env:LOCALAPPDATA "anaconda3"),
-        (Join-Path $env:LOCALAPPDATA "Miniforge3"),
-        (Join-Path $env:ProgramData "miniconda3"),
-        (Join-Path $env:ProgramData "anaconda3"),
-        (Join-Path $env:ProgramData "Miniforge3"),
-        "C:\ProgramData\miniconda3",
-        "C:\ProgramData\anaconda3",
-        "C:\tools\miniconda3",
-        "D:\Anaconda3",
-        "D:\Miniconda3"
-    ) | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -Unique
-
-    foreach ($root in $candidates) {
-        $condaExe = Resolve-CondaExeFromRoot $root
-        $condaBat = Join-Path $root "condabin\conda.bat"
-        if (-not $condaExe -and -not (Test-Path $condaBat)) {
-            $parentRoot = Split-Path (Split-Path $root -Parent) -Parent
-            if ($parentRoot) {
-                $condaExe = Resolve-CondaExeFromRoot $parentRoot
-                $condaBat = Join-Path $parentRoot "condabin\conda.bat"
-                $root = $parentRoot
-            }
-        }
-        if (-not $condaExe -and -not (Test-Path $condaBat)) { continue }
-        if (Use-CondaRoot $root) {
-            Write-Host "[OK] Found conda under $root"
-            return
-        }
+    $foundRoot = Find-CondaRootOnDisk
+    if ($foundRoot -and (Use-CondaRoot $foundRoot)) {
+        Write-Host "[OK] Found conda under $foundRoot"
+        return
     }
 
     Install-MinicondaSilent
@@ -186,14 +124,14 @@ function Initialize-Conda {
 $scriptExit = 0
 try {
     try { cmd /c "chcp 65001 >nul" | Out-Null } catch {}
-    if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
-    if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
+    Ensure-CondaNonInteractiveEnv
 
     Set-Location $HandoffRoot
     if (-not (Test-Path $Launcher)) {
         throw "Missing launcher: $Launcher"
     }
     Initialize-Conda
+    Ensure-CondaNonInteractiveEnv
     & $script:CondaExe run --no-capture-output -n $EnvName python $Launcher
     if ($LASTEXITCODE -ne 0) {
         throw "MorphAgent UI exited with code $LASTEXITCODE"

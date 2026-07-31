@@ -26,6 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "conda_windows.ps1")
 $HandoffRoot = Split-Path -Parent $ScriptDir
 $Repository = Join-Path $HandoffRoot "MorphAgent"
 $Requirements = Join-Path $HandoffRoot "dependencies\requirements-demo-ui.txt"
@@ -54,45 +55,37 @@ function Initialize-Utf8Console {
         [Console]::OutputEncoding = $utf8
         $global:OutputEncoding = $utf8
     } catch {}
-    if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
-    if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
-    # Old conda (e.g. 4.14) otherwise prompts y/N after unexpected errors and hangs .bat runs.
-    $env:CONDA_REPORT_ERRORS = "false"
-    # Miniconda 24+ ships conda-anaconda-tos, which prompts interactively and
-    # EOF-crashes non-interactive .bat / piped setup (repo.anaconda.com/pkgs/main).
-    # Official workaround: CONDA_NO_PLUGINS=true (setup uses conda-forge anyway).
-    $env:CONDA_NO_PLUGINS = "true"
+    Ensure-CondaNonInteractiveEnv
 }
 
 function Accept-AnacondaTosBestEffort {
     # Optional: persist ToS acceptance for future interactive conda use.
-    # Setup itself relies on CONDA_NO_PLUGINS=true; failures here are ignored.
+    # Setup itself relies on CONDA_NO_PLUGINS=true; never leave plugins re-enabled.
     if (-not $script:CondaExe) { return }
-    $prev = $env:CONDA_NO_PLUGINS
-    Remove-Item Env:\CONDA_NO_PLUGINS -ErrorAction SilentlyContinue
-    $channels = @(
-        "https://repo.anaconda.com/pkgs/main",
-        "https://repo.anaconda.com/pkgs/r",
-        "https://repo.anaconda.com/pkgs/msys2"
-    )
-    foreach ($ch in $channels) {
-        $prevEap = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        try {
-            & $script:CondaExe tos accept --override-channels --channel $ch 2>$null | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                & $script:CondaExe tos accept -c $ch 2>$null | Out-Null
-            }
-        } catch {
-            # ignore missing tos subcommand / plugin
-        } finally {
-            $ErrorActionPreference = $prevEap
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        # Keep CONDA_NO_PLUGINS unset only for this best-effort accept; restore after.
+        $had = $env:CONDA_NO_PLUGINS
+        Remove-Item Env:\CONDA_NO_PLUGINS -ErrorAction SilentlyContinue
+        foreach ($ch in @(
+            "https://repo.anaconda.com/pkgs/main",
+            "https://repo.anaconda.com/pkgs/r",
+            "https://repo.anaconda.com/pkgs/msys2"
+        )) {
+            try {
+                & $script:CondaExe tos accept --override-channels --channel $ch 2>$null | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    & $script:CondaExe tos accept -c $ch 2>$null | Out-Null
+                }
+            } catch {}
         }
-    }
-    if ($null -ne $prev -and "$prev" -ne "") {
-        $env:CONDA_NO_PLUGINS = $prev
-    } else {
-        $env:CONDA_NO_PLUGINS = "true"
+        if ($null -ne $had -and "$had" -ne "") { $env:CONDA_NO_PLUGINS = $had }
+    } catch {
+        # ignore missing tos subcommand / plugin
+    } finally {
+        $ErrorActionPreference = $prevEap
+        Ensure-CondaNonInteractiveEnv
     }
 }
 
@@ -288,62 +281,8 @@ function Write-FilteredUiRequirements([string]$Src, [string]$Dst) {
     Write-AsciiPipRequirements -Src $Src -Dst $Dst -SkipPyQt5
 }
 
-function Resolve-CondaExeFromRoot([string]$Root) {
-    if (-not $Root) { return $null }
-    foreach ($c in @(
-        (Join-Path $Root "Scripts\conda.exe"),
-        (Join-Path $Root "condabin\conda.exe"),
-        (Join-Path $Root "Library\bin\conda.exe")
-    )) {
-        if (Test-Path $c) { return $c }
-    }
-    return $null
-}
-
-function Use-CondaRoot([string]$Root) {
-    $condaExe = Resolve-CondaExeFromRoot $Root
-    if (-not $condaExe) { return $false }
-    $prepend = @(
-        (Join-Path $Root "condabin"),
-        (Join-Path $Root "Scripts"),
-        (Join-Path $Root "Library\bin"),
-        $Root
-    ) -join ";"
-    $env:Path = "$prepend;$env:Path"
-    $env:CONDA_ROOT = $Root
-    $script:CondaExe = $condaExe
-    Write-Host "[OK] conda.exe: $($script:CondaExe)"
-    return $true
-}
-
-function Get-CondaSearchRoots {
-    return @(
-        $env:CONDA_ROOT,
-        $env:CONDA_PREFIX,
-        (Join-Path $env:USERPROFILE "miniconda3"),
-        (Join-Path $env:USERPROFILE "Miniconda3"),
-        (Join-Path $env:USERPROFILE "anaconda3"),
-        (Join-Path $env:USERPROFILE "Anaconda3"),
-        (Join-Path $env:USERPROFILE "miniforge3"),
-        (Join-Path $env:USERPROFILE "Miniforge3"),
-        (Join-Path $env:USERPROFILE "mambaforge"),
-        (Join-Path $env:USERPROFILE "Mambaforge"),
-        (Join-Path $env:LOCALAPPDATA "miniconda3"),
-        (Join-Path $env:LOCALAPPDATA "Miniconda3"),
-        (Join-Path $env:LOCALAPPDATA "anaconda3"),
-        (Join-Path $env:LOCALAPPDATA "Miniforge3"),
-        (Join-Path $env:ProgramData "miniconda3"),
-        (Join-Path $env:ProgramData "anaconda3"),
-        (Join-Path $env:ProgramData "Miniforge3"),
-        "C:\ProgramData\miniconda3",
-        "C:\ProgramData\anaconda3",
-        "C:\tools\miniconda3",
-        "D:\Anaconda3",
-        "D:\Miniconda3"
-    ) | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -Unique
-}
-
 function Install-MinicondaSilent {
+    Ensure-CondaNonInteractiveEnv
     # One-time silent Miniconda when the machine has no conda at all.
     # Set MORPHAGENT_SKIP_MINICONDA_INSTALL=1 to disable auto-install.
     if ($env:MORPHAGENT_SKIP_MINICONDA_INSTALL -eq "1") {
@@ -418,6 +357,7 @@ then double-click scripts\setup_windows.bat again.
 
 function Initialize-Conda {
     # Prefer conda.exe everywhere. conda.bat + specs with "<" break under cmd redirection.
+    Ensure-CondaNonInteractiveEnv
     $cmd = Get-Command conda -ErrorAction SilentlyContinue
     if ($cmd) {
         $src = $cmd.Source
@@ -432,6 +372,7 @@ function Initialize-Conda {
             }
         }
         if ($script:CondaExe) {
+            Ensure-CondaNonInteractiveEnv
             Write-Host "[OK] conda.exe: $($script:CondaExe)"
             return
         }
@@ -439,22 +380,10 @@ function Initialize-Conda {
         throw "Could not resolve conda.exe next to $src. Reinstall Miniconda or add Scripts\conda.exe to PATH."
     }
 
-    foreach ($root in (Get-CondaSearchRoots)) {
-        $condaExe = Resolve-CondaExeFromRoot $root
-        $condaBat = Join-Path $root "condabin\conda.bat"
-        if (-not $condaExe -and -not (Test-Path $condaBat)) {
-            $parentRoot = Split-Path (Split-Path $root -Parent) -Parent
-            if ($parentRoot) {
-                $condaExe = Resolve-CondaExeFromRoot $parentRoot
-                $condaBat = Join-Path $parentRoot "condabin\conda.bat"
-                $root = $parentRoot
-            }
-        }
-        if (-not $condaExe -and -not (Test-Path $condaBat)) { continue }
-        if (Use-CondaRoot $root) {
-            Write-Host "[OK] Found conda under $root"
-            return
-        }
+    $foundRoot = Find-CondaRootOnDisk
+    if ($foundRoot -and (Use-CondaRoot $foundRoot)) {
+        Write-Host "[OK] Found conda under $foundRoot"
+        return
     }
 
     # No existing install: download + silent Miniconda into %USERPROFILE%\miniconda3
@@ -506,7 +435,7 @@ function Remove-CondaEnvCompat([string]$Name) {
 }
 
 function New-CondaEnvFromYamlCompat([string]$Name, [string]$Yml) {
-    $env:CONDA_NO_PLUGINS = "true"
+    Ensure-CondaNonInteractiveEnv
     # Older conda (e.g. 23.1): `conda env create -y` -> unrecognized arguments: -y
     $attempts = @(
         @{ Label = "env create -y -n -f"; Script = { & $script:CondaExe env create -y -n $Name -f $Yml } },
@@ -540,8 +469,7 @@ function New-CondaEnvFromYamlCompat([string]$Name, [string]$Yml) {
 }
 
 function New-CondaEnvPythonCompat([string]$Name) {
-    # Force plugin skip even if the parent shell cleared CONDA_NO_PLUGINS.
-    $env:CONDA_NO_PLUGINS = "true"
+    Ensure-CondaNonInteractiveEnv
     $attempts = @(
         { & $script:CondaExe create -y -n $Name -c conda-forge --override-channels "python=3.10" "pip" },
         { & $script:CondaExe create -y -n $Name -c conda-forge "python=3.10" "pip" },
@@ -565,7 +493,7 @@ function New-CondaEnvPythonCompat([string]$Name) {
 
 function Install-CoreCondaPackages([string]$Name) {
     Write-Host "Installing core conda packages into $Name (PyQt5 / numpy / scipy / ...)..."
-    $env:CONDA_NO_PLUGINS = "true"
+    Ensure-CondaNonInteractiveEnv
     # Specs keep "<"/">="; calling conda.exe (not .bat) so cmd does not treat "<" as redirect.
     & $script:CondaExe install -y -n $Name -c conda-forge --override-channels `
         "python=3.10" `
@@ -597,7 +525,7 @@ function Install-CoreCondaPackages([string]$Name) {
 
 function Install-SandboxCondaPackages([string]$Name) {
     Write-Host "Installing sandbox conda packages into $Name (numpy / scipy / scikit-image / ..., no Qt)..."
-    $env:CONDA_NO_PLUGINS = "true"
+    Ensure-CondaNonInteractiveEnv
     & $script:CondaExe install -y -n $Name -c conda-forge --override-channels `
         "python=3.10" `
         "pip>=24" `
@@ -624,6 +552,7 @@ function Install-SandboxCondaPackages([string]$Name) {
 }
 
 function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
+    Ensure-CondaNonInteractiveEnv
     & $script:CondaExe run --no-capture-output -n $Name @PythonArgs
     if ($LASTEXITCODE -ne 0) {
         throw "conda run -n $Name failed (exit $LASTEXITCODE): $($PythonArgs -join ' ')"
@@ -632,6 +561,7 @@ function Invoke-CondaRun([string]$Name, [string[]]$PythonArgs) {
 
 function Repair-Pip([string]$Name) {
     Write-Host "Repairing pip in $Name via conda (no pip self-upgrade)..."
+    Ensure-CondaNonInteractiveEnv
     $spOut = & $script:CondaExe run -n $Name python -c "import site; print(site.getsitepackages()[0])"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($spOut | Out-String))) {
         throw "Could not resolve site-packages for '$Name'"
@@ -648,7 +578,8 @@ function Repair-Pip([string]$Name) {
     Get-ChildItem -Path $sp -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like 'pip-*.dist-info' -or $_.Name -like 'pip-*.egg-info' } |
         ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
-    & $script:CondaExe install -y -n $Name -c conda-forge --force-reinstall "pip>=24" "setuptools" "wheel"
+    Ensure-CondaNonInteractiveEnv
+    & $script:CondaExe install -y -n $Name -c conda-forge --override-channels --force-reinstall "pip>=24" "setuptools" "wheel"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to repair pip in '$Name'"
     }
@@ -697,7 +628,8 @@ function Install-PipRequirementsWithoutPyQt([string]$Name, [string]$ReqFile) {
 
 function Ensure-SingleQtStack([string]$Name) {
     Write-Host "Reaffirming single conda Qt stack in $Name..."
-    & $script:CondaExe install -y -n $Name -c conda-forge --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
+    Ensure-CondaNonInteractiveEnv
+    & $script:CondaExe install -y -n $Name -c conda-forge --override-channels --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to reinstall conda pyqt for '$Name'"
     }
@@ -720,9 +652,14 @@ try {
     Set-Location $HandoffRoot
     Write-Host "MorphAgent handoff root: $HandoffRoot"
     Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) (avoids Anaconda ToS interactive prompt)"
+    try {
+        $driveLetters = (Get-ReadyDriveLetters) -join ","
+        Write-Host "[OK] Ready drives for conda search: $driveLetters"
+    } catch {}
 
     Initialize-Conda
     Accept-AnacondaTosBestEffort
+    Ensure-CondaNonInteractiveEnv
 
     if (-not (Test-Path $Requirements)) {
         throw "Missing requirements file: $Requirements"

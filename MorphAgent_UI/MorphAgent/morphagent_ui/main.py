@@ -4,16 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
+    QAction,
+    QApplication,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QShortcut,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -88,10 +90,26 @@ class MorphAgentWidget(QWidget):
             item.setData(Qt.AccessibleTextRole, f"{title}: {tip}")
             self.navigation.addItem(item)
         side_layout.addWidget(self.navigation, 1)
+
+        zoom_row = QHBoxLayout()
+        zoom_row.setSpacing(6)
+        self.font_smaller_btn = QToolButton()
+        self.font_smaller_btn.setText("A-")
+        self.font_smaller_btn.setToolTip("Smaller text (Ctrl/Cmd -)")
+        self.font_larger_btn = QToolButton()
+        self.font_larger_btn.setText("A+")
+        self.font_larger_btn.setToolTip("Larger text (Ctrl/Cmd + or =)")
+        self.font_scale_label = QLabel("")
+        self.font_scale_label.setProperty("role", "muted")
+        self.font_scale_label.setAlignment(Qt.AlignCenter)
+        self.font_scale_label.setToolTip("Text size. Shortcuts: Ctrl/Cmd + or = enlarge, - shrink, 0 reset. Ctrl/Cmd + mouse wheel also works.")
+        zoom_row.addWidget(self.font_smaller_btn, 1)
+        zoom_row.addWidget(self.font_larger_btn, 1)
+        side_layout.addLayout(zoom_row)
+        side_layout.addWidget(self.font_scale_label)
         version = QLabel("v0.1 · manuscript UI")
         version.setProperty("role", "muted")
         version.setAlignment(Qt.AlignCenter)
-        version.setToolTip("Font size: Ctrl + / Ctrl − / Ctrl 0")
         side_layout.addWidget(version)
         root.addWidget(self.sidebar)
 
@@ -110,11 +128,17 @@ class MorphAgentWidget(QWidget):
         ):
             self.pages.addWidget(page)
         root.addWidget(self.pages, 1)
+        self._font_actions: list[QAction] = []
         self._connect()
         self.navigate(0)
+        self._install_font_controls()
         self._apply_font_scale(persist=False)
-        self._install_font_shortcuts()
         self.setMinimumSize(1050, 700)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().showEvent(event)
+        self._attach_font_actions_to_window()
 
     def _scaled_px(self, base: int) -> int:
         return max(8, int(round(base * self._font_scale)))
@@ -131,6 +155,8 @@ class MorphAgentWidget(QWidget):
             f"border-radius: {self._scaled_px(9)}px; font-size: {self._scaled_px(18)}px; font-weight: 800;"
         )
         self.sidebar.setFixedWidth(self._scaled_px(188))
+        if hasattr(self, "font_scale_label"):
+            self.font_scale_label.setText(f"Text {self._font_scale:.0%}")
         if hasattr(self.configure_page, "demo_guide"):
             self.configure_page.demo_guide.setStyleSheet(
                 f"font-size: {self._scaled_px(22)}px;"
@@ -149,21 +175,140 @@ class MorphAgentWidget(QWidget):
             except Exception:
                 pass
 
-    def _install_font_shortcuts(self) -> None:
-        bindings = (
-            (QKeySequence.ZoomIn, self._zoom_font_in),
-            (QKeySequence("Ctrl+="), self._zoom_font_in),
-            (QKeySequence("Ctrl++"), self._zoom_font_in),
-            (QKeySequence.ZoomOut, self._zoom_font_out),
-            (QKeySequence("Ctrl+-"), self._zoom_font_out),
-            (QKeySequence("Ctrl+0"), self._zoom_font_reset),
+    def _install_font_controls(self) -> None:
+        """Buttons + window actions + key/wheel filter (QShortcut alone is flaky on macOS)."""
+
+        self.font_smaller_btn.clicked.connect(self._zoom_font_out)
+        self.font_larger_btn.clicked.connect(self._zoom_font_in)
+
+        # QAction on the top-level window is more reliable than QShortcut on a child.
+        context = (
+            Qt.ApplicationShortcut if self.viewer is None else Qt.WindowShortcut
         )
-        self._font_shortcuts = []
-        for sequence, slot in bindings:
-            shortcut = QShortcut(sequence, self)
-            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-            shortcut.activated.connect(slot)
-            self._font_shortcuts.append(shortcut)
+        specs = (
+            (
+                "Zoom text in",
+                [
+                    QKeySequence(QKeySequence.ZoomIn),
+                    QKeySequence(Qt.CTRL | Qt.Key_Equal),
+                    QKeySequence(Qt.CTRL | Qt.Key_Plus),
+                    QKeySequence(Qt.META | Qt.Key_Equal),
+                    QKeySequence(Qt.META | Qt.Key_Plus),
+                ],
+                self._zoom_font_in,
+            ),
+            (
+                "Zoom text out",
+                [
+                    QKeySequence(QKeySequence.ZoomOut),
+                    QKeySequence(Qt.CTRL | Qt.Key_Minus),
+                    QKeySequence(Qt.CTRL | Qt.Key_Underscore),
+                    QKeySequence(Qt.META | Qt.Key_Minus),
+                    QKeySequence(Qt.META | Qt.Key_Underscore),
+                ],
+                self._zoom_font_out,
+            ),
+            (
+                "Reset text zoom",
+                [
+                    QKeySequence(Qt.CTRL | Qt.Key_0),
+                    QKeySequence(Qt.META | Qt.Key_0),
+                ],
+                self._zoom_font_reset,
+            ),
+        )
+        self._font_actions = []
+        for name, sequences, slot in specs:
+            action = QAction(name, self)
+            action.setShortcuts([seq for seq in sequences if not seq.isEmpty()])
+            action.setShortcutContext(context)
+            action.triggered.connect(slot)
+            self.addAction(action)
+            self._font_actions.append(action)
+
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+        self._attach_font_actions_to_window()
+
+    def _attach_font_actions_to_window(self) -> None:
+        host = self.window()
+        if host is None or host is self:
+            return
+        for action in self._font_actions:
+            if action not in host.actions():
+                host.addAction(action)
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt API
+        if not self._is_font_zoom_target(obj):
+            return super().eventFilter(obj, event)
+
+        # Let our QActions win over line-edits that would otherwise eat the keys.
+        if event.type() == QEvent.ShortcutOverride and self._is_font_zoom_chord(event):
+            event.accept()
+            return True
+
+        if event.type() == QEvent.KeyPress and self._handle_font_zoom_key(event):
+            return True
+
+        if event.type() == QEvent.Wheel and self._handle_font_zoom_wheel(event):
+            return True
+
+        return super().eventFilter(obj, event)
+
+    def _is_font_zoom_target(self, obj) -> bool:
+        if obj is self:
+            return True
+        try:
+            if isinstance(obj, QWidget) and (obj is self.window() or self.isAncestorOf(obj)):
+                return True
+        except RuntimeError:
+            return False
+        return False
+
+    def _is_font_zoom_chord(self, event) -> bool:
+        modifiers = event.modifiers()
+        if not (modifiers & (Qt.ControlModifier | Qt.MetaModifier)):
+            return False
+        if modifiers & Qt.AltModifier:
+            return False
+        return event.key() in (
+            Qt.Key_Plus,
+            Qt.Key_Equal,
+            Qt.Key_Minus,
+            Qt.Key_Underscore,
+            Qt.Key_0,
+        )
+
+    def _handle_font_zoom_key(self, event) -> bool:
+        if not self._is_font_zoom_chord(event):
+            return False
+        key = event.key()
+        if key in (Qt.Key_Plus, Qt.Key_Equal):
+            self._zoom_font_in()
+            return True
+        if key in (Qt.Key_Minus, Qt.Key_Underscore):
+            self._zoom_font_out()
+            return True
+        if key == Qt.Key_0:
+            self._zoom_font_reset()
+            return True
+        return False
+
+    def _handle_font_zoom_wheel(self, event) -> bool:
+        modifiers = event.modifiers()
+        if not (modifiers & (Qt.ControlModifier | Qt.MetaModifier)):
+            return False
+        delta = event.angleDelta().y()
+        if delta == 0:
+            delta = event.pixelDelta().y()
+        if delta > 0:
+            self._zoom_font_in()
+            return True
+        if delta < 0:
+            self._zoom_font_out()
+            return True
+        return False
 
     def _zoom_font_in(self) -> None:
         self._font_scale = clamp_ui_font_scale(self._font_scale + UI_FONT_SCALE_STEP)

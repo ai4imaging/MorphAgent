@@ -34,8 +34,12 @@ fi
 
 # Miniconda 24+ may prompt for Anaconda ToS via conda-anaconda-tos and hang/EOF
 # in non-interactive setup. Official workaround; we install from conda-forge.
-export CONDA_NO_PLUGINS="${CONDA_NO_PLUGINS:-true}"
-export CONDA_REPORT_ERRORS="${CONDA_REPORT_ERRORS:-false}"
+ensure_conda_noninteractive() {
+  export CONDA_NO_PLUGINS=true
+  export CONDA_REPORT_ERRORS=false
+}
+ensure_conda_noninteractive
+echo "[OK] CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS} (avoids Anaconda ToS interactive prompt)"
 
 if [[ ! -f "${REQ_FILE}" ]]; then
   echo "ERROR: missing requirements file: ${REQ_FILE}" >&2
@@ -142,6 +146,7 @@ conda_env_create_from_yaml() {
 
 ensure_env() {
   local env="$1"
+  ensure_conda_noninteractive
   if [[ "${RECREATE_ENVS}" == "1" ]] && env_exists "${env}"; then
     echo "MORPHAGENT_RECREATE_ENVS=1 → removing conda env ${env}"
     conda_env_remove "${env}"
@@ -186,6 +191,7 @@ ensure_env() {
 #   ImportError: cannot import name 'get_runnable_pip'
 repair_pip() {
   local env="$1"
+  ensure_conda_noninteractive
   echo "Repairing pip in ${env} via conda (no pip self-upgrade)…"
   local sp
   sp="$(conda run -n "${env}" python -c 'import site; print(site.getsitepackages()[0])')"
@@ -194,7 +200,7 @@ repair_pip() {
   # Remove any pip-*.dist-info / egg-info without relying on shell globs.
   find "${sp}" -maxdepth 1 \( -name 'pip-*.dist-info' -o -name 'pip-*.egg-info' \) -print0 \
     | xargs -0 rm -rf 2>/dev/null || true
-  conda install -y -n "${env}" -c conda-forge --force-reinstall "pip>=24" "setuptools" "wheel"
+  conda install -y -n "${env}" -c conda-forge --override-channels --force-reinstall "pip>=24" "setuptools" "wheel"
   conda run -n "${env}" python -m pip --version
 }
 
@@ -228,8 +234,9 @@ PY
 
 install_ui_conda_stack() {
   local env="$1"
+  ensure_conda_noninteractive
   echo "Installing UI conda stack into ${env} (conda pyqt=5 + science libs)…"
-  conda install -y -n "${env}" -c conda-forge \
+  conda install -y -n "${env}" -c conda-forge --override-channels \
     "python=3.10" \
     "pip>=24" \
     "setuptools" \
@@ -256,8 +263,9 @@ install_ui_conda_stack() {
 
 install_sandbox_conda_stack() {
   local env="$1"
+  ensure_conda_noninteractive
   echo "Installing sandbox conda stack into ${env} (science only, no Qt)…"
-  conda install -y -n "${env}" -c conda-forge \
+  conda install -y -n "${env}" -c conda-forge --override-channels \
     "python=3.10" \
     "pip>=24" \
     "setuptools" \
@@ -281,10 +289,11 @@ install_sandbox_conda_stack() {
 
 ensure_single_conda_qt() {
   local env="$1"
+  ensure_conda_noninteractive
   echo "Ensuring single conda Qt stack in ${env}…"
   # Remove only the pip-bundled Qt runtime if someone installed it earlier.
   conda run -n "${env}" python -m pip uninstall -y PyQt5-Qt5 2>/dev/null || true
-  conda install -y -n "${env}" -c conda-forge --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
+  conda install -y -n "${env}" -c conda-forge --override-channels --force-reinstall "pyqt=5" "pyqt5-sip" "qtpy>=2.4"
   conda run -n "${env}" python - <<'PY'
 import PyQt5
 from PyQt5 import QtCore

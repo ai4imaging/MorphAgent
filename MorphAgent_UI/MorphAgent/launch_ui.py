@@ -57,12 +57,15 @@ def create_standalone_window(demo_page: str | None = None):
     window.setCentralWidget(widget)
     window.setMinimumSize(1100, 720)
     window.resize(1320, 860)
+    # Ensure font-zoom actions bind to the top-level window (Ctrl/Cmd +/-).
+    widget._attach_font_actions_to_window()
     return application, window, widget
 
 
 def launch_standalone(demo_page: str | None = None) -> int:
-    application, window, _widget = create_standalone_window(demo_page)
+    application, window, widget = create_standalone_window(demo_page)
     window.showMaximized()
+    widget.setFocus()
     return application.exec_()
 
 
