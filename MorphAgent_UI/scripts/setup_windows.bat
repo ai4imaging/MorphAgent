@@ -79,12 +79,12 @@ echo.
 if not "%EXITCODE%"=="0" (
   echo  Setup FAILED ^(exit %EXITCODE%^).
   echo  Common causes:
-  echo    1^) Miniconda / Miniforge / Anaconda is not installed
-  echo    2^) Network blocked while downloading packages
-  echo    3^) conda not on PATH - this script auto-finds common installs
-  echo    4^) Old scripts / encoding issues - git pull latest and retry
-  echo  Install Miniconda: https://docs.conda.io/en/latest/miniconda.html
-  echo  Or Miniforge:      https://github.com/conda-forge/miniforge
+  echo    1^) Network blocked while downloading Miniconda / conda packages
+  echo    2^) Antivirus blocked the silent Miniconda installer
+  echo    3^) Old scripts - git pull latest and retry
+  echo  Note: if conda is missing, setup_windows.ps1 auto-installs Miniconda
+  echo        into %%USERPROFILE%%\miniconda3 ^(needs network once^).
+  echo  Manual Miniconda: https://docs.conda.io/en/latest/miniconda.html
   echo  Then double-click this file again.
   echo  Do NOT use Explorer "Run with PowerShell" on the .ps1 - use this .bat.
 ) else (

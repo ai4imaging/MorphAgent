@@ -44,6 +44,77 @@ function Resolve-CondaExeFromRoot([string]$Root) {
     return $null
 }
 
+function Use-CondaRoot([string]$Root) {
+    $condaExe = Resolve-CondaExeFromRoot $Root
+    if (-not $condaExe) { return $false }
+    $prepend = @(
+        (Join-Path $Root "condabin"),
+        (Join-Path $Root "Scripts"),
+        (Join-Path $Root "Library\bin"),
+        $Root
+    ) -join ";"
+    $env:Path = "$prepend;$env:Path"
+    $env:CONDA_ROOT = $Root
+    $script:CondaExe = $condaExe
+    Write-Host "[OK] conda.exe: $($script:CondaExe)"
+    return $true
+}
+
+function Install-MinicondaSilent {
+    if ($env:MORPHAGENT_SKIP_MINICONDA_INSTALL -eq "1") {
+        throw "conda was not found, and MORPHAGENT_SKIP_MINICONDA_INSTALL=1 disables auto-install."
+    }
+
+    $prefix = Join-Path $env:USERPROFILE "miniconda3"
+    if (Use-CondaRoot $prefix) { return }
+
+    Write-Host "[INFO] conda not found. Installing Miniconda silently (one-time)..."
+    Write-Host "       prefix: $prefix"
+    Write-Host "       Prefer running scripts\setup_windows.bat first for a full install."
+
+    $isArm = ($env:PROCESSOR_ARCHITECTURE -match 'ARM64') -or ("$env:PROCESSOR_IDENTIFIER" -match 'ARM')
+    $urls = New-Object System.Collections.Generic.List[string]
+    if ($isArm) {
+        [void]$urls.Add("https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-arm64.exe")
+    }
+    [void]$urls.Add("https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe")
+
+    $installer = Join-Path $env:TEMP "MorphAgent-Miniconda3-latest-Windows.exe"
+    $downloaded = $false
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    } catch {}
+
+    foreach ($url in $urls) {
+        try {
+            Write-Host "  downloading: $url"
+            if (Test-Path -LiteralPath $installer) {
+                Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
+            }
+            Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+            if ((Test-Path -LiteralPath $installer) -and ((Get-Item -LiteralPath $installer).Length -gt 1MB)) {
+                $downloaded = $true
+                break
+            }
+        } catch {
+            Write-Host "  [WARN] download failed: $($_.Exception.Message)"
+        }
+    }
+    if (-not $downloaded) {
+        throw "Failed to download Miniconda. Run scripts\setup_windows.bat after installing Miniconda manually."
+    }
+
+    Write-Host "  running silent installer..."
+    $argList = "/S /InstallationType=JustMe /AddToPath=0 /RegisterPython=0 /D=$prefix"
+    $proc = Start-Process -FilePath $installer -ArgumentList $argList -Wait -PassThru
+    if (-not (Use-CondaRoot $prefix)) {
+        $code = if ($null -ne $proc) { [int]$proc.ExitCode } else { -1 }
+        throw "Miniconda install finished but conda.exe missing under $prefix (exit $code). Run setup_windows.bat after a manual Miniconda install."
+    }
+    Write-Host "[OK] Miniconda installed at $prefix"
+    try { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } catch {}
+}
+
 function Initialize-Conda {
     # Prefer conda.exe (not conda.bat) so args with < > = are not eaten by cmd.
     $cmd = Get-Command conda -ErrorAction SilentlyContinue
@@ -103,30 +174,13 @@ function Initialize-Conda {
             }
         }
         if (-not $condaExe -and -not (Test-Path $condaBat)) { continue }
-
-        $prepend = @(
-            (Join-Path $root "condabin"),
-            (Join-Path $root "Scripts"),
-            (Join-Path $root "Library\bin"),
-            $root
-        ) -join ";"
-        $env:Path = "$prepend;$env:Path"
-
-        if (-not $condaExe) { $condaExe = Resolve-CondaExeFromRoot $root }
-        if ($condaExe) {
-            $script:CondaExe = $condaExe
-            Write-Host "[OK] Found conda.exe under $root"
-            Write-Host "     $($script:CondaExe)"
+        if (Use-CondaRoot $root) {
+            Write-Host "[OK] Found conda under $root"
             return
         }
     }
 
-    throw @"
-conda was not found.
-
-Please install Miniconda/Miniforge/Anaconda, then double-click scripts\setup_windows.bat first.
-Do not use Explorer 'Run with PowerShell' on this .ps1 - use start_ui_windows.bat.
-"@
+    Install-MinicondaSilent
 }
 
 $scriptExit = 0
