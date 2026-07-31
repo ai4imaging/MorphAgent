@@ -64,7 +64,11 @@ def create_standalone_window(demo_page: str | None = None):
 
 def launch_standalone(demo_page: str | None = None) -> int:
     application, window, widget = create_standalone_window(demo_page)
-    window.showMaximized()
+    # Docker/noVNC: fill the virtual desktop (avoid a floating window on empty X).
+    if os.environ.get("MORPHAGENT_DOCKER", "").strip() in {"1", "true", "yes"}:
+        window.showFullScreen()
+    else:
+        window.showMaximized()
     widget.setFocus()
     return application.exec_()
 

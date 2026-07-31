@@ -4,35 +4,27 @@ This directory is a reviewable handoff package for the MorphAgent graphical inte
 
 ## 0. Docker one-click (recommended)
 
-No conda install needed. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). Double-click the starter; the MorphAgent Qt UI opens in the browser via noVNC.
+One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC).
 
-| Platform | Download |
-|----------|----------|
-| macOS | [MorphAgent-UI-Docker-macOS.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-macOS.zip) |
-| Windows | [MorphAgent-UI-Docker-Windows.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-Windows.zip) |
-| Linux | [MorphAgent-UI-Docker-Linux.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker-Linux.zip) |
+**Download:** [MorphAgent-UI-Docker.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker.zip)
 
-After download: unzip → double-click `MorphAgent-UI.command` (Mac) / `MorphAgent-UI.bat` (Windows) / run `MorphAgent-UI.sh` (Linux) → browser opens at `http://localhost:6080/vnc.html?autoconnect=true&resize=remote`.
+**Use:**
 
-First launch builds the image (several minutes). Later starts are fast. For a quick review without an API key: **Home → Load a previous run →** `completed_demo_run`.
+1. Install and start Docker.
+2. Unzip → run `start.command` (macOS) / `start.bat` (Windows) / `bash start.sh` (Linux).
+3. Browser opens [http://localhost:6080/morphagent.html](http://localhost:6080/morphagent.html).
+
+First launch builds the image (several minutes). Later starts are fast. Quick review without an API key: **Home → Load a previous run →** `completed_demo_run`. Stop with `docker compose down`.
 
 From this repo (developers):
 
 ```bash
-# macOS
-open docker/mac/MorphAgent-UI.command
-# Linux
-bash docker/linux/MorphAgent-UI.sh
-# Windows
-docker\win\MorphAgent-UI.bat
-
-# Rebuild the three downloadable zip packages locally (does not push):
+bash docker/start.sh
+# Rebuild the downloadable zip locally (does not push / does not commit docker/):
 bash scripts/build_docker_packages.sh
-# Optional: embed a pre-built image tarball into each zip (much larger):
-bash scripts/build_docker_packages.sh --with-image
 ```
 
-Packages are written to `docker/dist/` for manual upload to the GitHub Release above.
+The zip is written to `docker/dist/` for manual upload to the GitHub Release above (`docker/` stays gitignored).
 
 ## 1. Package Contents
 

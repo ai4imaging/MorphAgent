@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Build three platform “click-to-run” Docker zip packages (local only; does not push).
+# Build one MorphAgent UI Docker zip package (local only; does not push).
 #
 # Output:
-#   docker/dist/MorphAgent-UI-Docker-macOS.zip
-#   docker/dist/MorphAgent-UI-Docker-Windows.zip
-#   docker/dist/MorphAgent-UI-Docker-Linux.zip
+#   docker/dist/MorphAgent-UI-Docker.zip
 #
 # Optional:
-#   --with-image   also docker-build + docker-save into each zip (much larger)
+#   --with-image   also docker-build + docker-save into the zip (much larger)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +16,7 @@ STAGE_ROOT="${DIST_DIR}/_stage"
 WITH_IMAGE=0
 IMAGE_NAME="${MORPHAGENT_DOCKER_IMAGE:-morphagent-ui:latest}"
 TAG_DATE="$(date +%Y%m%d)"
+PKG_NAME="MorphAgent-UI-Docker"
 
 for arg in "$@"; do
   case "${arg}" in
@@ -48,20 +47,19 @@ mkdir -p "${DIST_DIR}" "${STAGE_ROOT}"
 
 write_package_dockerfile() {
   local dest="$1"
+  # Keep in sync with docker/Dockerfile, but COPY paths are package-root relative.
   cat > "${dest}" <<'EOF'
-# MorphAgent UI — browser-accessible desktop (noVNC)
-# Build from this package root:
-#   docker compose up -d --build
 FROM continuumio/miniconda3:24.9.2-0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
     QT_X11_NO_MITSHM=1 \
     LIBGL_ALWAYS_SOFTWARE=1 \
-    QT_QPA_PLATFORM=xcb \
+    CONDA_SOLVER=libmamba \
     MORPHAGENT_INSTALL_ALLEN=0 \
     MORPHAGENT_ENV_NAME=morphagent \
     MORPHAGENT_SANDBOX_ENV_NAME=morphagent_sandbox \
+    MORPHAGENT_DOCKER=1 \
     NO_VNC_PORT=6080 \
     VNC_PORT=5900 \
     RESOLUTION=1920x1080x24
@@ -95,8 +93,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core \
         ca-certificates \
         curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    conda install -y -n base -c conda-forge --override-channels conda-libmamba-solver; \
+    conda config --set solver libmamba; \
+    conda config --remove channels defaults 2>/dev/null || true; \
+    conda config --add channels conda-forge; \
+    conda config --set channel_priority strict
 
 WORKDIR /opt/MorphAgent_UI
 
@@ -104,161 +108,97 @@ COPY MorphAgent /opt/MorphAgent_UI/MorphAgent
 COPY dependencies /opt/MorphAgent_UI/dependencies
 COPY scripts /opt/MorphAgent_UI/scripts
 
-RUN bash scripts/setup.sh \
-    && conda clean -afy \
-    && find /opt/conda -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+RUN set -eux; \
+    QT_QPA_PLATFORM=offscreen bash scripts/setup.sh; \
+    conda clean -afy; \
+    find /opt/conda -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
+COPY novnc /opt/morphagent-novnc
+COPY fluxbox /opt/morphagent-fluxbox
 COPY entrypoint.sh /usr/local/bin/morphagent-entrypoint.sh
-RUN chmod +x /usr/local/bin/morphagent-entrypoint.sh
+RUN set -eux; \
+    chmod +x /usr/local/bin/morphagent-entrypoint.sh; \
+    cp /opt/morphagent-novnc/morphagent.html /usr/share/novnc/morphagent.html; \
+    ln -sfn /usr/share/novnc/morphagent.html /usr/share/novnc/index.html
 
 VOLUME ["/data"]
 EXPOSE 6080 5900
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
-    CMD curl -fsS "http://127.0.0.1:${NO_VNC_PORT}/" >/dev/null || exit 1
+    CMD curl -fsS "http://127.0.0.1:${NO_VNC_PORT}/morphagent.html" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/morphagent-entrypoint.sh"]
 EOF
 }
 
-write_readme() {
-  local dest="$1"
-  local platform="$2"
-  local starter="$3"
-  cat > "${dest}" <<EOF
-MorphAgent UI — Docker one-click package (${platform})
-=====================================================
+STAGE="${STAGE_ROOT}/${PKG_NAME}"
+echo "Packaging ${PKG_NAME}…"
+rm -rf "${STAGE}"
+mkdir -p "${STAGE}"
 
-Requirements
-------------
-- Docker Desktop (macOS / Windows) or Docker Engine (Linux)
-- ~8 GB RAM, ~10 GB free disk for the first image build
+write_package_dockerfile "${STAGE}/Dockerfile"
+cp "${DOCKER_DIR}/entrypoint.sh" "${STAGE}/entrypoint.sh"
+cp "${DOCKER_DIR}/docker-compose.package.yml" "${STAGE}/docker-compose.yml"
+cp "${DOCKER_DIR}/start.sh" "${STAGE}/start.sh"
+cp "${DOCKER_DIR}/start.command" "${STAGE}/start.command"
+cp "${DOCKER_DIR}/start.bat" "${STAGE}/start.bat"
+cp "${DOCKER_DIR}/README.txt" "${STAGE}/README.txt"
+chmod +x "${STAGE}/entrypoint.sh" "${STAGE}/start.sh" "${STAGE}/start.command"
 
-How to start
-------------
-1. Install and start Docker.
-2. Double-click / run: ${starter}
-3. Wait for the first build (several minutes), then your browser opens to:
-   http://localhost:6080/vnc.html?autoconnect=true&resize=remote
+rsync -a --delete \
+  --exclude '__pycache__' --exclude '*.pyc' --exclude '.DS_Store' --exclude '.env' --exclude 'logs/' \
+  "${HANDOFF_ROOT}/MorphAgent/" "${STAGE}/MorphAgent/"
 
-Quick review without an API key
--------------------------------
-In the UI: Home → Load a previous run →
-  MorphAgent/demo/data/results/completed_demo_run
+rsync -a --delete --exclude '.DS_Store' \
+  "${HANDOFF_ROOT}/dependencies/" "${STAGE}/dependencies/"
 
-Stop
-----
-  docker compose down
+rsync -a --delete --exclude '.DS_Store' \
+  "${DOCKER_DIR}/novnc/" "${STAGE}/novnc/"
+rsync -a --delete --exclude '.DS_Store' \
+  "${DOCKER_DIR}/fluxbox/" "${STAGE}/fluxbox/"
 
-Persist API keys
-----------------
-Place a .env file into the named Docker volume mount path /data/.env
-(or configure credentials in the UI Configure page).
+mkdir -p "${STAGE}/scripts"
+cp "${HANDOFF_ROOT}/scripts/setup.sh" "${STAGE}/scripts/setup.sh"
+cp "${HANDOFF_ROOT}/scripts/verify_install.py" "${STAGE}/scripts/verify_install.py"
+chmod +x "${STAGE}/scripts/setup.sh"
 
-Built: ${TAG_DATE}
-EOF
-}
+# Stamp build date into README
+printf '\nBuilt: %s\n' "${TAG_DATE}" >> "${STAGE}/README.txt"
 
-stage_common() {
-  local stage="$1"
-  mkdir -p "${stage}"
-  write_package_dockerfile "${stage}/Dockerfile"
-  cp "${DOCKER_DIR}/entrypoint.sh" "${stage}/entrypoint.sh"
-  cp "${DOCKER_DIR}/docker-compose.package.yml" "${stage}/docker-compose.yml"
-  chmod +x "${stage}/entrypoint.sh"
-
-  rsync -a --delete \
-    --exclude '__pycache__' \
-    --exclude '*.pyc' \
-    --exclude '.DS_Store' \
-    --exclude '.env' \
-    --exclude 'logs/' \
-    "${HANDOFF_ROOT}/MorphAgent/" "${stage}/MorphAgent/"
-
-  rsync -a --delete \
-    --exclude '.DS_Store' \
-    "${HANDOFF_ROOT}/dependencies/" "${stage}/dependencies/"
-
-  mkdir -p "${stage}/scripts"
-  cp "${HANDOFF_ROOT}/scripts/setup.sh" "${stage}/scripts/setup.sh"
-  cp "${HANDOFF_ROOT}/scripts/verify_install.py" "${stage}/scripts/verify_install.py"
-  chmod +x "${stage}/scripts/setup.sh"
-}
-
-IMAGE_TAR=""
 if [[ "${WITH_IMAGE}" -eq 1 ]]; then
   need docker
-  echo "Building Docker image ${IMAGE_NAME} (this can take a long time)…"
+  echo "Building Docker image ${IMAGE_NAME}…"
   docker build -f "${DOCKER_DIR}/Dockerfile" -t "${IMAGE_NAME}" "${HANDOFF_ROOT}"
-  IMAGE_TAR="${DIST_DIR}/morphagent-ui-image.tar"
-  echo "Saving image to ${IMAGE_TAR}…"
-  docker save -o "${IMAGE_TAR}" "${IMAGE_NAME}"
-fi
-
-maybe_copy_image() {
-  local stage="$1"
-  if [[ -n "${IMAGE_TAR}" && -f "${IMAGE_TAR}" ]]; then
-    cp "${IMAGE_TAR}" "${stage}/morphagent-ui-image.tar"
-    cat > "${stage}/load-image.sh" <<'EOF'
+  docker save -o "${STAGE}/morphagent-ui-image.tar" "${IMAGE_NAME}"
+  cat > "${STAGE}/load-image.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd)"
 docker load -i morphagent-ui-image.tar
-echo "Loaded morphagent-ui image. You can now run the platform starter."
+echo "Loaded. Run start.sh / start.command / start.bat"
 EOF
-    cat > "${stage}/load-image.bat" <<'EOF'
+  cat > "${STAGE}/load-image.bat" <<'EOF'
 @echo off
 cd /d "%~dp0"
 docker load -i morphagent-ui-image.tar
-echo Loaded morphagent-ui image. You can now run MorphAgent-UI.bat
+echo Loaded. Run start.bat
 pause
 EOF
-    chmod +x "${stage}/load-image.sh"
-  fi
-}
-
-pack_one() {
-  local name="$1"
-  local starter_src="$2"
-  local starter_name="$3"
-  local platform_label="$4"
-  local stage="${STAGE_ROOT}/${name}"
-
-  echo "Packaging ${name}…"
-  rm -rf "${stage}"
-  stage_common "${stage}"
-  cp "${starter_src}" "${stage}/${starter_name}"
-  chmod +x "${stage}/${starter_name}" 2>/dev/null || true
-  write_readme "${stage}/README.txt" "${platform_label}" "${starter_name}"
-  maybe_copy_image "${stage}"
-
-  local zip_path="${DIST_DIR}/${name}.zip"
-  rm -f "${zip_path}"
-  (
-    cd "${STAGE_ROOT}"
-    zip -r -q "${zip_path}" "${name}"
-  )
-  echo "  → ${zip_path}"
-}
-
-pack_one "MorphAgent-UI-Docker-macOS" \
-  "${DOCKER_DIR}/mac/MorphAgent-UI.command" "MorphAgent-UI.command" "macOS"
-
-pack_one "MorphAgent-UI-Docker-Windows" \
-  "${DOCKER_DIR}/win/MorphAgent-UI.bat" "MorphAgent-UI.bat" "Windows"
-
-pack_one "MorphAgent-UI-Docker-Linux" \
-  "${DOCKER_DIR}/linux/MorphAgent-UI.sh" "MorphAgent-UI.sh" "Linux"
-
-# Keep staging for inspection; comment out to save disk:
-rm -rf "${STAGE_ROOT}"
-if [[ -n "${IMAGE_TAR}" && -f "${IMAGE_TAR}" ]]; then
-  rm -f "${IMAGE_TAR}"
+  chmod +x "${STAGE}/load-image.sh"
 fi
 
+ZIP_PATH="${DIST_DIR}/${PKG_NAME}.zip"
+rm -f "${ZIP_PATH}"
+(
+  cd "${STAGE_ROOT}"
+  zip -r -q "${ZIP_PATH}" "${PKG_NAME}"
+)
+rm -rf "${STAGE_ROOT}"
+
 echo
-echo "Done. Packages written to: ${DIST_DIR}"
-ls -lh "${DIST_DIR}"/*.zip
+echo "Done: ${ZIP_PATH}"
+ls -lh "${ZIP_PATH}"
 echo
-echo "Upload these three zip files to a GitHub Release (do not git-push the zips),"
-echo "then keep the download links in README_UI.md."
+echo "Upload this zip to a GitHub Release (do not git-push the zip)."
+echo "Suggested asset name: MorphAgent-UI-Docker.zip"
+echo "Suggested tag:        ui-docker-${TAG_DATE}"
