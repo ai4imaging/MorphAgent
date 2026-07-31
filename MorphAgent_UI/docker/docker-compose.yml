@@ -25,7 +25,6 @@ services:
       # Select /workspace in the UI to use host datasets and persist new runs.
       - "${MORPHAGENT_WORKSPACE:-../workspace}:/workspace"
     shm_size: "1gb"
-    init: true
     restart: unless-stopped
     stop_grace_period: 20s
     security_opt:

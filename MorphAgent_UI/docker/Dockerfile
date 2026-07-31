@@ -1,10 +1,11 @@
-# syntax=docker/dockerfile:1.7
 # MorphAgent UI: reproducible Linux desktop exposed only through local noVNC.
 # Build context must be MorphAgent_UI/:
 #   docker build --platform linux/amd64 -f docker/Dockerfile .
-FROM --platform=linux/amd64 continuumio/miniconda3:24.9.2-0
+FROM continuumio/miniconda3:24.9.2-0
 
 ARG INSTALL_ALLEN=1
+ARG NOVNC_VERSION=1.5.0
+ARG WEBSOCKIFY_VERSION=0.12.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
@@ -57,15 +58,18 @@ RUN apt-get update \
         libxi6 \
         libxkbcommon-x11-0 \
         libxrender1 \
-        novnc \
         procps \
         tini \
-        websockify \
         x11vnc \
         xauth \
         xvfb \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/share/novnc \
+    && curl --fail --location --retry 5 --retry-all-errors \
+        "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+        | tar -xz --strip-components=1 -C /usr/share/novnc \
+    && python -m pip install --no-cache-dir "websockify==${WEBSOCKIFY_VERSION}" \
     && ln -sfn /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
 WORKDIR /opt/MorphAgent_UI
@@ -77,8 +81,16 @@ COPY MorphAgent/envs/ /opt/MorphAgent_UI/MorphAgent/envs/
 COPY MorphAgent/segmentation_allen/ /opt/MorphAgent_UI/MorphAgent/segmentation_allen/
 COPY docker/install-environments.sh /usr/local/bin/install-morphagent-environments
 
-RUN chmod 0755 /usr/local/bin/install-morphagent-environments \
-    && INSTALL_ALLEN="${INSTALL_ALLEN}" /usr/local/bin/install-morphagent-environments
+RUN chmod 0755 /usr/local/bin/install-morphagent-environments
+
+# Keep each environment in a separate cacheable layer. If an optional backend
+# fails, Docker can reuse the already completed UI and sandbox environments.
+RUN INSTALL_COMPONENT="ui" \
+    /usr/local/bin/install-morphagent-environments
+RUN INSTALL_COMPONENT="sandbox" \
+    /usr/local/bin/install-morphagent-environments
+RUN INSTALL_COMPONENT="allen" INSTALL_ALLEN="${INSTALL_ALLEN}" \
+    /usr/local/bin/install-morphagent-environments
 
 # Copy the complete application only after the reusable dependency layer.
 COPY MorphAgent/ /opt/MorphAgent_UI/MorphAgent/
