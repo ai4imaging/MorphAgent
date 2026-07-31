@@ -138,13 +138,13 @@ class RunConfig:
     features_per_iteration: int = field(default_factory=lambda: _environment_int("FEATURES_PER_ITERATION", 5))
     target_feature_count: int = field(default_factory=lambda: _environment_int("TARGET_FEATURE_COUNT", 5))
     num_rounds: int = field(default_factory=lambda: _environment_int("NUM_ROUNDS", 1))
-    enable_expert_knowledge: bool = True
-    enable_deep_research: bool = True
-    enable_rag: bool = True
+    enable_expert_knowledge: bool = False
+    enable_deep_research: bool = False
+    enable_rag: bool = False
     enable_background_knowledge_in_planning: bool = True
     enable_segmentation: bool = True
     segmentation_skip_if_present: bool = True
-    enable_feature_analysis: bool = True
+    enable_feature_analysis: bool = False
     reproduce: bool = True
     reproduce_seed: int = 42
     resume: bool = False
@@ -238,13 +238,10 @@ class RunConfig:
         # only the free restricted API lock in Configure does that.
         self.method = "both"
         self.dataset_source = "demo"
-        self.enable_expert_knowledge = True
-        self.enable_deep_research = True
-        self.enable_rag = True
+        # Knowledge / validation stay off by default; user can opt in on Configure.
         self.enable_background_knowledge_in_planning = True
         self.enable_segmentation = True
         self.segmentation_skip_if_present = True
-        self.enable_feature_analysis = True
         self.resume = False
         return cache_path
 

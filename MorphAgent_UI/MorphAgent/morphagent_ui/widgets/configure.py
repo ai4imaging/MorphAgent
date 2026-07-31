@@ -252,7 +252,7 @@ class ConfigurePage(QWidget):
         self.deep_check = QCheckBox("Deep research")
         self.rag_check = QCheckBox("Literature / RAG")
         for checkbox in (self.expert_check, self.deep_check, self.rag_check):
-            checkbox.setChecked(True)
+            checkbox.setChecked(False)
             checkbox.setProperty("choiceTile", True)
             checkbox.setMinimumHeight(46)
             knowledge.addWidget(checkbox, 1)
@@ -273,7 +273,7 @@ class ConfigurePage(QWidget):
         validation_row = QHBoxLayout()
         validation_row.setSpacing(14)
         self.validation_check = QCheckBox("Enable feature validation")
-        self.validation_check.setChecked(True)
+        self.validation_check.setChecked(False)
         self.validation_check.setProperty("choiceTile", True)
         self.validation_check.setMinimumHeight(46)
         validation_row.addWidget(self.validation_check, 1)
@@ -563,9 +563,17 @@ class ConfigurePage(QWidget):
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
 
+    def _form_is_free_demo_api(self) -> bool:
+        """Free-demo UI lock from the visible form only (not a blank form + .env)."""
+
+        return is_free_demo_connection(
+            self.llm_base_url_edit.text().strip(),
+            self.llm_api_key_edit.text().strip(),
+        )
+
     def _using_free_demo_api(self) -> bool:
-        # Resolve blank fields from .env so "leave key blank to keep it" still
-        # unlocks when the saved key is the user's own key on the free host.
+        # Resolve blank fields from .env so Run still applies free-demo scale lock
+        # when the user leaves the key blank to reuse a saved free-demo key.
         current = read_model_environment(self.config.repository_root)
         url = self.llm_base_url_edit.text().strip() or current.get("LLM_BASE_URL", "").strip()
         key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
@@ -574,7 +582,7 @@ class ConfigurePage(QWidget):
     def _refresh_config_visibility(self, *, ensure_open: bool = False) -> None:
         """Show run-config UI only when the form is not using the free demo API."""
 
-        using_free = self._using_free_demo_api()
+        using_free = self._form_is_free_demo_api()
         self.config_section.setVisible(not using_free)
         if using_free:
             self.advanced_panel.hide()
@@ -621,7 +629,7 @@ class ConfigurePage(QWidget):
     def _api_fields_changed(self) -> None:
         if self._loading:
             return
-        using_free = self._using_free_demo_api()
+        using_free = self._form_is_free_demo_api()
         self._set_free_demo_scale_locked(using_free)
         self._fields_changed()
 
