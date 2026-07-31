@@ -2,5 +2,6 @@
 logs/
 *.log
 
-# Local Docker package build output (upload to Releases manually; do not commit)
-docker/dist/
+# Docker one-click packages stay local only (do not commit / push).
+# Upload zip artifacts from docker/dist/ to GitHub Releases manually.
+docker/
