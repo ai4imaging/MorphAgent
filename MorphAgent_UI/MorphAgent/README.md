@@ -273,7 +273,7 @@ avoids reparsing the bundled PDFs. The shortest verified path is:
 
 1. Open **Configure** and select **Load demo dataset**.
 2. Confirm the Tau aggregation question, then complete **Model API**. Leave **Use the same connection for image scoring** unchecked unless LLM and VLM share one endpoint.
-3. Select the analysis route and knowledge sources, then press **Run MorphAgent**. Demo scale is **1 round × 5 candidates · target 5** (open **Config** for advanced knobs). Masks are reused when present; missing masks use Allen when available.
+3. Select the analysis route and knowledge sources, then press **Run MorphAgent**. Demo scale is **1 round × 5 candidates · target 5** (open **Config** for advanced knobs). Masks are reused when present; missing masks use Allen when available. A 1-round demo run typically takes about **5–30 minutes**, depending on model response speed.
 4. Follow **Live run**: Inspect -> Prepare -> Plan -> Quantify -> Validate -> Export. Completed files remain in the run directory after cancellation or failure.
 5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, and provenance. Shared run-level preview folders are not shown as per-feature images.
 

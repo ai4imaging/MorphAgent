@@ -187,6 +187,7 @@ Recommended settings:
 - Scale: **1 round × 5 candidates · target 5** (advanced **Config** panel for temperature, rounds, workers)
 - Masks: internal reuse when present; Allen only if missing (demo already has masks)
 - Reproducibility: fixed on by the UI
+- Runtime: a **1-round demo run typically takes about 5–30 minutes**, depending on how fast the configured model responds
 
 **Demo vs custom knowledge paths**
 
@@ -202,6 +203,8 @@ After clicking **Run MorphAgent** in the lower right, the Run page shows **Live 
 ```text
 Inspect → Prepare → Plan → Quantify → Validate → Export
 ```
+
+Expect roughly **5–30 minutes** for one demo round; slower APIs or higher concurrency contention sit toward the upper end. For a quick UI review without waiting, load `completed_demo_run` from Home instead.
 
 Logs are continuously written to `ui_console.log` in the current results directory. Default results location:
 
