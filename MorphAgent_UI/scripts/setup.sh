@@ -34,22 +34,15 @@ fi
 
 # Miniconda 24+ may prompt for Anaconda ToS via conda-anaconda-tos and hang/EOF
 # in non-interactive setup. Official workaround; we install from conda-forge.
-# Prefer libmamba when installed (low RAM). Classic + CONDA_NO_PLUGINS otherwise
-# (libmamba is a plugin, so CONDA_NO_PLUGINS must stay off when using it).
+# Always classic solver via process env only (Anaconda/Miniconda). Do not require
+# libmamba, and do not rewrite the user's ~/.condarc.
 ensure_conda_noninteractive() {
+  export CONDA_NO_PLUGINS=true
+  export CONDA_SOLVER=classic
   export CONDA_REPORT_ERRORS=false
-  if python -c "import conda_libmamba_solver" >/dev/null 2>&1; then
-    unset CONDA_NO_PLUGINS || true
-    export CONDA_SOLVER="${CONDA_SOLVER:-libmamba}"
-    conda config --set solver "${CONDA_SOLVER}" >/dev/null 2>&1 || true
-  else
-    export CONDA_NO_PLUGINS=true
-    export CONDA_SOLVER=classic
-    conda config --set solver classic >/dev/null 2>&1 || true
-  fi
 }
 ensure_conda_noninteractive
-echo "[OK] CONDA_SOLVER=${CONDA_SOLVER} CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-0} (non-interactive conda)"
+echo "[OK] CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS} CONDA_SOLVER=${CONDA_SOLVER} (non-interactive; classic solver only)"
 
 if [[ ! -f "${REQ_FILE}" ]]; then
   echo "ERROR: missing requirements file: ${REQ_FILE}" >&2

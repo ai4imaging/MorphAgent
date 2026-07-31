@@ -5,24 +5,13 @@
 function Ensure-CondaNonInteractiveEnv {
     # Miniconda 24+ conda-anaconda-tos prompts interactively and EOF-crashes
     # double-click .bat setup. Official workaround; we use conda-forge anyway.
-    # Force classic solver only (Anaconda/Miniconda). Do not require libmamba;
-    # many installs set solver=libmamba without shipping conda-libmamba-solver.
+    # With plugins disabled, a global libmamba solver config becomes invalid.
+    # Force the built-in classic solver for this process without touching user config.
     $env:CONDA_NO_PLUGINS = "true"
-    $env:CONDA_REPORT_ERRORS = "false"
     $env:CONDA_SOLVER = "classic"
+    $env:CONDA_REPORT_ERRORS = "false"
     if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
     if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
-    if ($script:CondaExe) {
-        $prevEap = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        try {
-            & $script:CondaExe config --set solver classic 2>$null | Out-Null
-        } catch {
-            # ignore: config write may fail on locked/permissioned installs
-        } finally {
-            $ErrorActionPreference = $prevEap
-        }
-    }
 }
 
 function Test-PathSafe {
@@ -98,8 +87,6 @@ function Use-CondaRoot {
     $env:Path = "$prepend;$env:Path"
     $env:CONDA_ROOT = $Root
     $script:CondaExe = $condaExe
-    # Re-run so conda config --set solver classic can use CondaExe.
-    Ensure-CondaNonInteractiveEnv
     Write-Host "[OK] conda.exe: $($script:CondaExe)"
     return $true
 }

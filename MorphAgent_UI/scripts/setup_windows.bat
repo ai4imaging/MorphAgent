@@ -52,7 +52,7 @@ set "PYTHONIOENCODING=utf-8"
 set "CONDA_REPORT_ERRORS=false"
 REM Skip conda-anaconda-tos interactive prompt (EOFError in double-click setup).
 set "CONDA_NO_PLUGINS=true"
-REM Anaconda/Miniconda classic solver only (do not require libmamba).
+REM CONDA_NO_PLUGINS disables libmamba; use classic solver for this process only.
 set "CONDA_SOLVER=classic"
 
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1" %*
