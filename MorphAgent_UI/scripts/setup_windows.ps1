@@ -651,7 +651,7 @@ try {
     Start-SetupTranscript
     Set-Location $HandoffRoot
     Write-Host "MorphAgent handoff root: $HandoffRoot"
-    Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) (avoids Anaconda ToS interactive prompt)"
+    Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) CONDA_SOLVER=$($env:CONDA_SOLVER) (non-interactive; classic solver only)"
     try {
         $driveLetters = (Get-ReadyDriveLetters) -join ","
         Write-Host "[OK] Ready drives for conda search: $driveLetters"
