@@ -107,7 +107,12 @@ class WidgetSmokeTests(unittest.TestCase):
         for section in ("1 · Data", "2 · Biological question", "3 · Model API", "4 · Analysis"):
             self.assertIn(section, labels)
         self.assertNotIn("4 · Ready to run", labels)
-        self.assertIn("Custom scale · 1 round × 5 candidates · target 5", labels)
+        self.assertIn(
+            f"Custom scale · {widget.config.num_rounds} round"
+            f"{'s' if widget.config.num_rounds != 1 else ''} × "
+            f"{widget.config.features_per_iteration} candidates · target {widget.config.target_feature_count}",
+            labels,
+        )
         self.assertIn("Analysis route · choose one", labels)
         self.assertNotIn("Mask preparation · choose one", labels)
         self.assertNotIn("Preparation · multiple choice", labels)
@@ -142,9 +147,14 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertTrue(widget.config.reproduce)
         self.assertFalse(page.reuse_llm_for_vlm.isChecked())
         self.assertTrue(hasattr(page, "advanced_toggle"))
-        self.assertEqual(page.advanced_toggle.text(), "Config")
-        self.assertFalse(page.advanced_panel.isVisible())
-        self.assertFalse(page.save_api_button.isVisible())
+        # Blank API fields = own-API path → Run config is available and open by default.
+        # Use isHidden(): isVisible() is False until the top-level window is shown.
+        self.assertFalse(page.config_section.isHidden())
+        self.assertFalse(page.advanced_toggle.isHidden())
+        self.assertIn("run config", page.advanced_toggle.text().lower())
+        self.assertFalse(page.advanced_panel.isHidden())
+        self.assertFalse(page.save_config_button.isHidden())
+        self.assertTrue(page.save_api_button.isHidden())
         self.assertIn("Input data path", labels)
 
         widget.config.reproduce = False
@@ -193,14 +203,45 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertFalse(page.rounds_spin.isEnabled())
         self.assertFalse(page.candidates_spin.isEnabled())
         self.assertFalse(page.target_spin.isEnabled())
+        self.assertTrue(page.config_section.isHidden())
         self.assertIn("token", page.free_api_note.text().lower())
 
         page.llm_base_url_edit.setText("https://api.openai.com/v1")
         self.app.processEvents()
+        self.assertFalse(page.config_section.isHidden())
+        self.assertFalse(page.advanced_panel.isHidden())
         self.assertTrue(page.rounds_spin.isEnabled())
         self.assertTrue(page.candidates_spin.isEnabled())
         self.assertTrue(page.target_spin.isEnabled())
         widget.close()
+
+    def test_own_api_can_save_run_config_to_env(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repository = Path(raw)
+            (repository / ".env").write_text("KEEP_ME=untouched\n", encoding="utf-8")
+            widget = MorphAgentWidget()
+            page = widget.configure_page
+            widget.config.repository_root = str(repository)
+            page.llm_base_url_edit.setText("https://api.openai.com/v1")
+            page.llm_api_key_edit.setText("sk-test")
+            page.llm_model_edit.setText("gpt-4o")
+            page.rounds_spin.setValue(2)
+            page.candidates_spin.setValue(8)
+            page.target_spin.setValue(16)
+            page.temperature_spin.setValue(0.2)
+            page.save_config_button.click()
+            self.app.processEvents()
+
+            env_text = (repository / ".env").read_text(encoding="utf-8")
+            self.assertIn("NUM_ROUNDS", env_text)
+            self.assertIn("2", env_text)
+            self.assertIn("FEATURES_PER_ITERATION", env_text)
+            self.assertIn("TARGET_FEATURE_COUNT", env_text)
+            self.assertIn("KEEP_ME", env_text)
+            self.assertEqual(widget.config.num_rounds, 2)
+            self.assertEqual(widget.config.features_per_iteration, 8)
+            self.assertEqual(widget.config.target_feature_count, 16)
+            widget.close()
 
     def test_configure_saves_masked_model_api_to_repository_env(self) -> None:
         names = (

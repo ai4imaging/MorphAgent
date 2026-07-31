@@ -12,6 +12,8 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -44,7 +46,12 @@ from ..models import (
     diagnose_dataset_selection,
     scan_dataset,
 )
-from ..environment import read_model_environment, save_model_environment
+from ..environment import (
+    read_model_environment,
+    read_run_scale_environment,
+    save_model_environment,
+    save_run_scale_environment,
+)
 from ..theme import COLORS
 from .common import Card, PageHeader, PathPicker
 
@@ -112,6 +119,7 @@ class ConfigurePage(QWidget):
 
         self._connect_signals()
         self.load_from_config()
+        self.load_run_scale_settings()
         self.load_api_settings()
         self.refresh_preflight(scan=False)
 
@@ -280,22 +288,44 @@ class ConfigurePage(QWidget):
         self.metadata_note.setWordWrap(True)
         layout.addWidget(self.metadata_note)
 
-        config_row = QHBoxLayout()
-        self.advanced_toggle = QPushButton("Config")
+        # Own-API run scale editor. Hidden entirely while using the free demo API.
+        self.config_section = QWidget()
+        config_section_layout = QVBoxLayout(self.config_section)
+        config_section_layout.setContentsMargins(0, 4, 0, 0)
+        config_section_layout.setSpacing(10)
+
+        config_header = QHBoxLayout()
+        config_header.setSpacing(10)
+        self.advanced_toggle = QPushButton("Run config")
         self.advanced_toggle.setCheckable(True)
-        self.advanced_toggle.setChecked(False)
+        self.advanced_toggle.setChecked(True)
         self.advanced_toggle.setProperty("choiceAction", True)
         self.advanced_toggle.setCursor(QCursor(Qt.PointingHandCursor))
-        self.advanced_toggle.setToolTip("Show advanced analysis parameters")
-        config_row.addWidget(self.advanced_toggle, 0, Qt.AlignLeft)
-        config_row.addStretch(1)
-        layout.addLayout(config_row)
+        self.advanced_toggle.setToolTip("Adjust rounds, candidates, and concurrency for your own API")
+        config_header.addWidget(self.advanced_toggle, 0, Qt.AlignLeft)
+        config_header.addStretch(1)
+        self.config_hint = QLabel("Available with your own API · free demo API stays locked to 1×5")
+        self.config_hint.setProperty("role", "muted")
+        self.config_hint.setWordWrap(True)
+        config_header.addWidget(self.config_hint, 1)
+        config_section_layout.addLayout(config_header)
 
-        self.advanced_panel = QWidget()
-        advanced = QFormLayout(self.advanced_panel)
-        advanced.setContentsMargins(0, 4, 0, 0)
-        advanced.setHorizontalSpacing(16)
-        advanced.setVerticalSpacing(8)
+        self.advanced_panel = QFrame()
+        self.advanced_panel.setProperty("configPanel", True)
+        advanced = QVBoxLayout(self.advanced_panel)
+        advanced.setContentsMargins(14, 12, 14, 14)
+        advanced.setSpacing(12)
+
+        panel_title = QLabel("Run scale")
+        panel_title.setProperty("role", "fieldLabel")
+        advanced.addWidget(panel_title)
+        panel_help = QLabel(
+            "These settings apply on the next Run. Save to keep them for later sessions."
+        )
+        panel_help.setProperty("role", "muted")
+        panel_help.setWordWrap(True)
+        advanced.addWidget(panel_help)
+
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.0, 2.0)
         self.temperature_spin.setSingleStep(0.1)
@@ -310,16 +340,72 @@ class ConfigurePage(QWidget):
         self.workers_spin.setRange(1, 32)
         self.vlm_concurrency_spin = QSpinBox()
         self.vlm_concurrency_spin.setRange(1, 32)
-        advanced.addRow("Temperature", self.temperature_spin)
-        advanced.addRow("Rounds", self.rounds_spin)
-        advanced.addRow("Candidates per round", self.candidates_spin)
-        advanced.addRow("Target feature count", self.target_spin)
-        advanced.addRow("Code workers", self.workers_spin)
-        advanced.addRow("VLM concurrency", self.vlm_concurrency_spin)
-        self.advanced_panel.hide()
-        layout.addWidget(self.advanced_panel)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(10)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        self._add_config_field(
+            grid, 0, 0, "Rounds", self.rounds_spin, "How many extraction rounds to run"
+        )
+        self._add_config_field(
+            grid, 0, 1, "Candidates / round", self.candidates_spin, "Features proposed each round"
+        )
+        self._add_config_field(
+            grid, 1, 0, "Target features", self.target_spin, "Stop once this many are retained"
+        )
+        self._add_config_field(
+            grid, 1, 1, "Temperature", self.temperature_spin, "0 = reproducible decoding"
+        )
+        self._add_config_field(
+            grid, 2, 0, "Code workers", self.workers_spin, "Forced to 1 when temperature is 0"
+        )
+        self._add_config_field(
+            grid, 2, 1, "VLM concurrency", self.vlm_concurrency_spin, "Forced to 1 when temperature is 0"
+        )
+        advanced.addLayout(grid)
+
+        save_row = QHBoxLayout()
+        save_row.setSpacing(10)
+        self.save_config_button = QPushButton("Save run config")
+        self.save_config_button.setProperty("choiceAction", True)
+        self.save_config_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.save_config_button.setToolTip("Write these values to the local .env for the next launch")
+        save_row.addWidget(self.save_config_button, 0, Qt.AlignLeft)
+        self.config_status_label = QLabel("Changes apply on Run · optional Save keeps them next time")
+        self.config_status_label.setProperty("role", "muted")
+        self.config_status_label.setWordWrap(True)
+        save_row.addWidget(self.config_status_label, 1)
+        advanced.addLayout(save_row)
+
+        config_section_layout.addWidget(self.advanced_panel)
+        layout.addWidget(self.config_section)
 
         self.content_layout.addWidget(card)
+
+    @staticmethod
+    def _add_config_field(
+        grid: QGridLayout,
+        row: int,
+        col: int,
+        title: str,
+        spin: QWidget,
+        hint: str,
+    ) -> None:
+        cell = QWidget()
+        cell_layout = QVBoxLayout(cell)
+        cell_layout.setContentsMargins(0, 0, 0, 0)
+        cell_layout.setSpacing(4)
+        label = QLabel(title)
+        label.setProperty("role", "fieldLabel")
+        note = QLabel(hint)
+        note.setProperty("role", "muted")
+        note.setWordWrap(True)
+        cell_layout.addWidget(label)
+        cell_layout.addWidget(spin)
+        cell_layout.addWidget(note)
+        grid.addWidget(cell, row, col)
 
     def _build_model_api_section(self) -> None:
         card = Card()
@@ -453,6 +539,7 @@ class ConfigurePage(QWidget):
             self.vlm_concurrency_spin,
         ):
             spin.valueChanged.connect(self._fields_changed)
+        self.save_config_button.clicked.connect(self._save_run_config)
         self.run_button.clicked.connect(self._request_run)
         self.free_api_button.clicked.connect(self._apply_free_demo_api)
         self.reuse_llm_for_vlm.toggled.connect(self._toggle_vlm_fields)
@@ -470,10 +557,39 @@ class ConfigurePage(QWidget):
 
     def _toggle_advanced(self, checked: bool) -> None:
         self.advanced_panel.setVisible(checked)
-        self.advanced_toggle.setText("Hide config" if checked else "Config")
+        self.advanced_toggle.setText("Hide run config" if checked else "Run config")
 
     def _toggle_vlm_fields(self, reuse: bool) -> None:
         self.vlm_connection_fields.setVisible(not reuse)
+
+    def _using_free_demo_api(self) -> bool:
+        return is_free_demo_connection(
+            self.llm_base_url_edit.text(),
+            self.llm_api_key_edit.text(),
+        )
+
+    def _refresh_config_visibility(self, *, ensure_open: bool = False) -> None:
+        """Show run-config UI only when the form is not using the free demo API."""
+
+        using_free = self._using_free_demo_api()
+        self.config_section.setVisible(not using_free)
+        if using_free:
+            self.advanced_panel.hide()
+            self.advanced_toggle.blockSignals(True)
+            self.advanced_toggle.setChecked(False)
+            self.advanced_toggle.blockSignals(False)
+            self.advanced_toggle.setText("Run config")
+            return
+        if ensure_open:
+            self.advanced_toggle.blockSignals(True)
+            self.advanced_toggle.setChecked(True)
+            self.advanced_toggle.blockSignals(False)
+        if self.advanced_toggle.isChecked():
+            self.advanced_panel.show()
+            self.advanced_toggle.setText("Hide run config")
+        else:
+            self.advanced_panel.hide()
+            self.advanced_toggle.setText("Run config")
 
     def _apply_free_demo_api(self) -> None:
         try:
@@ -502,10 +618,7 @@ class ConfigurePage(QWidget):
     def _api_fields_changed(self) -> None:
         if self._loading:
             return
-        using_free = is_free_demo_connection(
-            self.llm_base_url_edit.text(),
-            self.llm_api_key_edit.text(),
-        )
+        using_free = self._using_free_demo_api()
         self._set_free_demo_scale_locked(using_free)
         self._fields_changed()
 
@@ -519,11 +632,20 @@ class ConfigurePage(QWidget):
         else:
             self.free_api_note.setText(
                 "Optional · free restricted API for testing only (token-limited). "
-                "Your own Base URL / API key is unrestricted."
+                "Your own Base URL / API key unlocks Run config."
             )
             self.free_api_note.setProperty("role", "muted")
-        for spin in (self.rounds_spin, self.candidates_spin, self.target_spin):
+        for spin in (
+            self.temperature_spin,
+            self.rounds_spin,
+            self.candidates_spin,
+            self.target_spin,
+            self.workers_spin,
+            self.vlm_concurrency_spin,
+        ):
             spin.setEnabled(not locked)
+        # Re-open the panel when leaving the free demo API.
+        self._refresh_config_visibility(ensure_open=not locked)
         self.free_api_note.style().unpolish(self.free_api_note)
         self.free_api_note.style().polish(self.free_api_note)
 
@@ -552,6 +674,39 @@ class ConfigurePage(QWidget):
             self.metadata_note.setProperty("role", "muted")
         self.metadata_note.style().unpolish(self.metadata_note)
         self.metadata_note.style().polish(self.metadata_note)
+
+    def load_run_scale_settings(self) -> None:
+        """Load saved own-API run scale from `.env` into the form + RunConfig."""
+
+        values = read_run_scale_environment(self.config.repository_root)
+        self._loading = True
+        try:
+            if values.get("NUM_ROUNDS", "").strip().isdigit():
+                self.config.num_rounds = max(1, int(values["NUM_ROUNDS"]))
+            if values.get("FEATURES_PER_ITERATION", "").strip().isdigit():
+                self.config.features_per_iteration = max(1, int(values["FEATURES_PER_ITERATION"]))
+            if values.get("TARGET_FEATURE_COUNT", "").strip().isdigit():
+                self.config.target_feature_count = max(1, int(values["TARGET_FEATURE_COUNT"]))
+            if values.get("CODE_PARALLEL_WORKERS", "").strip().isdigit():
+                self.config.code_parallel_workers = max(1, int(values["CODE_PARALLEL_WORKERS"]))
+            if values.get("VLM_ONLINE_CONCURRENCY", "").strip().isdigit():
+                self.config.vlm_online_concurrency = max(1, int(values["VLM_ONLINE_CONCURRENCY"]))
+            temp_raw = values.get("UI_TEMPERATURE", "").strip()
+            if temp_raw:
+                try:
+                    self.config.temperature = max(0.0, min(2.0, float(temp_raw)))
+                except ValueError:
+                    pass
+            self.rounds_spin.setValue(int(self.config.num_rounds))
+            self.candidates_spin.setValue(int(self.config.features_per_iteration))
+            self.target_spin.setValue(int(self.config.target_feature_count))
+            self.workers_spin.setValue(int(self.config.code_parallel_workers))
+            self.vlm_concurrency_spin.setValue(int(self.config.vlm_online_concurrency))
+            self.temperature_spin.setValue(float(self.config.temperature))
+            self.config.reproduce = float(self.config.temperature) <= 0.0
+            self._refresh_scale_summary()
+        finally:
+            self._loading = False
 
     def load_api_settings(self) -> None:
         values = read_model_environment(self.config.repository_root)
@@ -593,6 +748,8 @@ class ConfigurePage(QWidget):
             self.api_status_label.setProperty("role", "muted")
         self.api_status_label.style().unpolish(self.api_status_label)
         self.api_status_label.style().polish(self.api_status_label)
+        # Blank URL is treated as own-API path so Run config stays available.
+        self._set_free_demo_scale_locked(False)
 
     def _persist_api_settings(self) -> bool:
         """Write form credentials to .env / environ. Called automatically on Run."""
@@ -647,6 +804,51 @@ class ConfigurePage(QWidget):
     def _save_api_settings(self) -> None:
         """Backward-compatible alias used by older tests."""
         self._persist_api_settings()
+
+    def _persist_run_config(self) -> None:
+        """Write current run-scale spins to `.env` (own API only)."""
+
+        if self._using_free_demo_api():
+            return
+        self._sync_config()
+        values = {
+            "NUM_ROUNDS": str(self.config.num_rounds),
+            "FEATURES_PER_ITERATION": str(self.config.features_per_iteration),
+            "TARGET_FEATURE_COUNT": str(self.config.target_feature_count),
+            "CODE_PARALLEL_WORKERS": str(self.config.code_parallel_workers),
+            "VLM_ONLINE_CONCURRENCY": str(self.config.vlm_online_concurrency),
+            "UI_TEMPERATURE": str(self.config.temperature),
+        }
+        save_run_scale_environment(self.config.repository_root, values)
+
+    def _save_run_config(self) -> None:
+        if self._using_free_demo_api():
+            QMessageBox.information(
+                self,
+                "Run config locked",
+                "Free restricted API keeps scale at 1 round × 5 candidates. "
+                "Enter your own Base URL / API key to edit and save run config.",
+            )
+            return
+        self._sync_config()
+        if self.config.target_feature_count < self.config.features_per_iteration:
+            QMessageBox.warning(
+                self,
+                "Invalid run config",
+                "Target feature count must be greater than or equal to candidates per round.",
+            )
+            return
+        self._persist_run_config()
+        self.config_status_label.setText(
+            f"Saved · {self.config.num_rounds} round"
+            f"{'s' if self.config.num_rounds != 1 else ''} × "
+            f"{self.config.features_per_iteration} candidates · target {self.config.target_feature_count}"
+        )
+        self.config_status_label.setProperty("role", "success")
+        self.config_status_label.style().unpolish(self.config_status_label)
+        self.config_status_label.style().polish(self.config_status_label)
+        self.refresh_preflight(scan=False)
+        self.configuration_changed.emit()
 
     def _load_reference_demo(self) -> None:
         try:
@@ -909,6 +1111,18 @@ class ConfigurePage(QWidget):
             )
             self.refresh_preflight(scan=False)
             return
+        # Apply current spins to RunConfig, then keep own-API scale in `.env`.
+        self._sync_config()
+        if not self._using_free_demo_api():
+            self._persist_run_config()
+            self.config_status_label.setText(
+                f"Applied on Run · {self.config.num_rounds} round"
+                f"{'s' if self.config.num_rounds != 1 else ''} × "
+                f"{self.config.features_per_iteration} candidates · target {self.config.target_feature_count}"
+            )
+            self.config_status_label.setProperty("role", "success")
+            self.config_status_label.style().unpolish(self.config_status_label)
+            self.config_status_label.style().polish(self.config_status_label)
         problem = diagnose_dataset_selection(self.dataset_picker.text())
         if problem:
             QMessageBox.warning(self, "Dataset path not usable", problem)

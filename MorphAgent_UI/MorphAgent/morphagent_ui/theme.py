@@ -74,6 +74,11 @@ QLabel[role="scaleSummary"] {{
     font-size: 13px;
     font-weight: 600;
 }}
+QFrame[configPanel="true"] {{
+    background: #0E1A2A;
+    border: 1px solid #3C5878;
+    border-radius: 9px;
+}}
 QLabel[role="muted"] {{ color: {COLORS['muted']}; }}
 QLabel[role="success"] {{ color: {COLORS['success']}; font-weight: 600; }}
 QLabel[role="warning"] {{ color: {COLORS['warning']}; font-weight: 600; }}
