@@ -1,6 +1,6 @@
 # Scientific stack for MorphAgent UI *code sandbox* only.
 # Used by agent-generated extract() code (conda env: morphagent_sandbox).
-# Do NOT install Qt / LangChain / OpenAI clients here — those stay in `morphagent`.
+# Do NOT install Qt / LangChain / OpenAI clients here - those stay in `morphagent`.
 #
 # Versions are pinned to match the UI demo stack. Setup installs these once;
 # runtime fix/auto-install MUST NOT change versions or reinstall these packages.

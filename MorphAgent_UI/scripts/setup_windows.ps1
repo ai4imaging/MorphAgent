@@ -8,11 +8,11 @@
 # filtered out on purpose - Windows is not meant to follow the Unix pip-Qt path.
 #
 # IMPORTANT (Windows): never invoke conda.bat with specs containing "<" or ">".
-# cmd.exe treats those as redirection ("系统找不到指定的文件"). Always use conda.exe.
+# cmd.exe treats those as redirection ("The system cannot find the file specified"). Always use conda.exe.
 # Also: old conda (4.14) rejects `conda run python -c` when the -c string has newlines.
 # Use a temp .py file or PowerShell filtering instead.
 #
-# Silky path for non-dev machines: double-click scripts\setup_windows.bat
+# Simple path for non-dev machines: double-click scripts\setup_windows.bat
 # (bypasses ExecutionPolicy and auto-finds conda). Advanced:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 param(
@@ -44,7 +44,7 @@ $script:SetupLogPath = $null
 $script:SetupStatusPath = Join-Path $script:SetupLogDir "setup_last_status.txt"
 
 function Initialize-Utf8Console {
-    # Reduce GBK/CP936 mojibake when .bat/.ps1 print ASCII + Chinese together.
+    # Reduce GBK/CP936 mojibake on Windows consoles (script body stays ASCII-only).
     try { cmd /c "chcp 65001 >nul" | Out-Null } catch {}
     try {
         $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -188,20 +188,66 @@ function Invoke-CondaPythonScript {
     }
 }
 
-function Write-FilteredUiRequirements([string]$Src, [string]$Dst) {
-    # Filter PyQt5 lines in PowerShell (UTF-8) - no conda run / no multiline -c needed.
-    $utf8 = New-Object System.Text.UTF8Encoding $false
-    $lines = [System.IO.File]::ReadAllLines($Src, $utf8)
-    $pat = [regex]::new('^\s*PyQt5([=<>!\.].*)?\s*(#.*)?$', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    $kept = New-Object System.Collections.Generic.List[string]
-    foreach ($ln in $lines) {
-        if (-not $pat.IsMatch($ln)) { [void]$kept.Add($ln) }
+function Write-AsciiPipRequirements {
+    # Write ASCII-only package lines as raw UTF-8/ASCII bytes (no BOM).
+    # Never use Set-Content / Out-File (PowerShell 5.1 defaults to UTF-16LE and
+    # breaks `pip install -r` on Windows with UnicodeDecodeError).
+    param(
+        [Parameter(Mandatory = $true)][string]$Src,
+        [Parameter(Mandatory = $true)][string]$Dst,
+        [switch]$SkipPyQt5
+    )
+    if (-not (Test-Path -LiteralPath $Src)) {
+        throw "Missing requirements file: $Src"
     }
-    $body = ($kept -join "`n")
-    if (-not [string]::IsNullOrEmpty($body) -and -not $body.EndsWith("`n")) { $body += "`n" }
-    if ([string]::IsNullOrEmpty($body)) { $body = "`n" }
-    Write-Utf8NoBomFile -Path $Dst -Content $body
-    Write-Host "[OK] wrote filtered requirements ($($kept.Count) lines), PyQt5 skipped"
+    $raw = [System.IO.File]::ReadAllBytes($Src)
+    if ($raw.Length -ge 2 -and $raw[0] -eq 0xFF -and $raw[1] -eq 0xFE) {
+        $text = [System.Text.Encoding]::Unicode.GetString($raw, 2, $raw.Length - 2)
+    } elseif ($raw.Length -ge 2 -and $raw[0] -eq 0xFE -and $raw[1] -eq 0xFF) {
+        $text = [System.Text.Encoding]::BigEndianUnicode.GetString($raw, 2, $raw.Length - 2)
+    } elseif ($raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF) {
+        $text = [System.Text.Encoding]::UTF8.GetString($raw, 3, $raw.Length - 3)
+    } else {
+        try {
+            $enc = New-Object System.Text.UTF8Encoding $false, $true
+            $text = $enc.GetString($raw)
+        } catch {
+            $text = [System.Text.Encoding]::Unicode.GetString($raw)
+        }
+    }
+
+    $kept = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in ($text -split "`r?`n")) {
+        $t = $ln.Trim()
+        if ([string]::IsNullOrEmpty($t)) { continue }
+        if ($t.StartsWith("#")) { continue }  # drop comments entirely
+        if ($SkipPyQt5 -and ($t -match '^(?i)PyQt5([=<>!\.].*)?(\s+#.*)?$')) { continue }
+        if ($t -notmatch '^[\x20-\x7E]+$') {
+            throw "Non-ASCII requirement line in ${Src}: $t"
+        }
+        [void]$kept.Add($t)
+    }
+    if ($kept.Count -lt 1) {
+        throw "No pip requirements left after filtering from $Src"
+    }
+
+    $payload = (($kept -join "`n") + "`n")
+    $bytes = [System.Text.Encoding]::ASCII.GetBytes($payload)
+    [System.IO.File]::WriteAllBytes($Dst, $bytes)
+
+    $verify = [System.IO.File]::ReadAllBytes($Dst)
+    if ($verify.Length -ge 2 -and $verify[1] -eq 0x00) {
+        throw "Temp requirements looks like UTF-16LE (null bytes); refusing to call pip: $Dst"
+    }
+    $roundtrip = [System.Text.Encoding]::UTF8.GetString($verify)
+    if ($roundtrip -ne $payload) {
+        throw "Temp requirements UTF-8 round-trip mismatch: $Dst"
+    }
+    Write-Host "[OK] wrote ASCII UTF-8 requirements ($($kept.Count) lines, $($verify.Length) bytes) -> $Dst"
+}
+
+function Write-FilteredUiRequirements([string]$Src, [string]$Dst) {
+    Write-AsciiPipRequirements -Src $Src -Dst $Dst -SkipPyQt5
 }
 
 function Resolve-CondaExeFromRoot([string]$Root) {
@@ -259,7 +305,9 @@ function Initialize-Conda {
         (Join-Path $env:ProgramData "Miniforge3"),
         "C:\ProgramData\miniconda3",
         "C:\ProgramData\anaconda3",
-        "C:\tools\miniconda3"
+        "C:\tools\miniconda3",
+        "D:\Anaconda3",
+        "D:\Miniconda3"
     ) | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -Unique
 
     foreach ($root in $candidates) {
@@ -304,10 +352,6 @@ English:
   2. Close this window, then double-click scripts\setup_windows.bat again.
      (Do not use Explorer 'Run with PowerShell' - Windows blocks .ps1 by default.)
 
-中文:
-  1. 请先安装 Miniconda 或 Miniforge（只需一次）。
-  2. 关闭窗口后，再双击 scripts\setup_windows.bat。
-     不要用资源管理器的「使用 PowerShell 运行」——系统默认会拦截 .ps1 脚本。
 "@
 }
 
@@ -357,7 +401,7 @@ function Install-CoreCondaPackages([string]$Name) {
         "requests" `
         "lxml"
     if ($LASTEXITCODE -ne 0) {
-        throw "conda install of core packages failed for env '$Name' (exit $LASTEXITCODE). If you still see '系统找不到指定的文件', conda.bat was used; this script must call Scripts\conda.exe."
+        throw "conda install of core packages failed for env '$Name' (exit $LASTEXITCODE). If you still see 'The system cannot find the file specified', conda.bat was used; this script must call Scripts\conda.exe."
     }
 }
 
@@ -430,7 +474,7 @@ function Remove-PipPyQt5Qt5IfPresent([string]$Name) {
     try {
         $null = & $script:CondaExe run --no-capture-output -n $Name python -m pip uninstall -y PyQt5-Qt5 2>&1
     } catch {
-        # absent package / native stderr noise — safe to ignore
+        # absent package / native stderr noise - safe to ignore
     } finally {
         $ErrorActionPreference = $prevEap
         $global:LASTEXITCODE = 0
@@ -524,7 +568,15 @@ try {
     Install-SandboxCondaPackages $SandboxEnvName
     Write-Host "Installing frozen sandbox pip stack from requirements-sandbox.txt..."
     Repair-Pip $SandboxEnvName
-    Invoke-CondaRun $SandboxEnvName @("python", "-m", "pip", "install", "-r", $SandboxRequirements)
+    $sandboxFiltered = Join-Path $env:TEMP ("morphagent-sandbox-req-" + [guid]::NewGuid().ToString("N") + ".txt")
+    try {
+        Write-AsciiPipRequirements -Src $SandboxRequirements -Dst $sandboxFiltered
+        Invoke-CondaRun $SandboxEnvName @("python", "-m", "pip", "install", "-r", $sandboxFiltered)
+    } finally {
+        if (Test-Path -LiteralPath $sandboxFiltered) {
+            Remove-Item -LiteralPath $sandboxFiltered -Force -ErrorAction SilentlyContinue
+        }
+    }
     Invoke-CondaRun $SandboxEnvName @(
         "python", "-c",
         "import numpy, skimage, cv2, mahotas; print('[OK] sandbox numpy', numpy.__version__, 'skimage', skimage.__version__)"
