@@ -2,29 +2,42 @@
 
 This directory is a reviewable handoff package for the MorphAgent graphical interface. It includes the current UI source, backend pipeline, dependency manifests, install/launch/self-check scripts, Tau neuron demo data provided by the instructor, one completed run result, and the final English demo video.
 
-## 0. Docker one-click (recommended)
+## 0. Docker (recommended for reproducible installation)
 
-One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC).
-
-**Download:** [MorphAgent-UI-Docker.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker.zip)
-
-**Use:**
-
-1. Install and start Docker.
-2. Unzip → run `start.command` (macOS) / `start.bat` (Windows) / `bash start.sh` (Linux).
-3. Browser opens [http://localhost:6080/morphagent.html](http://localhost:6080/morphagent.html).
-
-First launch builds the image (several minutes). Later starts are fast. Quick review without an API key: **Home → Load a previous run →** `completed_demo_run`. Stop with `docker compose down`.
-
-From this repo (developers):
+Docker is the same workflow on Windows, macOS, and Linux. The host needs Docker
+Desktop/Engine and a browser, but does not need Conda, Python, Qt, or an X
+server. From `MorphAgent_UI/`:
 
 ```bash
-bash docker/start.sh
-# Rebuild the downloadable zip locally (does not push / does not commit docker/):
-bash scripts/build_docker_packages.sh
+mkdir -p docker-data workspace
+docker compose -f docker/docker-compose.yml build
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-The zip is written to `docker/dist/` for manual upload to the GitHub Release above (`docker/` stays gitignored).
+Open `http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=remote`. The
+existing Qt interface is rendered inside the container and sent to this local
+browser page through noVNC. Port 6080 is bound to the current computer only;
+raw VNC port 5900 is not published.
+
+- Put custom datasets under `workspace/`, then browse to `/workspace` in the
+  UI. Dataset files and generated results remain on the host.
+- API settings, UI state, logs, and demo results persist under `docker-data/`.
+- The full image includes the `morphagent`, `morphagent_sandbox`, and legacy
+  `morphagent_allen` environments.
+- The image is fixed to `linux/amd64` for Allen compatibility. Apple Silicon
+  uses Docker emulation and may build or segment more slowly.
+
+For a quick review without an API key, choose **Home → Load a previous run**;
+the standard `completed_demo_run` is seeded automatically on first start.
+
+Stop without deleting state:
+
+```bash
+docker compose -f docker/docker-compose.yml down
+```
+
+See [`docker/README.md`](docker/README.md) for configuration, logs, alternate
+ports, verification, and troubleshooting.
 
 ## 1. Package Contents
 

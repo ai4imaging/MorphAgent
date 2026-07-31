@@ -72,6 +72,19 @@ class DockerRuntimeContractTests(unittest.TestCase):
         existing = [str(path.relative_to(UI_ROOT)) for path in obsolete if path.exists()]
         self.assertEqual([], existing)
 
+    def test_documentation_describes_the_single_compose_workflow(self) -> None:
+        docker_readme = read(DOCKER_DIR / "README.md")
+        ui_readme = read(UI_ROOT / "README_UI.md")
+        docs = docker_readme + "\n" + ui_readme
+
+        self.assertIn("docker compose -f docker/docker-compose.yml build", docs)
+        self.assertIn("docker compose -f docker/docker-compose.yml up -d", docs)
+        self.assertIn("http://127.0.0.1:6080", docs)
+        self.assertIn("/workspace", docs)
+        self.assertIn("docker-data", docs)
+        self.assertNotIn("MorphAgent-UI-Docker-macOS.zip", ui_readme)
+        self.assertNotIn("build_docker_packages.sh", ui_readme)
+
 
 if __name__ == "__main__":
     unittest.main()
