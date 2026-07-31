@@ -20,7 +20,7 @@
 # * PyTorch: the pinned `torch==2.9.1` wheel on PyPI ships CUDA 12 support for
 #   Linux x86_64 out of the box (GPU used automatically if available, otherwise
 #   it falls back to CPU). No extra index URL is required.
-# * PDF ingest uses pymupdf (lite text → LLM). Optional PaddleX OCR lives in
+# * PDF ingest uses pymupdf (lite text -> LLM). Optional PaddleX OCR lives in
 #   `requirements-optional.txt` (`RAG_PDF_BACKEND=paddlex`).
 # * The only optional extras (PaddleX OCR, local Qwen3-VL) are intentionally
 #   left out to keep this environment lean — install from
@@ -54,7 +54,7 @@ dependencies:
       - beautifulsoup4==4.14.3
       - lxml==6.0.2
 
-      # --- PDF text for RAG + Deep Research (lite extract → LLM) ------------
+      # --- PDF text for RAG + Deep Research (lite extract -> LLM) ------------
       # Default path avoids PaddleX so UI/demo stays responsive on CPU/Mac.
       # Optional heavy OCR: pip install paddlex[ocr] paddlepaddle && RAG_PDF_BACKEND=paddlex
       - pymupdf>=1.24.0,<2

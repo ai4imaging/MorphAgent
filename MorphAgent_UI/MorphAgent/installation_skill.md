@@ -9,9 +9,9 @@
 
 MorphAgent is an LLM/VLM agent that **designs and extracts quantitative
 morphological features** from microscopy images. Given a dataset (one folder
-per sample) and a natural-language task, it: understands the dataset → (optionally)
-segments cells → plans a feature list → **writes and executes Python feature
-code** in a sandbox + **scores visual features with a VLM** → validates → writes
+per sample) and a natural-language task, it: understands the dataset -> (optionally)
+segments cells -> plans a feature list -> **writes and executes Python feature
+code** in a sandbox + **scores visual features with a VLM** -> validates -> writes
 a `features.csv`.
 
 **Critical invariant — there is NO local model in this build.** Every LLM and VLM
@@ -159,13 +159,13 @@ INPUT/                         # pass this to --data-root
 Key facts to check:
 - **Primary files** are the images directly in each sample dir (`.tif/.tiff/.png/
   .jpg/.jpeg/.bmp/.gif`). These are `img` in generated `extract(img, seg)` code.
-- **`seg` is a dict keyed by mask file stem**: `segmentation/mask_cell.tif` →
+- **`seg` is a dict keyed by mask file stem**: `segmentation/mask_cell.tif` ->
   `seg["mask_cell"]`. Code accesses masks by name, never by index. Masks may be
   binary or instance-label maps.
 - **Bring-your-own segmentation**: drop masks into each sample's `segmentation/`
   and the pipeline skips auto-segmentation by default.
 - **Description file** (under `data_root`, resolved in order): `dataset_index.txt`
-  → `README.md` → `README.txt` → `dataset_description.json` → `description.txt`
+  -> `README.md` -> `README.txt` -> `dataset_description.json` -> `description.txt`
   (or pass `--description`). It is free text for the LLM — describe dimensions
   (2D/3D/multi-channel/z-stack), what each channel is, naming conventions.
 - Optional knowledge folders live under the **project root** (the parent that
@@ -244,7 +244,7 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
   export SEGMENTATION_CONDA_ENV=morphagent_allen
   ```
   See `segmentation_allen/README_SEGMENTATION.md`.
-- **PDF parsing**: default is pymupdf lite extract → LLM. Optional PaddleX OCR:
+- **PDF parsing**: default is pymupdf lite extract -> LLM. Optional PaddleX OCR:
   `pip install -r envs/requirements-optional.txt` (uncomment paddlex lines) then
   `export RAG_PDF_BACKEND=paddlex`.
 - **Local Qwen3-VL** (advanced, optional): `pip install -r envs/requirements-optional.txt`
@@ -255,22 +255,22 @@ Written to `<project_root>/results/run_<timestamp>/` (or `--results-dir`):
 
 ## 6. Troubleshooting / known pitfalls
 
-- **`langchain-core` ResolutionImpossible** → someone re-added `langchain` /
+- **`langchain-core` ResolutionImpossible** -> someone re-added `langchain` /
   `langchain-community` / `langchain-experimental`. Remove them; keep only the
   `langchain-core` / `langchain-openai` / `langgraph` 1.x set.
-- **`torch.cuda.is_available()` is False** → CPU-only machine. VLM scoring still
+- **`torch.cuda.is_available()` is False** -> CPU-only machine. VLM scoring still
   works (API). Code features and Cellpose-SAM run but slower; large jobs want a GPU.
-- **VLM 401 / timeout** → check `VLM_BASE_URL` / `VLM_API_KEY` / `VLM_MODEL`; the
+- **VLM 401 / timeout** -> check `VLM_BASE_URL` / `VLM_API_KEY` / `VLM_MODEL`; the
   VLM endpoint must accept image inputs (multimodal).
-- **0 samples found** → data layout wrong; each sample must be its own subdirectory
+- **0 samples found** -> data layout wrong; each sample must be its own subdirectory
   under `data_root`.
-- **PDF knowledge ignored / empty extract** → install `pymupdf` (in the unified
+- **PDF knowledge ignored / empty extract** -> install `pymupdf` (in the unified
   env). Scanned/image-only PDFs need optional PaddleX (`RAG_PDF_BACKEND=paddlex`)
   or convert reports to `.md/.txt`.
-- **Literature download failed but search worked** → network restriction on the
+- **Literature download failed but search worked** -> network restriction on the
   server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a
   machine with internet (`HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
-- **Segmentation runs in the wrong/missing env** → set `SEGMENTATION_CONDA_ENV` to
+- **Segmentation runs in the wrong/missing env** -> set `SEGMENTATION_CONDA_ENV` to
   the env that has Cellpose-SAM (or `morphagent_allen` for the Allen backend).
 
 ## 7. From-scratch checklist (copy/paste)

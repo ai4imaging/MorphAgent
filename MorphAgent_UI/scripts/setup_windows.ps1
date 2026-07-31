@@ -58,6 +58,42 @@ function Initialize-Utf8Console {
     if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
     # Old conda (e.g. 4.14) otherwise prompts y/N after unexpected errors and hangs .bat runs.
     $env:CONDA_REPORT_ERRORS = "false"
+    # Miniconda 24+ ships conda-anaconda-tos, which prompts interactively and
+    # EOF-crashes non-interactive .bat / piped setup (repo.anaconda.com/pkgs/main).
+    # Official workaround: CONDA_NO_PLUGINS=true (setup uses conda-forge anyway).
+    $env:CONDA_NO_PLUGINS = "true"
+}
+
+function Accept-AnacondaTosBestEffort {
+    # Optional: persist ToS acceptance for future interactive conda use.
+    # Setup itself relies on CONDA_NO_PLUGINS=true; failures here are ignored.
+    if (-not $script:CondaExe) { return }
+    $prev = $env:CONDA_NO_PLUGINS
+    Remove-Item Env:\CONDA_NO_PLUGINS -ErrorAction SilentlyContinue
+    $channels = @(
+        "https://repo.anaconda.com/pkgs/main",
+        "https://repo.anaconda.com/pkgs/r",
+        "https://repo.anaconda.com/pkgs/msys2"
+    )
+    foreach ($ch in $channels) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $script:CondaExe tos accept --override-channels --channel $ch 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                & $script:CondaExe tos accept -c $ch 2>$null | Out-Null
+            }
+        } catch {
+            # ignore missing tos subcommand / plugin
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+    }
+    if ($null -ne $prev -and "$prev" -ne "") {
+        $env:CONDA_NO_PLUGINS = $prev
+    } else {
+        $env:CONDA_NO_PLUGINS = "true"
+    }
 }
 
 function Write-Utf8NoBomFile([string]$Path, [string]$Content) {
@@ -470,6 +506,7 @@ function Remove-CondaEnvCompat([string]$Name) {
 }
 
 function New-CondaEnvFromYamlCompat([string]$Name, [string]$Yml) {
+    $env:CONDA_NO_PLUGINS = "true"
     # Older conda (e.g. 23.1): `conda env create -y` -> unrecognized arguments: -y
     $attempts = @(
         @{ Label = "env create -y -n -f"; Script = { & $script:CondaExe env create -y -n $Name -f $Yml } },
@@ -503,10 +540,13 @@ function New-CondaEnvFromYamlCompat([string]$Name, [string]$Yml) {
 }
 
 function New-CondaEnvPythonCompat([string]$Name) {
+    # Force plugin skip even if the parent shell cleared CONDA_NO_PLUGINS.
+    $env:CONDA_NO_PLUGINS = "true"
     $attempts = @(
+        { & $script:CondaExe create -y -n $Name -c conda-forge --override-channels "python=3.10" "pip" },
         { & $script:CondaExe create -y -n $Name -c conda-forge "python=3.10" "pip" },
-        { & $script:CondaExe create --yes -n $Name -c conda-forge "python=3.10" "pip" },
-        { "y`ny`ny" | & $script:CondaExe create -n $Name -c conda-forge "python=3.10" "pip" }
+        { & $script:CondaExe create --yes -n $Name -c conda-forge --override-channels "python=3.10" "pip" },
+        { "a`na`na`ny`ny`ny" | & $script:CondaExe create -n $Name -c conda-forge "python=3.10" "pip" }
     )
     foreach ($attempt in $attempts) {
         $prevEap = $ErrorActionPreference
@@ -525,8 +565,9 @@ function New-CondaEnvPythonCompat([string]$Name) {
 
 function Install-CoreCondaPackages([string]$Name) {
     Write-Host "Installing core conda packages into $Name (PyQt5 / numpy / scipy / ...)..."
+    $env:CONDA_NO_PLUGINS = "true"
     # Specs keep "<"/">="; calling conda.exe (not .bat) so cmd does not treat "<" as redirect.
-    & $script:CondaExe install -y -n $Name -c conda-forge `
+    & $script:CondaExe install -y -n $Name -c conda-forge --override-channels `
         "python=3.10" `
         "pip>=24" `
         "setuptools" `
@@ -556,7 +597,8 @@ function Install-CoreCondaPackages([string]$Name) {
 
 function Install-SandboxCondaPackages([string]$Name) {
     Write-Host "Installing sandbox conda packages into $Name (numpy / scipy / scikit-image / ..., no Qt)..."
-    & $script:CondaExe install -y -n $Name -c conda-forge `
+    $env:CONDA_NO_PLUGINS = "true"
+    & $script:CondaExe install -y -n $Name -c conda-forge --override-channels `
         "python=3.10" `
         "pip>=24" `
         "setuptools" `
@@ -677,8 +719,10 @@ try {
     Start-SetupTranscript
     Set-Location $HandoffRoot
     Write-Host "MorphAgent handoff root: $HandoffRoot"
+    Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) (avoids Anaconda ToS interactive prompt)"
 
     Initialize-Conda
+    Accept-AnacondaTosBestEffort
 
     if (-not (Test-Path $Requirements)) {
         throw "Missing requirements file: $Requirements"

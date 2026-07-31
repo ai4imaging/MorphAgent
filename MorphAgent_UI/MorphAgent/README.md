@@ -39,9 +39,9 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 | Code feature extraction | The LLM generates/repairs an `extract(img, seg)` function and runs it in batch | LLM API + sandbox conda environment |
 | VLM feature scoring | A multimodal model scores images feature by feature on a continuous scale | Multimodal API (e.g. GPT-4o) |
 | auto_segmentation | Generates masks with Cellpose-SAM (default) or Allen aicssegmentation | GPU (Cellpose) / CPU (Allen) |
-| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF: lite text extract) |
-| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → lite PDF text → LLM digests → injects into planning | Internet + pymupdf + LLM API |
-| expert_knowledge | Reads expert materials under `expert_knowledge/` → LLM digests | LLM API |
+| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` -> LLM digests -> injects into planning | Deep-research/LLM API (PDF: lite text extract) |
+| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) -> lite PDF text -> LLM digests -> injects into planning | Internet + pymupdf + LLM API |
+| expert_knowledge | Reads expert materials under `expert_knowledge/` -> LLM digests | LLM API |
 | Deterministic validation | Unsupervised / supervised (metadata) feature filtering with multi-round deduplication | None |
 
 ---
@@ -56,7 +56,7 @@ MorphAgent/
 ├── config.py                # Global configuration (USER CONFIGURATION block at the top)
 ├── graph.py / state.py      # LangGraph pipeline and state
 ├── utils_helpers.py         # Dataset indexing / image path lookup
-├── nodes/                   # researcher → prompt_gen → execution nodes
+├── nodes/                   # researcher -> prompt_gen -> execution nodes
 ├── tools/                   # Code generation/execution/repair, VLM client, segmentation calls
 ├── knowledge/               # Dataset understanding, expert/deep_research/RAG, prompts/
 │   └── prompts/             # 6 general-purpose prompt templates (JSON)
@@ -216,7 +216,7 @@ Here **`seg` is a dictionary** whose keys are the **file name stems** of the mas
 
 ### 4. Dataset description file (description)
 
-Placed under `data_root` and located by priority: `dataset_index.txt` → `README.md` → `README.txt` → `dataset_description.json` → `description.txt` (you can also specify the path explicitly with `--description`).
+Placed under `data_root` and located by priority: `dataset_index.txt` -> `README.md` -> `README.txt` -> `dataset_description.json` -> `description.txt` (you can also specify the path explicitly with `--description`).
 
 It is **free text** handed to the LLM to understand, telling the agent about: the data dimensions (2D/3D/multi-channel/z-stack), what each channel captures (markers/colors), file naming conventions, etc. The clearer it is written, the more accurate the feature planning. Example:
 
@@ -274,7 +274,7 @@ avoids reparsing the bundled PDFs. The shortest verified path is:
 1. Open **Configure** and select **Load demo dataset**.
 2. Confirm the Tau aggregation question, then complete **Model API**. Leave **Use the same connection for image scoring** unchecked unless LLM and VLM share one endpoint.
 3. Select the analysis route and knowledge sources, then press **Run MorphAgent**. Demo scale is **1 round × 5 candidates · target 5** (open **Config** for advanced knobs). Masks are reused when present; missing masks use Allen when available.
-4. Follow **Live run**: Inspect → Prepare → Plan → Quantify → Validate → Export. Completed files remain in the run directory after cancellation or failure.
+4. Follow **Live run**: Inspect -> Prepare -> Plan -> Quantify -> Validate -> Export. Completed files remain in the run directory after cancellation or failure.
 5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, and provenance. Shared run-level preview folders are not shown as per-feature images.
 
 During UI/result debugging, choose **Load a previous run** on Home and select the specific completed `run_ui_*` results folder. MorphAgent loads Features and Evidence directly without launching `main.py`, making API calls, or rerunning segmentation and feature extraction.
@@ -303,7 +303,7 @@ python main.py "Generate unbiased morphological features for these microscopy im
 
 - The positional argument is the **natural-language task description** (it feeds into the feature planning prompt).
 - `--method both`: use both code and vlm; you can also use `code` or `vlm`.
-- The first run automatically: understands the dataset → (optionally) segments → plans features → generates/executes code + VLM scoring → validates → writes CSV.
+- The first run automatically: understands the dataset -> (optionally) segments -> plans features -> generates/executes code + VLM scoring -> validates -> writes CSV.
 
 ---
 
@@ -363,7 +363,7 @@ Place the generated masks into each sample's `segmentation/`, and the main pipel
 Both capabilities are **fully autonomous** in this build — no local model or heavy
 subsystem is deployed. Each is a single, cheap step wired into the pipeline:
 
-### auto_deep_research — one API call → report → digest
+### auto_deep_research — one API call -> report -> digest
 
 Add `--auto-deep-research` and MorphAgent makes **one call** to a deep-research
 model (`DEEP_RESEARCH_MODEL`, falls back to your LLM) to write a
@@ -382,7 +382,7 @@ model (e.g. Perplexity `sonar-deep-research`, OpenAI `gpt-4o-search-preview`);
 any strong chat model also works. You can still drop your own `.md`/`.txt`/`.pdf`
 reports into `deep_research/` instead of (or in addition to) generating one.
 
-### auto_literature_retrieval — keyword → PubMed PDFs → lite text → digest
+### auto_literature_retrieval — keyword -> PubMed PDFs -> lite text -> digest
 
 Add `--auto-literature-retrieval` and MorphAgent searches PubMed / Europe PMC for
 your keywords, downloads **open-access PDFs** into `project_root/RAG/`, extracts
@@ -449,6 +449,6 @@ desired). Markdown/text/XML sources are read directly.
 
 - **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU; but **Cellpose-SAM segmentation requires a GPU**. Without a GPU, you can disable segmentation (`--disable-segmentation`) or use your own masks / Allen (CPU) instead.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
-- **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
+- **PDF parsing?** Default is PyMuPDF lite extract -> LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).

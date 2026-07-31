@@ -79,10 +79,10 @@ class CodeGenerator:
         try:
             response = self.llm.invoke(messages)
             planning_text = response.content if hasattr(response, 'content') else str(response)
-            print(f"  ✅ Plan generation complete ({len(planning_text)} characters)")
+            print(f"  [OK] Plan generation complete ({len(planning_text)} characters)")
             return planning_text
         except Exception as e:
-            print(f"  ❌ Plan generation failed: {e}; skipping the CoT step")
+            print(f"  [ERROR] Plan generation failed: {e}; skipping the CoT step")
             return ""
     
     def generate(
@@ -183,7 +183,7 @@ class CodeGenerator:
         
         # If there is a guidance_message, add it to the end of the prompt
         if guidance_message:
-            print(f"  📝 Applying guidance from previous error fix...")
+            print(f"   Applying guidance from previous error fix...")
             print(f"     Guidance: {guidance_message[:200]}...")
             filled_prompt += f"\n\n====================\nPrevious Error Guidance\n====================\n{guidance_message}\n"
         
@@ -198,7 +198,7 @@ class CodeGenerator:
             response = self.llm.invoke(messages)
             response_text = response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
-            print(f"  ❌ LLM API call failed: {type(e).__name__}: {str(e)}")
+            print(f"  [ERROR] LLM API call failed: {type(e).__name__}: {str(e)}")
             raise
         
         # Extract the code
@@ -206,9 +206,9 @@ class CodeGenerator:
         
         print(f"  Response length: {len(response_text)} characters")
         if cleaned_code:
-            print(f"  ✅ Code extracted successfully, code length: {len(cleaned_code)} characters")
+            print(f"  [OK] Code extracted successfully, code length: {len(cleaned_code)} characters")
         else:
-            print(f"  ⚠️  Could not extract valid code from the response")
+            print(f"  [WARN]  Could not extract valid code from the response")
         
         return CodeResult(
             code=cleaned_code,

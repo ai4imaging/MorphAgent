@@ -6,10 +6,10 @@ MorphAgent turns a microscopy dataset and a biological question into a compact, 
 
 ```text
 dataset + biological question + optional knowledge/metadata
-  → inspect → prepare → plan feature cards
-  → quantify by code and/or VLM
-  → validate statistically and visually
-  → export complete + retained features + audit evidence
+  -> inspect -> prepare -> plan feature cards
+  -> quantify by code and/or VLM
+  -> validate statistically and visually
+  -> export complete + retained features + audit evidence
 ```
 
 The application is not a generic chatbot, code IDE, segmentation program, or benchmark dashboard. Its core product object is the feature card.

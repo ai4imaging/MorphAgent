@@ -54,7 +54,7 @@ If it cannot be extracted from the description, return an empty array []. Return
             if len(channels) == num_channels:
                 return channels
     except Exception as e:
-        print(f"  [Channel Extractor] ⚠️  LLM channel name extraction failed: {e}")
+        print(f"  [Channel Extractor] [WARN]  LLM channel name extraction failed: {e}")
     
     # Fallback: try simple keyword matching
     desc_lower = description.lower()

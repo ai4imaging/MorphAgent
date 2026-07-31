@@ -112,7 +112,7 @@ def collect_data_statistics(
             # Extract channel information
             stats["channel_information"] = _extract_channel_info(img_array, dataset_description)
     except Exception as e:
-        print(f"  ⚠️  Failed to collect image statistics: {e}")
+        print(f"  [WARN]  Failed to collect image statistics: {e}")
     
     # Collect segmentation statistics (including unique_labels for instance-label determination)
     if segmentation_paths:
@@ -147,7 +147,7 @@ def collect_data_statistics(
                     f"     - Unique labels: {n_unique} (background + {n_unique - 1} objects)\n"
                 )
             except Exception as e:
-                print(f"  ⚠️  Failed to collect segmentation statistics ({seg_path_obj.name}): {e}")
+                print(f"  [WARN]  Failed to collect segmentation statistics ({seg_path_obj.name}): {e}")
 
         if seg_files_info:
             stats["segmentation_files_info"] = "\n**Available Segmentation Files** (in `sample_dir/segmentation/`):\n" + \

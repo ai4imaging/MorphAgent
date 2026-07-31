@@ -165,7 +165,7 @@ Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation u
 The window maximizes automatically on launch.
 
 1. On the home page, click **Start a discovery run**.
-2. Under **1 · Data**, click **Load demo dataset** (guided by the 👉 cue), or browse to a folder that contains `dataset/<sample>/*.tif`.
+2. Under **1 · Data**, click **Load demo dataset**, or browse to a folder that contains `dataset/<sample>/*.tif`.
 3. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.
 4. Under **3 · Model API**, fill Base URL, API key, and Model (leave fields blank — no invented defaults). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step). Optional VLM fields can stay empty to reuse the LLM connection. Free tip: [Free AI APIs 2026](https://aicosthub.com/guides/free-ai-apis-2026).
 5. Under **4 · Analysis**, optionally keep **Enable feature validation** on and point at a metadata CSV (`sample_id` + group/label). The demo already ships `demo/data/metadata.csv`.

@@ -89,17 +89,17 @@ def segment_image_with_allen(
     out_dir = Path(output_dir)
 
     if not input_path.exists():
-        print(f"  ⚠️  Input image does not exist: {input_path}")
+        print(f"  [WARN]  Input image does not exist: {input_path}")
         return False
 
     if shutil.which("conda") is None:
-        print("  ⚠️  conda not found; skipping Allen segmentation")
+        print("[WARN]  conda not found; skipping Allen segmentation")
         return False
 
     current_file = Path(__file__).resolve()
     script_path = current_file.parent.parent / "segmentation_allen" / "run_segment_image_tif.py"
     if not script_path.exists():
-        print(f"  ⚠️  Allen segmentation script does not exist: {script_path}")
+        print(f"  [WARN]  Allen segmentation script does not exist: {script_path}")
         return False
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +117,7 @@ def segment_image_with_allen(
         print(f"  [Allen] Using environment: {conda_env}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode != 0:
-            print(f"  ⚠️  Allen segmentation failed (exit {result.returncode}); skipping sample")
+            print(f"  [WARN]  Allen segmentation failed (exit {result.returncode}); skipping sample")
             if result.stdout:
                 print(f"  stdout: {result.stdout[-2000:]}")
             if result.stderr:
@@ -137,12 +137,12 @@ def segment_image_with_allen(
             and is_segmentation_mask_filename(p.name)
         ] if out_dir.is_dir() else []
         if out_files:
-            print(f"  ✅ Allen segmentation complete; {len(out_files)} file(s) in {out_dir}")
+            print(f"  [OK] Allen segmentation complete; {len(out_files)} file(s) in {out_dir}")
             return True
-        print("  ⚠️  Allen command finished but no mask files were found; skipping")
+        print("[WARN]  Allen command finished but no mask files were found; skipping")
         return False
     except Exception as e:
-        print(f"  ⚠️  Allen segmentation error (skipping): {e}")
+        print(f"  [WARN]  Allen segmentation error (skipping): {e}")
         return False
 
 
@@ -178,7 +178,7 @@ def segment_image_with_cellpose(
     output_path = Path(output_mask_path)
     
     if not input_path.exists():
-        print(f"  ⚠️  Input image does not exist: {input_path}")
+        print(f"  [WARN]  Input image does not exist: {input_path}")
         return False
     
     # Make sure the output directory exists
@@ -189,7 +189,7 @@ def segment_image_with_cellpose(
     current_file = Path(__file__).resolve()
     script_path = current_file.parent / "segment_tif_with_cpsam.py"
     if not script_path.exists():
-        print(f"  ⚠️  Segmentation script does not exist: {script_path}")
+        print(f"  [WARN]  Segmentation script does not exist: {script_path}")
         return False
     
     # Determine the output directory (the script automatically saves three files to the segmentation directory)
@@ -231,7 +231,7 @@ def segment_image_with_cellpose(
         cytoplasm_file = output_dir / "cytoplasm.tif"
         
         if cyto_file.exists() and nuclei_file.exists() and cytoplasm_file.exists():
-            print(f"  ✅ Segmentation complete; three mask files saved to: {output_dir}")
+            print(f"  [OK] Segmentation complete; three mask files saved to: {output_dir}")
             print(f"     - cyto.tif")
             print(f"     - nuclei.tif")
             print(f"     - cytoplasm.tif")
@@ -244,18 +244,18 @@ def segment_image_with_cellpose(
                 missing.append("nuclei.tif")
             if not cytoplasm_file.exists():
                 missing.append("cytoplasm.tif")
-            print(f"  ⚠️  Segmentation command succeeded, but files are missing: {', '.join(missing)}")
+            print(f"  [WARN]  Segmentation command succeeded, but files are missing: {', '.join(missing)}")
             return False
             
     except subprocess.CalledProcessError as e:
-        print(f"  ⚠️  Segmentation failed (skipping): {e}")
+        print(f"  [WARN]  Segmentation failed (skipping): {e}")
         if e.stdout:
             print(f"  stdout: {e.stdout[-2000:]}")
         if e.stderr:
             print(f"  stderr: {e.stderr[-2000:]}")
         return False
     except Exception as e:
-        print(f"  ⚠️  Error during segmentation (skipping): {e}")
+        print(f"  [WARN]  Error during segmentation (skipping): {e}")
         return False
 
 
@@ -377,7 +377,7 @@ def load_segmentation_mask(mask_path: Path) -> Optional[Any]:
 
         return load_image_array(mask_path)
     except Exception as e:
-        print(f"  ⚠️  Failed to load segmentation mask: {e}")
+        print(f"  [WARN]  Failed to load segmentation mask: {e}")
         return None
 
 
@@ -426,7 +426,7 @@ def segment_all_samples(
     for i, sample_id in enumerate(sample_ids, 1):
         sample_dir = data_root / sample_id
         if not sample_dir.exists():
-            print(f"  [{i}/{len(sample_ids)}] ⚠️  Sample directory does not exist: {sample_dir}")
+            print(f"  [{i}/{len(sample_ids)}] [WARN]  Sample directory does not exist: {sample_dir}")
             results[sample_id] = "failed"
             continue
 
@@ -434,21 +434,21 @@ def segment_all_samples(
         if skip_if_any_segmentation_exists:
             existing = list_segmentation_files(sample_dir)
             if existing:
-                print(f"  [{i}/{len(sample_ids)}] ✅ {sample_id}: already has segmentation files ({len(existing)}), skipping")
+                print(f"  [{i}/{len(sample_ids)}] [OK] {sample_id}: already has segmentation files ({len(existing)}), skipping")
                 results[sample_id] = "skipped_user_seg"
                 continue
 
         # Find the image file
         image_paths = find_image_paths(sample_dir, dataset_description)
         if not image_paths:
-            print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: no image file found")
+            print(f"  [{i}/{len(sample_ids)}] [WARN]  {sample_id}: no image file found")
             results[sample_id] = "failed"
             continue
 
         # Get the output directory
         output_dir = sample_dir / "segmentation"
 
-        print(f"  [{i}/{len(sample_ids)}] 🔄 {sample_id}: running {backend} segmentation...")
+        print(f"  [{i}/{len(sample_ids)}] [RETRY] {sample_id}: running {backend} segmentation...")
         if backend == "allen":
             success = segment_image_with_allen(
                 input_image_path=str(image_paths[0]),
@@ -457,11 +457,11 @@ def segment_all_samples(
                 conda_env=conda_env,
             )
             if success and list_segmentation_files(sample_dir):
-                print(f"  [{i}/{len(sample_ids)}] ✅ {sample_id}: segmentation complete")
+                print(f"  [{i}/{len(sample_ids)}] [OK] {sample_id}: segmentation complete")
                 results[sample_id] = "success"
             else:
-                # Experience-first: Allen missing/failed → skip, do not abort the run.
-                print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: Allen unavailable or failed; skipping sample")
+                # Experience-first: Allen missing/failed -> skip, do not abort the run.
+                print(f"  [{i}/{len(sample_ids)}] [WARN]  {sample_id}: Allen unavailable or failed; skipping sample")
                 results[sample_id] = "skipped_allen_unavailable"
         else:
             success = segment_image_with_cellpose(
@@ -476,13 +476,13 @@ def segment_all_samples(
             )
             if success:
                 if check_all_segmentation_masks_exist(sample_dir):
-                    print(f"  [{i}/{len(sample_ids)}] ✅ {sample_id}: segmentation complete")
+                    print(f"  [{i}/{len(sample_ids)}] [OK] {sample_id}: segmentation complete")
                     results[sample_id] = "success"
                 else:
-                    print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: segmentation incomplete; skipping sample")
+                    print(f"  [{i}/{len(sample_ids)}] [WARN]  {sample_id}: segmentation incomplete; skipping sample")
                     results[sample_id] = "skipped_seg_unavailable"
             else:
-                print(f"  [{i}/{len(sample_ids)}] ⚠️  {sample_id}: segmentation unavailable; skipping sample")
+                print(f"  [{i}/{len(sample_ids)}] [WARN]  {sample_id}: segmentation unavailable; skipping sample")
                 results[sample_id] = "skipped_seg_unavailable"
 
     success_count = sum(1 for v in results.values() if v == "success")

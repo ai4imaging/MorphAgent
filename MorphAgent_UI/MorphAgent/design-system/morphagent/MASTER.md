@@ -173,17 +173,17 @@
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Poor audio player
-- ❌ Cluttered layout
+- [ERROR] Poor audio player
+- [ERROR] Cluttered layout
 
 ### Additional Forbidden Patterns
 
-- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
-- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
-- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
-- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
-- ❌ **Instant state changes** — Always use transitions (150-300ms)
-- ❌ **Invisible focus states** — Focus states must be visible for a11y
+- [ERROR] **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
+- [ERROR] **Missing cursor:pointer** — All clickable elements must have cursor:pointer
+- [ERROR] **Layout-shifting hovers** — Avoid scale transforms that shift layout
+- [ERROR] **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
+- [ERROR] **Instant state changes** — Always use transitions (150-300ms)
+- [ERROR] **Invisible focus states** — Focus states must be visible for a11y
 
 ---
 

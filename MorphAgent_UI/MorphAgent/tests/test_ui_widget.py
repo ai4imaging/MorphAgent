@@ -153,7 +153,7 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertTrue(widget.config.reproduce)
         self.assertFalse(page.reuse_llm_for_vlm.isChecked())
         self.assertTrue(hasattr(page, "advanced_toggle"))
-        # Blank API fields = own-API path → Run config is available and open by default.
+        # Blank API fields = own-API path -> Run config is available and open by default.
         # Use isHidden(): isVisible() is False until the top-level window is shown.
         self.assertFalse(page.config_section.isHidden())
         self.assertFalse(page.advanced_toggle.isHidden())
@@ -171,7 +171,7 @@ class WidgetSmokeTests(unittest.TestCase):
 
         self.assertTrue(page.load_demo_button.property("choiceAction"))
         self.assertEqual(page.load_demo_button.text(), "Load demo dataset")
-        self.assertEqual(page.demo_guide.text(), "👉")
+        self.assertEqual(page.demo_guide.text(), ">>")
         self.assertEqual(page.dataset_picker.button.text(), "Browse…")
         self.assertTrue(page.run_button.property("runCta"))
         self.assertFalse(hasattr(page, "scan_button"))
@@ -234,7 +234,7 @@ class WidgetSmokeTests(unittest.TestCase):
         self.app.processEvents()
         self.assertTrue(page.config_section.isHidden())
 
-        # Keep the free host, replace only the API key → unrestricted scale.
+        # Keep the free host, replace only the API key -> unrestricted scale.
         page.llm_api_key_edit.setText("sk-user-own-gpugeek-key")
         self.app.processEvents()
         self.assertFalse(page.config_section.isHidden())

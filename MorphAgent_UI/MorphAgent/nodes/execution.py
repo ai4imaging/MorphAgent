@@ -29,7 +29,7 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         print(f"\n[Execution] {len(features_needing_seg)} features require segmentation, executing segmentation...")
         segmentation_mask = _perform_segmentation(features_needing_seg, image_paths, state)
         if segmentation_mask is None:
-            print("  ⚠️  Warning: Segmentation failed, skipping features that require segmentation")
+            print("[WARN]  Warning: Segmentation failed, skipping features that require segmentation")
             features_needing_seg = []
     
     # Note: VLM feature extraction is not performed in execution_node
@@ -75,13 +75,13 @@ def _perform_segmentation(
     from tools.segmentation import ensure_sample_segmentation, check_segmentation_exists
     
     if not image_paths:
-        print(f"  [Segmentation] ⚠️  No image paths available, cannot perform segmentation")
+        print(f"  [Segmentation] [WARN]  No image paths available, cannot perform segmentation")
         return None
     
     # Get sample_id from state to determine output path
     sample_id = state.get("sample_id", "")
     if not sample_id:
-        print(f"  [Segmentation] ⚠️  Cannot determine sample ID, cannot perform segmentation")
+        print(f"  [Segmentation] [WARN]  Cannot determine sample ID, cannot perform segmentation")
         return None
     
     # Get data_root from state (needs to be inferred from image_paths)
@@ -97,7 +97,7 @@ def _perform_segmentation(
     # Check if segmentation result already exists
     existing_seg = check_segmentation_exists(sample_dir)
     if existing_seg:
-        print(f"  [Segmentation] ✅ Found existing segmentation result: {existing_seg}")
+        print(f"  [Segmentation] [OK] Found existing segmentation result: {existing_seg}")
         return str(existing_seg)
     
     # Collect segmentation parameters (extract from features if available)
@@ -122,10 +122,10 @@ def _perform_segmentation(
     )
     
     if mask_path is not None:
-        print(f"  [Segmentation] ✅ Segmentation completed: {mask_path}")
+        print(f"  [Segmentation] [OK] Segmentation completed: {mask_path}")
         return str(mask_path)
     else:
-        print(f"  [Segmentation] ⚠️  Segmentation failed; continuing without masks")
+        print(f"  [Segmentation] [WARN]  Segmentation failed; continuing without masks")
         return None
 
 
@@ -263,7 +263,7 @@ def _execute_code_feature(
     # Note: this function is now mainly used for executing on a single sample
     # Batch execution should use execute_feature_on_all_samples
     print(f"  [Code] Executing feature '{feature.get('name')}' (single sample)")
-    print(f"    ⚠️  Note: For batch execution, please use execute_feature_on_all_samples")
+    print(f"    [WARN]  Note: For batch execution, please use execute_feature_on_all_samples")
     
     # Return None to indicate that batch execution is required
     return None
@@ -302,7 +302,7 @@ def _execute_vlm_feature(
         if not template_str:
             raise ValueError("Template content is empty")
     except (FileNotFoundError, ValueError) as e:
-        print(f"  [VLM] ⚠️  Warning: Failed to load vlm_scoring template ({e}), using default prompt")
+        print(f"  [VLM] [WARN]  Warning: Failed to load vlm_scoring template ({e}), using default prompt")
         template_str = "Evaluate feature {feature_name}: {feature_description}\nGive a score from 0-100."
     
     # Filter image paths to keep only VLM-supported formats (read from the config)
@@ -326,7 +326,7 @@ def _execute_vlm_feature(
         # The slices directory may exist but the path selector returned .tif files
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"[VLM] ⚠️  Warning: No VLM-supported image files found ({supported_extensions})\n")
+                f.write(f"[VLM] [WARN]  Warning: No VLM-supported image files found ({supported_extensions})\n")
                 f.write(f"[VLM] Trying to find PNG files in the slices directory...\n")
                 f.flush()
         
@@ -343,7 +343,7 @@ def _execute_vlm_feature(
                         vlm_paths = [str(p) for p in sorted(png_files)]
                         if log_file:
                             with open(log_file, 'a', encoding='utf-8') as f:
-                                f.write(f"[VLM] ✅ Found {len(vlm_paths)} PNG files in the slices directory\n")
+                                f.write(f"[VLM] [OK] Found {len(vlm_paths)} PNG files in the slices directory\n")
                                 f.write(f"[VLM] Using files from the slices directory: {[Path(p).name for p in vlm_paths[:3]]}\n")
                                 f.flush()
         
@@ -351,12 +351,12 @@ def _execute_vlm_feature(
         if not vlm_paths:
             if log_file:
                 with open(log_file, 'a', encoding='utf-8') as f:
-                    f.write(f"[VLM] ⚠️  Warning: Falling back to using all image_paths\n")
+                    f.write(f"[VLM] [WARN]  Warning: Falling back to using all image_paths\n")
                     f.flush()
             vlm_paths = image_paths
     
     if not vlm_paths:
-        error_msg = f"  [VLM] ❌ Error: No available image files (checked {len(image_paths)} paths, supported formats: {supported_extensions})"
+        error_msg = f"  [VLM] [ERROR] Error: No available image files (checked {len(image_paths)} paths, supported formats: {supported_extensions})"
         print(error_msg)
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -407,13 +407,13 @@ def _execute_vlm_feature(
         
         elapsed = time.time() - start_time
         if elapsed > 600:  # More than 10 minutes
-            print(f"  [VLM] ⚠️  Warning: VLM evaluation took {elapsed:.1f}s (>10 minutes)")
+            print(f"  [VLM] [WARN]  Warning: VLM evaluation took {elapsed:.1f}s (>10 minutes)")
         
         return score
         
     except TimeoutError as e:
         elapsed = time.time() - start_time
-        error_msg = f"  [VLM] ❌ Timeout after {elapsed:.1f}s: {e}"
+        error_msg = f"  [VLM] [ERROR] Timeout after {elapsed:.1f}s: {e}"
         print(error_msg)
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -427,7 +427,7 @@ def _execute_vlm_feature(
         raise
     except Exception as e:
         elapsed = time.time() - start_time
-        error_msg = f"  [VLM] ❌ Error after {elapsed:.1f}s: {e}"
+        error_msg = f"  [VLM] [ERROR] Error after {elapsed:.1f}s: {e}"
         print(error_msg)
         import traceback
         tb_str = traceback.format_exc()
@@ -480,7 +480,7 @@ def _execute_vlm_features_batch(
             raise ValueError("Template content is empty")
     except (FileNotFoundError, ValueError) as e:
         # If the batch template does not exist, fall back to the single-feature template, but the prompt needs modification
-        print(f"  [VLM Batch] ⚠️  Warning: Failed to load vlm_scoring_batch template ({e}), using single template with batch prompt")
+        print(f"  [VLM Batch] [WARN]  Warning: Failed to load vlm_scoring_batch template ({e}), using single template with batch prompt")
         try:
             template_dict = load_template("vlm_scoring")
             template_str = template_dict.get("template", "")
@@ -509,7 +509,7 @@ def _execute_vlm_features_batch(
         # If there are no paths after filtering, check whether it is a slices directory issue
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"[VLM Batch] ⚠️  Warning: No VLM-supported image files found ({supported_extensions})\n")
+                f.write(f"[VLM Batch] [WARN]  Warning: No VLM-supported image files found ({supported_extensions})\n")
                 f.write(f"[VLM Batch] Trying to find PNG files in the slices directory...\n")
                 f.flush()
         
@@ -525,19 +525,19 @@ def _execute_vlm_features_batch(
                         vlm_paths = [str(p) for p in sorted(png_files)]
                         if log_file:
                             with open(log_file, 'a', encoding='utf-8') as f:
-                                f.write(f"[VLM Batch] ✅ Found {len(vlm_paths)} PNG files in the slices directory\n")
+                                f.write(f"[VLM Batch] [OK] Found {len(vlm_paths)} PNG files in the slices directory\n")
                                 f.flush()
         
         # If still not found, use all paths
         if not vlm_paths:
             if log_file:
                 with open(log_file, 'a', encoding='utf-8') as f:
-                    f.write(f"[VLM Batch] ⚠️  Warning: Falling back to using all image_paths\n")
+                    f.write(f"[VLM Batch] [WARN]  Warning: Falling back to using all image_paths\n")
                     f.flush()
             vlm_paths = image_paths
     
     if not vlm_paths:
-        error_msg = f"  [VLM Batch] ❌ Error: No available image files"
+        error_msg = f"  [VLM Batch] [ERROR] Error: No available image files"
         print(error_msg)
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -595,13 +595,13 @@ def _execute_vlm_features_batch(
         
         elapsed = time.time() - start_time
         if elapsed > 600:  # More than 10 minutes
-            print(f"  [VLM Batch] ⚠️  Warning: VLM batch evaluation took {elapsed:.1f}s (>10 minutes)")
+            print(f"  [VLM Batch] [WARN]  Warning: VLM batch evaluation took {elapsed:.1f}s (>10 minutes)")
         
         return scores_dict
         
     except TimeoutError as e:
         elapsed = time.time() - start_time
-        error_msg = f"  [VLM Batch] ❌ Timeout after {elapsed:.1f}s: {e}"
+        error_msg = f"  [VLM Batch] [ERROR] Timeout after {elapsed:.1f}s: {e}"
         print(error_msg)
         if log_file:
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -615,7 +615,7 @@ def _execute_vlm_features_batch(
         return {feat.get("name", "unknown"): None for feat in features}
     except Exception as e:
         elapsed = time.time() - start_time
-        error_msg = f"  [VLM Batch] ❌ Error after {elapsed:.1f}s: {e}"
+        error_msg = f"  [VLM Batch] [ERROR] Error after {elapsed:.1f}s: {e}"
         print(error_msg)
         import traceback
         tb_str = traceback.format_exc()
@@ -679,5 +679,5 @@ def _execute_single_feature(
     elif method == "vlm":
         return _execute_vlm_feature(feature, image_paths, state, segmentation_mask)
     else:
-        print(f"  ⚠️  Unknown method: {method}")
+        print(f"  [WARN]  Unknown method: {method}")
         return None

@@ -100,12 +100,12 @@ class SegmentAllSamplesTests(unittest.TestCase):
             mask = sample / "segmentation" / "nucleus_segmentation.tiff"
             mask.touch()
 
-            # Existing mask → no call
+            # Existing mask -> no call
             path = ensure_sample_segmentation(sample, str(image))
             self.assertEqual(path, mask)
             segment_allen.assert_not_called()
 
-            # Missing mask → Allen
+            # Missing mask -> Allen
             mask.unlink()
             with patch("tools.segmentation.check_segmentation_exists", side_effect=[None, mask]):
                 path = ensure_sample_segmentation(sample, str(image), conda_env="morphagent_allen")

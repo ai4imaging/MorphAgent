@@ -141,7 +141,7 @@ def apply_vlm_provider(provider: str) -> None:
     preset = VLM_PROVIDER_PRESETS.get(name)
     if preset is None:
         print(
-            f"  ⚠️  Unknown vlm_api_provider '{provider}', falling back to the online API."
+            f"  [WARN]  Unknown vlm_api_provider '{provider}', falling back to the online API."
             f" Options: {sorted(VLM_PROVIDER_PRESETS.keys())}"
         )
         preset = VLM_PROVIDER_PRESETS["ONLINE"]
@@ -163,7 +163,7 @@ def apply_api_provider(provider: str) -> None:
     preset = API_PROVIDER_PRESETS.get(name)
     if preset is None:
         print(
-            f"  ⚠️  Unregistered api_provider '{provider}', using DEFAULT (environment variables / config defaults)."
+            f"  [WARN]  Unregistered api_provider '{provider}', using DEFAULT (environment variables / config defaults)."
             f" Registered: {sorted(API_PROVIDER_PRESETS.keys())}"
         )
         preset = API_PROVIDER_PRESETS["DEFAULT"]
@@ -497,7 +497,7 @@ class RetryableChatLLM:
             new_messages, changed = self._semantic_compress_messages(messages)
         except Exception as exc:
             print(
-                f"  ⚠️  Proactive compression failed ({type(exc).__name__}); sending the original prompt, "
+                f"  [WARN]  Proactive compression failed ({type(exc).__name__}); sending the original prompt, "
                 f"with reactive compression as a fallback if needed (provider={self._provider_name})"
             )
             return args
@@ -505,7 +505,7 @@ class RetryableChatLLM:
             return args
         new_total = self._total_message_chars(new_messages)
         print(
-            f"  🧠 Proactive compression: detected a prompt of about {total} characters (> threshold {PROACTIVE_COMPACT_THRESHOLD_CHARS}), "
+            f"  [LLM] Proactive compression: detected a prompt of about {total} characters (> threshold {PROACTIVE_COMPACT_THRESHOLD_CHARS}), "
             f"LLM-summarized it down to about {new_total} characters before calling (provider={self._provider_name})"
         )
         return (new_messages,) + tuple(args[1:])
@@ -531,7 +531,7 @@ class RetryableChatLLM:
             return False
         self._v1_fallback_tried = True
         print(
-            f"  ⚠️  LLM API returned 404 (provider={self._provider_name}); "
+            f"  [WARN]  LLM API returned 404 (provider={self._provider_name}); "
             f"retrying with base_url={candidate}"
         )
         self._rebuild_llm(candidate)
@@ -565,7 +565,7 @@ class RetryableChatLLM:
         except Exception:
             pass
         print(
-            f"  ⚠️  Provider rejected max_tokens={current_int or current}; "
+            f"  [WARN]  Provider rejected max_tokens={current_int or current}; "
             f"retrying with max_tokens={new_max} (provider={self._provider_name})"
         )
         self._rebuild_llm()
@@ -612,7 +612,7 @@ class RetryableChatLLM:
 
                 error_kind = "timeout" if _is_timeout_like_error(exc) else "transient error"
                 print(
-                    f"  ⚠️  LLM {error_kind} from {self._provider_name} "
+                    f"  [WARN]  LLM {error_kind} from {self._provider_name} "
                     f"(attempt {attempt}/{self._max_attempts}, timeout={self._timeout_seconds}s): "
                     f"{type(exc).__name__}"
                 )
@@ -646,7 +646,7 @@ class RetryableChatLLM:
                 summary = _summarize_text_via_llm(self._llm, head)
             except Exception as exc:
                 print(
-                    f"  ⚠️  Semantic compaction summary call failed ({type(exc).__name__}); keeping this message as-is, "
+                    f"  [WARN]  Semantic compaction summary call failed ({type(exc).__name__}); keeping this message as-is, "
                     f"leaving it to the truncation fallback (provider={self._provider_name})"
                 )
                 new_messages.append(msg)
@@ -668,7 +668,7 @@ class RetryableChatLLM:
 
         Order (inspired by the Claude Code /compact strategy):
           1) Semantic compaction (LLM summary: protect system, keep the verbatim tail, chunked rolling summary);
-          2) If semantic compression had no effect or is still over-long → fall back to progressive truncation (80k→40k→16k characters), guaranteeing no crash.
+          2) If semantic compression had no effect or is still over-long -> fall back to progressive truncation (80k->40k->16k characters), guaranteeing no crash.
         """
         messages = args[0]
         rest = args[1:]
@@ -678,7 +678,7 @@ class RetryableChatLLM:
         semantic_messages, semantic_changed = self._semantic_compress_messages(messages)
         if semantic_changed:
             print(
-                f"  🧠 Detected an over-long prompt ({type(last_exc).__name__}); applied LLM summary-style compression to the accumulated context"
+                f"  [LLM] Detected an over-long prompt ({type(last_exc).__name__}); applied LLM summary-style compression to the accumulated context"
                 f" (protecting system + keeping the verbatim tail), retrying (provider={self._provider_name})..."
             )
             try:
@@ -687,7 +687,7 @@ class RetryableChatLLM:
                 last_exc = exc
                 if not _is_context_length_error(exc):
                     print(
-                        f"  ❌ A non-length error occurred after semantic compression ({type(exc).__name__}); no further compression"
+                        f"  [ERROR] A non-length error occurred after semantic compression ({type(exc).__name__}); no further compression"
                     )
                     return _COMPRESSION_FAILED
             # Still over-long after semantic compression: continue with the truncation fallback based on the compressed messages
@@ -699,7 +699,7 @@ class RetryableChatLLM:
             if not changed:
                 continue
             print(
-                f"  ⚠️  Semantic compression was insufficient to meet the context limit; falling back to truncating to about {budget} characters and retrying"
+                f"  [WARN]  Semantic compression was insufficient to meet the context limit; falling back to truncating to about {budget} characters and retrying"
                 f" (provider={self._provider_name})..."
             )
             try:
@@ -710,7 +710,7 @@ class RetryableChatLLM:
                     break
                 continue
         print(
-            f"  ❌ Prompt compression retries still failed (provider={self._provider_name}): {type(last_exc).__name__}"
+            f"  [ERROR] Prompt compression retries still failed (provider={self._provider_name}): {type(last_exc).__name__}"
         )
         return _COMPRESSION_FAILED
 

@@ -196,7 +196,7 @@ def workflow2_ml_segmentation(channels, output_dir, image_name, model_path=None)
     print(f"{'='*60}")
     
     if model_path is None or not os.path.exists(model_path):
-        print("\n⚠️  Warning: pretrained model not found!")
+        print("\n[WARN]  Warning: pretrained model not found!")
         print("\nTo use the Allen-ml deep learning method, you need to:")
         print("1. Train your own model, or")
         print("2. Download a pretrained model from the Allen Institute")
@@ -246,13 +246,13 @@ def workflow2_ml_segmentation(channels, output_dir, image_name, model_path=None)
         # The image must first be converted to TIFF format here
         # Since the ML workflow is fairly complex, users are advised to follow the official docs
         
-        print("\n⚠️  ML segmentation requires a complete configuration process")
+        print("\n[WARN]  ML segmentation requires a complete configuration process")
         print("Please refer to: aics-ml-segmentation/docs/doc_pred_yaml.md")
         
         return None
         
     except ImportError:
-        print("\n⚠️  Unable to import the Allen-ml module; make sure the allen_ml environment is installed and activated")
+        print("\n[WARN]  Unable to import the Allen-ml module; make sure the allen_ml environment is installed and activated")
         return None
 
 

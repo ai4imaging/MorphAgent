@@ -445,7 +445,7 @@ class RunConfig:
             command.append("--resume")
         if self.multigpu:
             command.append("--multigpu")
-        # UI: skip VLM critic when code features run (noisy false ❌ / wasted retries).
+        # UI: skip VLM critic when code features run (noisy false [ERROR] / wasted retries).
         if self.method in {"code", "both"}:
             command.append("--disable-critic-agent")
         return command

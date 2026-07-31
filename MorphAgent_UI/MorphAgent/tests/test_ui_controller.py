@@ -19,7 +19,7 @@ class StageDetectorTests(unittest.TestCase):
         self.assertIsNone(detector.feed("Step 3.5: Data preprocessing"))
         self.assertEqual(detector.feed("Step 4: Batch feature extraction"), 3)
         self.assertEqual(detector.feed("Step 6: Deterministic feature validation"), 4)
-        self.assertEqual(detector.feed("✅ Round 1 complete!"), 5)
+        self.assertEqual(detector.feed("[OK] Round 1 complete!"), 5)
         self.assertIsNone(detector.feed("Step 2: Dataset understanding"))
 
     def test_indented_code_route_steps_do_not_change_stage(self) -> None:
@@ -67,7 +67,7 @@ class PipelineWorkerTests(unittest.TestCase):
                 "(out / 'features.csv').write_text('sample_id,f1\\nsample_1,0.5\\n')\n"
                 "print('Step 6: Deterministic feature validation', flush=True)\n"
                 "(out / 'round_1' / 'round_results.json').write_text('{}')\n"
-                "print('✅ Round 1 complete!', flush=True)\n",
+                "print('[OK] Round 1 complete!', flush=True)\n",
                 encoding="utf-8",
             )
             config = RunConfig(

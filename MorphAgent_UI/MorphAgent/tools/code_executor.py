@@ -88,7 +88,7 @@ def _find_conda_python(conda_env: str) -> Optional[Path]:
     if os.getenv("CONDA_ROOT"):
         conda_bases.append(Path(os.environ["CONDA_ROOT"]))
 
-    # Detect from CONDA_PREFIX (…/envs/<name> → install root)
+    # Detect from CONDA_PREFIX (…/envs/<name> -> install root)
     if "CONDA_PREFIX" in os.environ:
         current_path = Path(os.environ["CONDA_PREFIX"])
         if "envs" in current_path.parts:
@@ -688,8 +688,8 @@ class CodeExecutor:
                     error_msg = "Image file not found"
                     errors[sample_id] = error_msg
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
-                    tqdm.write(f"    [Code] {sample_id}: ❌ {error_msg}")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
+                    tqdm.write(f"    [Code] {sample_id}: [ERROR] {error_msg}")
                     continue
                 
                 # Get the image path and segmentation paths
@@ -718,8 +718,8 @@ class CodeExecutor:
                     error_msg = "Image file not found"
                     errors[sample_id] = error_msg
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
-                    tqdm.write(f"    [Code] {sample_id}: ❌ {error_msg}")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
+                    tqdm.write(f"    [Code] {sample_id}: [ERROR] {error_msg}")
                     continue
                 
                 # Use the first image
@@ -737,16 +737,16 @@ class CodeExecutor:
                 if success:
                     values[sample_id] = value
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ✅ {value} (image: {image_path})\n")
-                    tqdm.write(f"    [Code] {sample_id}: ✅ Result = {value}")
+                        log_fp.write(f"{sample_id}: [OK] {value} (image: {image_path})\n")
+                    tqdm.write(f"    [Code] {sample_id}: [OK] Result = {value}")
                 else:
                     errors[sample_id] = error_msg or "Unknown error"
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg} (image: {image_path})\n")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg} (image: {image_path})\n")
                         log_fp.flush()  # Ensure it is written immediately
                     # Show the full error message (not truncated), but limit the display length
                     error_display = error_msg if len(error_msg) <= 500 else error_msg[:500] + "..."
-                    tqdm.write(f"    [Code] {sample_id}: ❌ {error_display}")
+                    tqdm.write(f"    [Code] {sample_id}: [ERROR] {error_display}")
         finally:
             if log_fp:
                 log_fp.close()
@@ -856,16 +856,16 @@ def run_code_generation_with_react(
                                 summary = json.load(f)
                                 if summary.get("mask_order_description"):
                                     state["segmentation_mask_order"] = summary["mask_order_description"]
-                                    print(f"  ✅ Read mask order information from the segmentation summary")
+                                    print(f"  [OK] Read mask order information from the segmentation summary")
                 except Exception as e:
-                    print(f"  ⚠️  Failed to read the segmentation summary: {e}")
+                    print(f"  [WARN]  Failed to read the segmentation summary: {e}")
             
             # If still not available, use the one generated in data_statistics
             if not state.get("segmentation_mask_order") and data_statistics.get("segmentation_mask_order"):
                 state["segmentation_mask_order"] = data_statistics["segmentation_mask_order"]
             
             state["data_statistics"] = data_statistics
-            print(f"  ✅ Statistics collection completed")
+            print(f"  [OK] Statistics collection completed")
             
             # Generate the CoT plan
             print(f"\n  [CoT Planning] Generating the code implementation plan...")
@@ -875,15 +875,15 @@ def run_code_generation_with_react(
                 data_statistics=data_statistics
             )
             if planning_text:
-                print(f"  ✅ Plan generation completed")
+                print(f"  [OK] Plan generation completed")
                 # Save the plan
                 if results_dir:
                     planning_path = feature_dir / "code_planning.txt"
                     with open(planning_path, 'w', encoding='utf-8') as f:
                         f.write(planning_text)
-                    print(f"  💾 Plan saved: {planning_path}")
+                    print(f"   Plan saved: {planning_path}")
             else:
-                print(f"  ⚠️  Plan generation failed; code will be generated directly")
+                print(f"  [WARN]  Plan generation failed; code will be generated directly")
     
     for attempt in range(1, max_cycles + 1):
         print(f"\n  Attempt {attempt}/{max_cycles}")
@@ -909,14 +909,14 @@ def run_code_generation_with_react(
                 }, f, indent=2, ensure_ascii=False)
         
         if not code_result.code:
-            print(f"    ❌ Failed to generate valid code")
+            print(f"    [ERROR] Failed to generate valid code")
             if attempt == max_cycles:
                 return ExtractionResult(values={}, errors={sid: "Code generation failed" for sid in sample_ids}), code_result
             continue
         
         # Save code
         extract_py_path.write_text(code_result.code, encoding='utf-8')
-        print(f"    ✅ Code saved: {extract_py_path}")
+        print(f"    [OK] Code saved: {extract_py_path}")
         
         # First test the first sample, and get segmentation file information for the prompt
         segmentation_files_info = ""
@@ -973,11 +973,11 @@ def run_code_generation_with_react(
                 if not success:
                     # Show the full error message for debugging
                     error_display = error_msg if len(error_msg) <= 1000 else error_msg[:1000] + "..."
-                    print(f"    ❌ First sample test failed: {error_display}")
+                    print(f"    [ERROR] First sample test failed: {error_display}")
                     
                     # Check if it's a timeout error
                     if "timeout" in error_msg.lower() or "timed out" in error_msg:
-                        print(f"    ⚠️  Timeout error detected")
+                        print(f"    [WARN]  Timeout error detected")
                         if attempt == max_cycles:
                             return ExtractionResult(
                                 values={},
@@ -997,16 +997,16 @@ def run_code_generation_with_react(
                     # Other errors, generate fix plan
                     if attempt < max_cycles:
                         error_map = {first_sample_id: error_msg}
-                        print(f"    🔧 Generating fix plan for error: {error_msg[:300]}...")
+                        print(f"     Generating fix plan for error: {error_msg[:300]}...")
                         fix_plan = fixer.plan(feature, code_result.code, error_map)
                         if fix_plan:
-                            print(f"    ✅ Fix plan generated")
+                            print(f"    [OK] Fix plan generated")
                             print(f"       Install script: {fix_plan.install_script[:100] if fix_plan.install_script else 'None'}...")
                             print(f"       Guidance: {fix_plan.guidance_message[:200] if fix_plan.guidance_message else 'None'}...")
                             _handle_code_fix(fix_plan, feature_dir, feature_name, conda_env=conda_env)
                             guidance_message = fix_plan.guidance_message
                         else:
-                            print(f"    ⚠️  Failed to generate fix plan")
+                            print(f"    [WARN]  Failed to generate fix plan")
                             guidance_message = f"Previous error: {error_msg[:500]}"
                         continue
                     else:
@@ -1016,7 +1016,7 @@ def run_code_generation_with_react(
                             errors={sid: error_msg for sid in sample_ids}
                         ), code_result
                 else:
-                    print(f"    ✅ First sample test succeeded: {value}")
+                    print(f"    [OK] First sample test succeeded: {value}")
         
         # The first sample passed; execute all samples
         # Create the log file
@@ -1033,7 +1033,7 @@ def run_code_generation_with_react(
         )
         
         if not result.errors:
-            print(f"    ✅ All samples executed successfully ({len(result.values)}/{len(sample_ids)})")
+            print(f"    [OK] All samples executed successfully ({len(result.values)}/{len(sample_ids)})")
             if log_file:
                 print(f"    Detailed results saved to: {log_file}")
             
@@ -1041,7 +1041,7 @@ def run_code_generation_with_react(
             if result.values:
                 all_zero = all(abs(v) < 1e-10 for v in result.values.values())
                 if all_zero and attempt < max_cycles:
-                    print(f"    ⚠️  Detected all feature values are 0.0, which usually indicates a logic error in the code")
+                    print(f"    [WARN]  Detected all feature values are 0.0, which usually indicates a logic error in the code")
                     print(f"    Triggering ReAct fix mechanism...")
                     
                     # Build an error message explaining that all values are 0.0
@@ -1051,38 +1051,38 @@ def run_code_generation_with_react(
                     
                     fix_plan = fixer.plan(feature, code_result.code, zero_error)
                     if fix_plan:
-                        print(f"    ✅ Fix plan generated for all-zero values")
+                        print(f"    [OK] Fix plan generated for all-zero values")
                         print(f"       Guidance: {fix_plan.guidance_message[:200] if fix_plan.guidance_message else 'None'}...")
                         _handle_code_fix(fix_plan, feature_dir, feature_name, conda_env=conda_env)
                         guidance_message = fix_plan.guidance_message
-                        print(f"    🔄 Retrying with fix guidance...")
+                        print(f"    [RETRY] Retrying with fix guidance...")
                         continue
                     else:
-                        print(f"    ⚠️  Failed to generate fix plan for all-zero values")
+                        print(f"    [WARN]  Failed to generate fix plan for all-zero values")
                         guidance_message = "All samples returned 0.0. Please check: (1) Are you using the correct channel/index? (2) Is the array indexing correct? (3) Is the calculation formula correct? (4) Are there any data type issues?"
                         continue
             
             return result, code_result
         
         # There are errors, but the first sample passed, might be special cases for some samples
-        print(f"    ⚠️  Some samples failed: {len(result.errors)}/{len(sample_ids)}")
+        print(f"    [WARN]  Some samples failed: {len(result.errors)}/{len(sample_ids)}")
         
         # If there are too many errors, try to fix them
         error_rate = len(result.errors) / len(sample_ids)
         from config import settings
         error_threshold = settings.code_error_rate_threshold
         if error_rate > error_threshold and attempt < max_cycles:  # Failure rate exceeds the threshold
-            print(f"    🔧 Error rate ({error_rate:.1%}) exceeds threshold ({error_threshold:.1%}), generating fix plan...")
+            print(f"     Error rate ({error_rate:.1%}) exceeds threshold ({error_threshold:.1%}), generating fix plan...")
             fix_plan = fixer.plan(feature, code_result.code, result.errors)
             if fix_plan:
-                print(f"    ✅ Fix plan generated")
+                print(f"    [OK] Fix plan generated")
                 print(f"       Guidance: {fix_plan.guidance_message[:200] if fix_plan.guidance_message else 'None'}...")
                 _handle_code_fix(fix_plan, feature_dir, feature_name, conda_env=conda_env)
                 guidance_message = fix_plan.guidance_message
-                print(f"    🔄 Retrying with fix guidance...")
+                print(f"    [RETRY] Retrying with fix guidance...")
                 continue
             else:
-                print(f"    ⚠️  Failed to generate fix plan")
+                print(f"    [WARN]  Failed to generate fix plan")
                 # Use partial error information as guidance
                 sample_errors = list(result.errors.items())[:3]  # Take the first 3 errors
                 error_summary = "\n".join([f"{sid}: {err[:200]}" for sid, err in sample_errors])
@@ -1093,7 +1093,7 @@ def run_code_generation_with_react(
         return result, code_result
     
     # All attempts failed
-    print(f"    ❌ Reached maximum retry count, giving up on this feature")
+    print(f"    [ERROR] Reached maximum retry count, giving up on this feature")
     return ExtractionResult(
         values={},
         errors={sid: "Reached maximum retry count, code execution failed" for sid in sample_ids}
@@ -1123,7 +1123,7 @@ def _handle_code_fix(plan: CodeFixPlan, feature_dir: Path, feature_name: str, co
     
     if plan.guidance_message:
         (feature_dir / "code_fix_guidance.txt").write_text(plan.guidance_message, encoding="utf-8")
-        print(f"    📝 Fix guidance: {plan.guidance_message[:200]}")
+        print(f"     Fix guidance: {plan.guidance_message[:200]}")
     
     # Execute the install script
     if plan.install_script:
@@ -1134,7 +1134,7 @@ def _handle_code_fix(plan: CodeFixPlan, feature_dir: Path, feature_name: str, co
 
         ok, reason, script = validate_install_script(plan.install_script)
         if not ok:
-            print(f"    🚫 Sandbox install blocked: {reason}")
+            print(f"     Sandbox install blocked: {reason}")
             guidance = blocked_install_guidance(reason)
             existing = (plan.guidance_message or "").strip()
             plan.guidance_message = (existing + "\n\n" + guidance).strip() if existing else guidance
@@ -1166,7 +1166,7 @@ conda run -n {target_env} bash << 'INSTALL_EOF'
 INSTALL_EOF
 """
                 script = wrapped_script
-                print(f"    🔧 Wrapping install script to execute in conda environment '{target_env}'")
+                print(f"     Wrapping install script to execute in conda environment '{target_env}'")
         
         if not script.startswith("#!"):
             script = "#!/usr/bin/env bash\n" + script
@@ -1177,11 +1177,11 @@ INSTALL_EOF
         
         try:
             subprocess.run(["bash", str(script_path)], check=True, timeout=60)
-            print(f"    ✅ Fix script executed successfully (in environment '{target_env}')")
+            print(f"    [OK] Fix script executed successfully (in environment '{target_env}')")
         except subprocess.CalledProcessError as exc:
-            print(f"    ⚠️  Fix script execution failed: {exc}")
+            print(f"    [WARN]  Fix script execution failed: {exc}")
         except subprocess.TimeoutExpired:
-            print(f"    ⚠️  Fix script execution timeout")
+            print(f"    [WARN]  Fix script execution timeout")
 
 
 def evaluate_result_with_critic(
@@ -1305,9 +1305,9 @@ Please analyze the image and provide your evaluation."""
                     _save_critic_result(passed, feedback, generated_text, reason)
 
                     if passed:
-                        print(f"      ✅ Critic evaluation passed: {reason or 'Result is reasonable'}")
+                        print(f"      [OK] Critic evaluation passed: {reason or 'Result is reasonable'}")
                     else:
-                        print(f"      ❌ Critic evaluation not passed: {reason or 'Result is unreasonable'}")
+                        print(f"      [ERROR] Critic evaluation not passed: {reason or 'Result is unreasonable'}")
                     return passed, feedback
                 except json.JSONDecodeError:
                     pass
@@ -1317,7 +1317,7 @@ Please analyze the image and provide your evaluation."""
                 _save_critic_result(False, feedback, generated_text, "")
                 return False, feedback
 
-            print(f"      ⚠️  Critic response format could not be parsed; passing by default")
+            print(f"      [WARN]  Critic response format could not be parsed; passing by default")
             _save_critic_result(True, "", generated_text, "")
             return True, ""
         
@@ -1386,7 +1386,7 @@ Please analyze the image and provide your evaluation."""
             return _parse_critic_response(generated_text)
                 
         except Exception as e:
-            print(f"      ⚠️  Critic evaluation error (VLM request failed); skipping — NOT counted as a pass: {e}")
+            print(f"      [WARN]  Critic evaluation error (VLM request failed); skipping — NOT counted as a pass: {e}")
             import traceback
             traceback.print_exc()
             # Skip critic on infrastructure / request failures so we do not
@@ -1395,10 +1395,10 @@ Please analyze the image and provide your evaluation."""
             return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
             
     except ImportError:
-        print(f"      ⚠️  VLM client is not available; skipping critic evaluation")
+        print(f"      [WARN]  VLM client is not available; skipping critic evaluation")
         return True, ""
     except Exception as e:
-        print(f"      ⚠️  Critic evaluation failed (setup error); skipping — NOT counted as a pass: {e}")
+        print(f"      [WARN]  Critic evaluation failed (setup error); skipping — NOT counted as a pass: {e}")
         import traceback
         traceback.print_exc()
         return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
@@ -1505,16 +1505,16 @@ def run_code_generation_test_only(
                                 summary = json.load(f)
                                 if summary.get("mask_order_description"):
                                     state["segmentation_mask_order"] = summary["mask_order_description"]
-                                    print(f"  ✅ Read mask order information from the segmentation summary")
+                                    print(f"  [OK] Read mask order information from the segmentation summary")
                 except Exception as e:
-                    print(f"  ⚠️  Failed to read the segmentation summary: {e}")
+                    print(f"  [WARN]  Failed to read the segmentation summary: {e}")
             
             # If still not available, use the one generated in data_statistics
             if not state.get("segmentation_mask_order") and data_statistics.get("segmentation_mask_order"):
                 state["segmentation_mask_order"] = data_statistics["segmentation_mask_order"]
             
             state["data_statistics"] = data_statistics
-            print(f"  ✅ Statistics collection completed")
+            print(f"  [OK] Statistics collection completed")
             
             # Generate the CoT plan
             print(f"\n  [CoT Planning] Generating the code implementation plan...")
@@ -1524,15 +1524,15 @@ def run_code_generation_test_only(
                 data_statistics=data_statistics
             )
             if planning_text:
-                print(f"  ✅ Plan generation completed")
+                print(f"  [OK] Plan generation completed")
                 # Save the plan
                 if results_dir:
                     planning_path = feature_dir / "code_planning.txt"
                     with open(planning_path, 'w', encoding='utf-8') as f:
                         f.write(planning_text)
-                    print(f"  💾 Plan saved: {planning_path}")
+                    print(f"   Plan saved: {planning_path}")
             else:
-                print(f"  ⚠️  Plan generation failed; code will be generated directly")
+                print(f"  [WARN]  Plan generation failed; code will be generated directly")
     
     for attempt in range(1, max_cycles + 1):
         print(f"\n  Attempt {attempt}/{max_cycles}")
@@ -1558,14 +1558,14 @@ def run_code_generation_test_only(
                 }, f, indent=2, ensure_ascii=False)
         
         if not code_result.code:
-            print(f"    ❌ Unable to generate valid code")
+            print(f"    [ERROR] Unable to generate valid code")
             if attempt == max_cycles:
                 return None, code_result
             continue
         
         # Save the code
         extract_py_path.write_text(code_result.code, encoding='utf-8')
-        print(f"    ✅ Code saved: {extract_py_path}")
+        print(f"    [OK] Code saved: {extract_py_path}")
         
         # Test the first sample
         if sample_ids:
@@ -1602,11 +1602,11 @@ def run_code_generation_test_only(
                 if not success:
                     # Show the full error message for debugging
                     error_display = error_msg if len(error_msg) <= 1000 else error_msg[:1000] + "..."
-                    print(f"    ❌ First sample test failed: {error_display}")
+                    print(f"    [ERROR] First sample test failed: {error_display}")
                     
                     # Check if it's a timeout error
                     if "timeout" in error_msg.lower() or "timed out" in error_msg:
-                        print(f"    ⚠️  Timeout error detected")
+                        print(f"    [WARN]  Timeout error detected")
                         if attempt == max_cycles:
                             return None, code_result
                         
@@ -1623,25 +1623,25 @@ def run_code_generation_test_only(
                     # Other errors, generate fix plan
                     if attempt < max_cycles:
                         error_map = {first_sample_id: error_msg}
-                        print(f"    🔧 Generating fix plan, error: {error_msg[:300]}...")
+                        print(f"     Generating fix plan, error: {error_msg[:300]}...")
                         fix_plan = fixer.plan(feature, code_result.code, error_map)
                         if fix_plan:
-                            print(f"    ✅ Fix plan generated")
+                            print(f"    [OK] Fix plan generated")
                             _handle_code_fix(fix_plan, feature_dir, feature_name, conda_env=conda_env)
                             guidance_message = fix_plan.guidance_message
                         else:
-                            print(f"    ⚠️  Failed to generate fix plan")
+                            print(f"    [WARN]  Failed to generate fix plan")
                             guidance_message = f"Previous error: {error_msg[:500]}"
                         continue
                     else:
                         # The last attempt failed
                         return None, code_result
                 else:
-                    print(f"    ✅ First sample test succeeded: {value}")
+                    print(f"    [OK] First sample test succeeded: {value}")
                     
                     # Check whether it is all zeros (existing logic)
                     if abs(value) < 1e-10:
-                        print(f"    ⚠️  Detected a result of 0, which may indicate a problem")
+                        print(f"    [WARN]  Detected a result of 0, which may indicate a problem")
                         if attempt < max_cycles:
                             zero_error = {
                                 "all_samples": f"Test sample returned 0.0. This usually indicates a logic error in the code, such as: incorrect channel selection, wrong array indexing, incorrect data type handling, or a bug in the calculation formula."
@@ -1667,7 +1667,7 @@ def run_code_generation_test_only(
                     )
                     
                     if not critic_passed:
-                        print(f"    ❌ Critic Agent evaluation not passed: {critic_feedback[:200]}...")
+                        print(f"    [ERROR] Critic Agent evaluation not passed: {critic_feedback[:200]}...")
                         if attempt < max_cycles:
                             # Add the critic feedback to guidance_message
                             if guidance_message:
@@ -1677,21 +1677,21 @@ def run_code_generation_test_only(
                             continue
                         else:
                             # Last attempt; accept this code even if the critic does not pass (at least the code runs)
-                            print(f"    ⚠️  Reached maximum retry count; accepting this code even though the critic did not pass")
+                            print(f"    [WARN]  Reached maximum retry count; accepting this code even though the critic did not pass")
                             return extract_py_path, code_result
 
                     # Test passed; only claim critic passed when it actually evaluated (not skipped on VLM error)
                     if isinstance(critic_feedback, str) and critic_feedback.startswith("[CRITIC_SKIPPED_VLM_ERROR]"):
-                        print(f"    ✅ Test passed (critic skipped due to VLM error)")
+                        print(f"    [OK] Test passed (critic skipped due to VLM error)")
                     else:
-                        print(f"    ✅ Test passed and critic evaluation passed")
+                        print(f"    [OK] Test passed and critic evaluation passed")
                     return extract_py_path, code_result
         
         # If there are no samples, also return the code path (although it cannot be tested)
         return extract_py_path, code_result
     
     # All attempts failed
-    print(f"    ❌ Reached maximum retry count; giving up on this feature")
+    print(f"    [ERROR] Reached maximum retry count; giving up on this feature")
     return None, code_result
 
 
@@ -1722,7 +1722,7 @@ def merge_feature_codes(
     feature_codes = []
     for i, (feature, code_path) in enumerate(zip(features, code_paths)):
         if not code_path or not code_path.exists():
-            print(f"  ⚠️  Warning: the code file for feature {i+1} ({feature.get('name', 'unknown')}) does not exist: {code_path}")
+            print(f"  [WARN]  Warning: the code file for feature {i+1} ({feature.get('name', 'unknown')}) does not exist: {code_path}")
             continue
         
         code_content = code_path.read_text(encoding='utf-8')
@@ -1732,10 +1732,10 @@ def merge_feature_codes(
             "description": feature.get("description", ""),
             "code": code_content
         })
-        print(f"  ✅ Read feature {i+1}: {feature.get('name', 'unknown')}")
+        print(f"  [OK] Read feature {i+1}: {feature.get('name', 'unknown')}")
     
     if not feature_codes:
-        print(f"  ❌ There is no valid code to merge")
+        print(f"  [ERROR] There is no valid code to merge")
         return None, None
     
     # Build the merge prompt: explicitly require extract_all(img, seg) with seg as a key-value dict, to avoid the LLM generating multiple parameters or truncating
@@ -1834,7 +1834,7 @@ Return ONLY the Python code, starting with imports and ending with the full extr
                 first_error = e
             # One retry: ask the LLM to complete the missing except/return
             if first_error is not None:
-                print(f"  ⚠️  Merged code has a syntax error; attempting one completion retry: {first_error}")
+                print(f"  [WARN]  Merged code has a syntax error; attempting one completion retry: {first_error}")
                 fix_prompt = f"""The following Python code has a SyntaxError: {first_error}
 
 The code is likely truncated. Please output the COMPLETE corrected code: add any missing except or finally blocks for every try, and ensure the function ends with \"return results\". Output the full file from the first line (imports) to the last line (return results).
@@ -1859,17 +1859,17 @@ Return ONLY the complete, corrected Python code (full file), no markdown wrapper
                         merged_code = fixed_code
                         syntax_ok = True
                 except Exception as retry_e:
-                    print(f"  ⚠️  Completion retry failed: {retry_e}")
+                    print(f"  [WARN]  Completion retry failed: {retry_e}")
             if not syntax_ok:
                 err_msg = first_error if first_error is not None else "SyntaxError (unknown)"
-                print(f"  ❌ Merged code syntax error (SyntaxError/IndentationError): {err_msg}")
+                print(f"  [ERROR] Merged code syntax error (SyntaxError/IndentationError): {err_msg}")
                 if results_dir:
                     err_path = results_dir / "merged_feature_code_syntax_error.txt"
                     err_path.write_text(
                         f"SyntaxError: {err_msg}\n\nCode preview (first 2000 chars):\n{merged_code[:2000]}",
                         encoding="utf-8"
                     )
-                    print(f"  💾 Error message and code preview saved: {err_path}")
+                    print(f"   Error message and code preview saved: {err_path}")
                 return None, None
         
         # Extra completeness check: ensure every feature has an explicit assignment in the merged code, rather than only relying on a shared default dict
@@ -1887,7 +1887,7 @@ Return ONLY the complete, corrected Python code (full file), no markdown wrapper
         if missing_feature_assignments:
             # Record the incomplete merged code and trigger a fallback to per-feature execution mode
             print(
-                "  ❌ The merged code has no explicit assignment for the following features (it may only use the default dict); "
+                "  [ERROR] The merged code has no explicit assignment for the following features (it may only use the default dict); "
                 "to avoid producing large batches of all-0/NaN, this merge will be abandoned and fall back to per-feature execution mode:"
             )
             print(f"     {', '.join(missing_feature_assignments)}")
@@ -1901,21 +1901,21 @@ Return ONLY the complete, corrected Python code (full file), no markdown wrapper
                     + "\n".join(missing_feature_assignments),
                     encoding="utf-8",
                 )
-                print(f"  💾 Incomplete merged code and summary saved: {incomplete_path}, {summary_path}")
+                print(f"   Incomplete merged code and summary saved: {incomplete_path}, {summary_path}")
             return None, None
 
-        print(f"  ✅ Merged code generated successfully and passed syntax and completeness checks ({len(merged_code)} characters)")
+        print(f"  [OK] Merged code generated successfully and passed syntax and completeness checks ({len(merged_code)} characters)")
         
         # Save the merged code
         if results_dir:
             merged_code_path = results_dir / "merged_feature_code.py"
             merged_code_path.write_text(merged_code, encoding='utf-8')
-            print(f"  💾 Merged code saved: {merged_code_path}")
+            print(f"   Merged code saved: {merged_code_path}")
         
         return merged_code, response.content if hasattr(response, 'content') else str(response)
         
     except Exception as e:
-        print(f"  ❌ Merged code generation failed: {e}")
+        print(f"  [ERROR] Merged code generation failed: {e}")
         import traceback
         traceback.print_exc()
         return None, None
@@ -1993,7 +1993,7 @@ def _execute_merged_code_serial(
         extract_py_path = merged_dir / "extract_all.py"
     
     extract_py_path.write_text(merged_code, encoding='utf-8')
-    print(f"  ✅ Merged code saved: {extract_py_path}")
+    print(f"  [OK] Merged code saved: {extract_py_path}")
     
     # Create the executor
     executor = CodeExecutor(data_root, conda_env=conda_env)
@@ -2018,7 +2018,7 @@ def _execute_merged_code_serial(
                 error_msg = f"Sample directory does not exist: {sample_dir}"
                 all_errors[sample_id] = error_msg
                 if log_fp:
-                    log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                    log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                 continue
             
             # Get the image path and segmentation paths
@@ -2044,7 +2044,7 @@ def _execute_merged_code_serial(
                 error_msg = f"No image file found for sample {sample_id}"
                 all_errors[sample_id] = error_msg
                 if log_fp:
-                    log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                    log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                 continue
             
             # Execute the code
@@ -2074,23 +2074,23 @@ def _execute_merged_code_serial(
                         all_values[sample_id] = {feature_names[0]: result_value} if feature_names else {"unknown": result_value}
                 
                 if log_fp:
-                    log_fp.write(f"{sample_id}: ✅ {all_values[sample_id]}\n")
+                    log_fp.write(f"{sample_id}: [OK] {all_values[sample_id]}\n")
             else:
                 all_errors[sample_id] = error_msg or "Unknown error"
                 if log_fp:
-                    log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                    log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                     log_fp.flush()
     
     finally:
         if log_fp:
             log_fp.close()
             if log_file:
-                print(f"  ✅ Detailed results saved to: {log_file}")
+                print(f"  [OK] Detailed results saved to: {log_file}")
     
     # Summarize the results
     total_samples = len(sample_ids)
     successful_samples = len(all_values)
-    print(f"  ✅ Execution completed: {successful_samples}/{total_samples} samples succeeded")
+    print(f"  [OK] Execution completed: {successful_samples}/{total_samples} samples succeeded")
     
     # Return a dict containing all feature values
     return ExtractionResult(
@@ -2205,7 +2205,7 @@ def _execute_merged_code_parallel(
         extract_py_path = merged_dir / "extract_all.py"
     
     extract_py_path.write_text(merged_code, encoding='utf-8')
-    print(f"  ✅ Merged code saved: {extract_py_path}")
+    print(f"  [OK] Merged code saved: {extract_py_path}")
     
     # Pre-split the list of sample IDs, preserving the order
     def split_samples(sample_ids: List[str], num_workers: int) -> List[List[Tuple[int, str]]]:
@@ -2222,7 +2222,7 @@ def _execute_merged_code_parallel(
     
     # Split the samples
     sample_chunks = split_samples(sample_ids, num_workers)
-    print(f"  📊 Samples split into {len(sample_chunks)} batches (out of {len(sample_ids)} samples)")
+    print(f"   Samples split into {len(sample_chunks)} batches (out of {len(sample_ids)} samples)")
     
     # Prepare the arguments (Path needs to be converted to a string so it can be pickled)
     chunk_args = [
@@ -2265,7 +2265,7 @@ def _execute_merged_code_parallel(
                         # Update the progress bar
                         pbar.update(len(chunk_results))
                     except Exception as e:
-                        print(f"  ⚠️  Batch {chunk_index} processing failed: {e}")
+                        print(f"  [WARN]  Batch {chunk_index} processing failed: {e}")
                         import traceback
                         traceback.print_exc()
                         # Record all samples in this batch as errors
@@ -2273,7 +2273,7 @@ def _execute_merged_code_parallel(
                         for original_index, sample_id in chunk:
                             all_errors[sample_id] = f"Batch processing failed: {e}"
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ❌ Batch processing failed: {e}\n")
+                                log_fp.write(f"{sample_id}: [ERROR] Batch processing failed: {e}\n")
                 
                 # Merge results in the original order (key point: preserve order)
                 for chunk_index in sorted(completed_results.keys()):
@@ -2286,30 +2286,30 @@ def _execute_merged_code_parallel(
                             if isinstance(result, dict):
                                 all_values[sample_id] = result
                                 if log_fp:
-                                    log_fp.write(f"{sample_id}: ✅ {result}\n")
+                                    log_fp.write(f"{sample_id}: [OK] {result}\n")
                                     log_fp.flush()
                             else:
                                 # If it is not a dict, record it as an error
                                 all_errors[sample_id] = f"Result format error: expected a dict, got {type(result)}"
                                 if log_fp:
-                                    log_fp.write(f"{sample_id}: ❌ Result format error: {type(result)}\n")
+                                    log_fp.write(f"{sample_id}: [ERROR] Result format error: {type(result)}\n")
                                     log_fp.flush()
                         else:
                             all_errors[sample_id] = result
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ❌ {result}\n")
+                                log_fp.write(f"{sample_id}: [ERROR] {result}\n")
                                 log_fp.flush()
     
     finally:
         if log_fp:
             log_fp.close()
             if log_file:
-                print(f"  ✅ Detailed results saved to: {log_file}")
+                print(f"  [OK] Detailed results saved to: {log_file}")
     
     # Summarize the results
     total_samples = len(sample_ids)
     successful_samples = len(all_values)
-    print(f"  ✅ Execution completed: {successful_samples}/{total_samples} samples succeeded")
+    print(f"  [OK] Execution completed: {successful_samples}/{total_samples} samples succeeded")
     
     # Return the results (already in the original order)
     return ExtractionResult(

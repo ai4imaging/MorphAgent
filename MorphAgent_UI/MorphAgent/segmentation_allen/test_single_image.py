@@ -73,16 +73,16 @@ def segment_nucleus(dapi_channel):
     print("\n[Step 1] Segmenting nucleus (DAPI channel)...")
     
     # Preprocessing: intensity normalization
-    print("  - Intensity normalization...")
+    print("- Intensity normalization...")
     intensity_norm_param = [0.5, 15]  # Auto-contrast normalization
     dapi_norm = intensity_normalization(dapi_channel, scaling_param=intensity_norm_param)
     
     # Smoothing
-    print("  - Gaussian smoothing...")
+    print("- Gaussian smoothing...")
     dapi_smooth = image_smoothing_gaussian_slice_by_slice(dapi_norm, sigma=1.0)
     
     # Segment the nucleus with the MO (Masked-Object) thresholding method
-    print("  - MO thresholding...")
+    print("- MO thresholding...")
     nucleus_bw = MO(
         dapi_smooth, 
         global_thresh_method='tri',  # Triangle method
@@ -91,7 +91,7 @@ def segment_nucleus(dapi_channel):
     )
     
     # Postprocessing: remove small objects, fill holes
-    print("  - Postprocessing (remove small objects, fill holes)...")
+    print("- Postprocessing (remove small objects, fill holes)...")
     nucleus_bw = remove_small_objects(nucleus_bw > 0, min_size=50, connectivity=1, in_place=False)
     
     # For 2D images, use scipy's binary_fill_holes
@@ -102,7 +102,7 @@ def segment_nucleus(dapi_channel):
     
     nucleus_bw = nucleus_bw.astype(np.uint8) * 255
     num_nuclei = np.max(label(nucleus_bw > 0))
-    print(f"  ✓ Detected {num_nuclei} nuclei")
+    print(f"   Detected {num_nuclei} nuclei")
     
     return nucleus_bw
 
@@ -114,15 +114,15 @@ def segment_cytoplasm(actin_channel, nucleus_bw):
     print("\n[Step 2] Segmenting cytoplasm (Actin channel)...")
     
     # Preprocessing
-    print("  - Intensity normalization...")
+    print("- Intensity normalization...")
     intensity_norm_param = [0.5, 15]
     actin_norm = intensity_normalization(actin_channel, scaling_param=intensity_norm_param)
     
-    print("  - Gaussian smoothing...")
+    print("- Gaussian smoothing...")
     actin_smooth = image_smoothing_gaussian_slice_by_slice(actin_norm, sigma=1.5)
     
     # Segment the cytoplasm with the MO thresholding method
-    print("  - MO thresholding...")
+    print("- MO thresholding...")
     cytoplasm_bw = MO(
         actin_smooth,
         global_thresh_method='tri',
@@ -131,7 +131,7 @@ def segment_cytoplasm(actin_channel, nucleus_bw):
     )
     
     # Postprocessing
-    print("  - Postprocessing (remove small objects, fill holes)...")
+    print("- Postprocessing (remove small objects, fill holes)...")
     cytoplasm_bw = remove_small_objects(cytoplasm_bw > 0, min_size=200, connectivity=1, in_place=False)
     
     if len(cytoplasm_bw.shape) == 3:
@@ -140,7 +140,7 @@ def segment_cytoplasm(actin_channel, nucleus_bw):
         cytoplasm_bw = binary_fill_holes(cytoplasm_bw)
     
     # Use the nuclei as seeds to expand the cytoplasm segmentation
-    print("  - Using nuclei as seeds to expand the cytoplasm region...")
+    print("- Using nuclei as seeds to expand the cytoplasm region...")
     nucleus_labeled = label(nucleus_bw > 0)
     num_nuclei = np.max(nucleus_labeled)
     
@@ -163,7 +163,7 @@ def segment_cytoplasm(actin_channel, nucleus_bw):
     
     cytoplasm_bw = cytoplasm_bw.astype(np.uint8) * 255
     num_cytoplasm = np.max(label(cytoplasm_bw > 0))
-    print(f"  ✓ Detected {num_cytoplasm} cytoplasm regions")
+    print(f"   Detected {num_cytoplasm} cytoplasm regions")
     
     return cytoplasm_bw
 
@@ -219,7 +219,7 @@ def visualize_results(original_img, nucleus_bw, cytoplasm_bw, output_path):
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  ✓ Visualization saved: {output_path}")
+    print(f"   Visualization saved: {output_path}")
 
 
 def main():
@@ -287,8 +287,8 @@ def main():
         with OmeTiffWriter(str(cytoplasm_output)) as writer:
             writer.save(cytoplasm_3d)
         
-        print(f"  ✓ Nucleus segmentation result: {nucleus_output}")
-        print(f"  ✓ Cytoplasm segmentation result: {cytoplasm_output}")
+        print(f"   Nucleus segmentation result: {nucleus_output}")
+        print(f"   Cytoplasm segmentation result: {cytoplasm_output}")
         
         # Visualization
         vis_output = output_dir / "segmentation_visualization.png"

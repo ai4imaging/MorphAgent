@@ -82,23 +82,23 @@ class CodeFixer:
             response = self.llm.invoke(messages)
             response_text = response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
-            print(f"  ❌ LLM API call failed: {type(e).__name__}: {str(e)}")
+            print(f"  [ERROR] LLM API call failed: {type(e).__name__}: {str(e)}")
             raise
         
         # Extract JSON
         data = self._extract_json(response_text)
         if not data:
-            print(f"  ⚠️  Failed to extract valid JSON from response")
+            print(f"  [WARN]  Failed to extract valid JSON from response")
             return None
         
         install_script = data.get("install_script", "").strip()
         guidance_message = data.get("guidance_message", "").strip()
         
         if not install_script and not guidance_message:
-            print(f"  ⚠️  Fix plan is empty")
+            print(f"  [WARN]  Fix plan is empty")
             return None
         
-        print(f"  ✅ Generated fix plan")
+        print(f"  [OK] Generated fix plan")
         if install_script:
             print(f"    Install script: {len(install_script)} characters")
         if guidance_message:

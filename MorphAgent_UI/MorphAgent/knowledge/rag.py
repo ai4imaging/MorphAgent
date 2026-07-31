@@ -296,7 +296,7 @@ Use English for all output."""
         raw_summary = response.content if hasattr(response, 'content') else str(response)
         return raw_summary
     except Exception as e:
-        print(f"  [RAG] ⚠️  Error while processing batch: {e}")
+        print(f"  [RAG] [WARN]  Error while processing batch: {e}")
         return f"[ERROR] Failed to process batch: {e}"
 
 
@@ -346,7 +346,7 @@ Use English for all output."""
         final_summary = response.content if hasattr(response, 'content') else str(response)
         return final_summary
     except Exception as e:
-        print(f"  [RAG] ⚠️  Error while summarizing batches: {e}")
+        print(f"  [RAG] [WARN]  Error while summarizing batches: {e}")
         # If summarization fails, return a simple concatenation of all batches
         return "\n\n".join([f"=== Batch {i+1} ===\n{summary}" for i, summary in enumerate(batch_summaries)])
 
@@ -591,7 +591,7 @@ def extract_rag_knowledge(
     xml_files = list(rag_dir.glob("*.xml"))
     
     if not pdf_files and not xml_files:
-        print("  [RAG] No PDF or XML files found")
+        print("[RAG] No PDF or XML files found")
         return None
     
     print(f"  Found {len(pdf_files)} PDF files, {len(xml_files)} XML files")
@@ -614,14 +614,14 @@ def extract_rag_knowledge(
             cached_content, cached_hash = cache_result
             # Verify whether the cached hash matches
             if cached_hash and cached_hash == rag_hash:
-                print(f"  [RAG] ✅ Valid cache found; using it directly (skipping PDF/XML processing)")
+                print(f"  [RAG] [OK] Valid cache found; using it directly (skipping PDF/XML processing)")
                 print(f"  [RAG] Cache hash matches: {rag_hash[:8]}...")
                 return cached_content
             elif cached_hash:
-                print(f"  [RAG] ⚠️  Cache hash mismatch (cache: {cached_hash[:8]}..., current: {rag_hash[:8]}...); reprocessing needed")
+                print(f"  [RAG] [WARN]  Cache hash mismatch (cache: {cached_hash[:8]}..., current: {rag_hash[:8]}...); reprocessing needed")
             else:
                 # Old-format cache without hash information; reprocess to be safe
-                print(f"  [RAG] ⚠️  Cache format is old (no hash information); reprocessing to be safe")
+                print(f"  [RAG] [WARN]  Cache format is old (no hash information); reprocessing to be safe")
         else:
             print(f"  [RAG] No cache found; PDF/XML files need to be processed")
     else:
@@ -638,14 +638,14 @@ def extract_rag_knowledge(
         try:
             text = extract_text_from_pdf(pdf_file, device=device)
             if text.startswith("[ERROR]"):
-                print(f"    ⚠️  {text}")
+                print(f"    [WARN]  {text}")
                 continue
             document_texts.append(text)
             document_names.append(pdf_file.name)
             document_types.append("pdf")
-            print(f"    ✅ Extraction succeeded, text length: {len(text)} characters")
+            print(f"    [OK] Extraction succeeded, text length: {len(text)} characters")
         except Exception as e:
-            print(f"    ❌ Error while processing: {e}")
+            print(f"    [ERROR] Error while processing: {e}")
             import traceback
             traceback.print_exc()
     
@@ -658,29 +658,29 @@ def extract_rag_knowledge(
                 document_texts.append(text)
                 document_names.append(xml_file.name)
                 document_types.append('xml')
-                print(f"    ✅ Extraction succeeded, text length: {len(text)} characters")
+                print(f"    [OK] Extraction succeeded, text length: {len(text)} characters")
             else:
-                print(f"    ⚠️  BeautifulSoup is not available; skipping this XML (please install: pip install beautifulsoup4 lxml)")
+                print(f"    [WARN]  BeautifulSoup is not available; skipping this XML (please install: pip install beautifulsoup4 lxml)")
         except Exception as e:
-            print(f"    ❌ Error while processing: {e}")
+            print(f"    [ERROR] Error while processing: {e}")
             import traceback
             traceback.print_exc()
     
     if not document_texts:
-        print("  [RAG] Failed to extract any document content")
+        print("[RAG] Failed to extract any document content")
         return None
     
     # Summarize the information from all documents
     print(f"  Summarizing the content of {len(document_texts)} documents ({len(pdf_files)} PDFs, {len(xml_files)} XMLs)...")
     raw_rag_summary = summarize_rag_knowledge(document_texts, document_names, document_types)
     
-    print(f"  ✅ Initial RAG knowledge extraction complete")
+    print(f"  [OK] Initial RAG knowledge extraction complete")
     
     # Fine-grained filtering and evidence grading
     if raw_rag_summary:
         print(f"  [RAG] Starting fine-grained filtering and evidence grading...")
         rag_knowledge_summary = refine_rag_knowledge(raw_rag_summary)
-        print(f"  ✅ RAG knowledge fine-grained filtering complete")
+        print(f"  [OK] RAG knowledge fine-grained filtering complete")
     else:
         rag_knowledge_summary = None
     

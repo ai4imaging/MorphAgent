@@ -49,7 +49,7 @@ triggers a UI warning but does not block Run.
 - **deep_research** is provided as `report.md` (read directly by the LLM).
   Loading the demo dataset does **not** pass `--auto-deep-research`.
 - **RAG** is served from a pre-seeded cache on the happy path. Fresh PDF
-  ingest uses lightweight PyMuPDF text extract → LLM (not PaddleX). The demo
+  ingest uses lightweight PyMuPDF text extract -> LLM (not PaddleX). The demo
   path does **not** pass `--auto-literature-retrieval`.
 
 ## Requirements
@@ -64,11 +64,11 @@ triggers a UI warning but does not block Run.
 
 When you choose your own folder in the UI (not Load demo dataset):
 
-- **Deep research** checked → `--auto-deep-research` (uses the LLM API).
-- **Literature / RAG** checked → `--auto-literature-retrieval --pubmed-max-results 10`
-  (PubMed → lite PDF text → LLM). Failures are logged and the run continues with
+- **Deep research** checked -> `--auto-deep-research` (uses the LLM API).
+- **Literature / RAG** checked -> `--auto-literature-retrieval --pubmed-max-results 10`
+  (PubMed -> lite PDF text -> LLM). Failures are logged and the run continues with
   whatever local knowledge files already exist.
-- Missing masks → Allen via `morphagent_allen` when available; otherwise the
+- Missing masks -> Allen via `morphagent_allen` when available; otherwise the
   sample is skipped gracefully (install optional Allen env only if needed).
 
 See the top-level `README.md` and `installation_skill.md` for full details.

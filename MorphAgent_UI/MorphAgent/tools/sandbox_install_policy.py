@@ -43,7 +43,7 @@ CORE_SCIENCE_PACKAGES = frozenset(
     }
 )
 
-# Import name → preferred pip distribute name (for messaging only).
+# Import name -> preferred pip distribute name (for messaging only).
 _IMPORT_TO_PIP = {
     "skimage": "scikit-image",
     "sklearn": "scikit-learn",

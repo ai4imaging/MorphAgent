@@ -1,4 +1,4 @@
-"""OpenAI-compatible base URL helpers (e.g. missing ``/v1`` → 404)."""
+"""OpenAI-compatible base URL helpers (e.g. missing ``/v1`` -> 404)."""
 from __future__ import annotations
 
 from typing import Any, Optional

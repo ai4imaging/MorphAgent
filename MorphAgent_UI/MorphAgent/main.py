@@ -11,6 +11,24 @@ from multiprocessing import Queue, Process
 import queue
 import os
 
+
+def _configure_stdio_utf8() -> None:
+    """Avoid Windows GBK UnicodeEncodeError on emoji / non-ASCII prints."""
+
+    os.environ.setdefault("PYTHONUTF8", "1")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+_configure_stdio_utf8()
+
 import numpy as np
 import pandas as pd
 import tifffile
@@ -228,7 +246,7 @@ def _vlm_worker_process(
             elif not isinstance(round_results_dir, Path):
                 round_results_dir = Path(str(round_results_dir))
     except Exception as e:
-        print(f"  ⚠️  GPU {gpu_id} worker process failed to convert argument types: {e}")
+        print(f"  [WARN]  GPU {gpu_id} worker process failed to convert argument types: {e}")
         return
     
     try:
@@ -242,7 +260,7 @@ def _vlm_worker_process(
             batch_log_fp.write(f"[GPU {gpu_id}] Process ID: {os.getpid()}\n")
             batch_log_fp.flush()
     except Exception as e:
-        print(f"  ⚠️  GPU {gpu_id} failed to create log file: {e}")
+        print(f"  [WARN]  GPU {gpu_id} failed to create log file: {e}")
         batch_log_fp = None
     
     try:
@@ -258,16 +276,16 @@ def _vlm_worker_process(
         from tools.segmentation_tool import get_segmentation_tool
         
         if batch_log_fp:
-            batch_log_fp.write(f"[GPU {gpu_id}] ✅ Modules imported successfully\n")
+            batch_log_fp.write(f"[GPU {gpu_id}] [OK] Modules imported successfully\n")
             batch_log_fp.flush()
     except Exception as e:
-        error_msg = f"[GPU {gpu_id}] ❌ Module import failed: {e}"
+        error_msg = f"[GPU {gpu_id}] [ERROR] Module import failed: {e}"
         if batch_log_fp:
             batch_log_fp.write(f"{error_msg}\n")
             import traceback
             batch_log_fp.write(traceback.format_exc() + "\n")
             batch_log_fp.flush()
-        print(f"  ⚠️  {error_msg}")
+        print(f"  [WARN]  {error_msg}")
         if batch_log_fp:
             batch_log_fp.close()
         return
@@ -302,7 +320,7 @@ def _vlm_worker_process(
                 try:
                     task = task_queue.get(timeout=1)
                     if batch_log_fp:
-                        batch_log_fp.write(f"[GPU {gpu_id}] ✅ Successfully got task: {task}\n")
+                        batch_log_fp.write(f"[GPU {gpu_id}] [OK] Successfully got task: {task}\n")
                         batch_log_fp.flush()
                 except queue.Empty:
                     # Queue is empty, keep waiting (other processes may still be working)
@@ -312,7 +330,7 @@ def _vlm_worker_process(
                     continue
                 except Exception as get_error:
                     # Some other error occurred while getting the task
-                    error_msg = f"[GPU {gpu_id}] ❌ Error getting task from queue: {get_error}"
+                    error_msg = f"[GPU {gpu_id}] [ERROR] Error getting task from queue: {get_error}"
                     if batch_log_fp:
                         batch_log_fp.write(f"{error_msg}\n")
                         import traceback
@@ -332,7 +350,7 @@ def _vlm_worker_process(
                 try:
                     sample_index, sample_id = task
                 except (ValueError, TypeError) as unpack_err:
-                    error_msg = f"[GPU {gpu_id}] ❌ Task unpacking failed: task={task}, error={unpack_err}"
+                    error_msg = f"[GPU {gpu_id}] [ERROR] Task unpacking failed: task={task}, error={unpack_err}"
                     if batch_log_fp:
                         batch_log_fp.write(f"{error_msg}\n")
                         import traceback
@@ -341,7 +359,7 @@ def _vlm_worker_process(
                     continue
                 
                 if batch_log_fp:
-                    batch_log_fp.write(f"[GPU {gpu_id}] 📋 Starting to process task #{task_count}: sample_index={sample_index}, sample_id={sample_id}\n")
+                    batch_log_fp.write(f"[GPU {gpu_id}] [INFO] Starting to process task #{task_count}: sample_index={sample_index}, sample_id={sample_id}\n")
                     batch_log_fp.flush()
                 
                 if batch_log_fp:
@@ -362,7 +380,7 @@ def _vlm_worker_process(
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
                     if batch_log_fp:
-                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: ❌ {error_msg}\n")
+                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: [ERROR] {error_msg}\n")
                         batch_log_fp.flush()
                     result_queue.put((sample_index, sample_id, {}))
                     if batch_log_fp:
@@ -389,7 +407,7 @@ def _vlm_worker_process(
                 except Exception as e:
                     error_msg = f"Error selecting data source for sample {sample_id}: {e}"
                     if batch_log_fp:
-                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: ❌ {error_msg}\n")
+                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: [ERROR] {error_msg}\n")
                         import traceback
                         batch_log_fp.write(traceback.format_exc() + "\n")
                         batch_log_fp.flush()
@@ -402,7 +420,7 @@ def _vlm_worker_process(
                 if not image_paths:
                     error_msg = f"No image files found for sample {sample_id}"
                     if batch_log_fp:
-                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: ❌ {error_msg}\n")
+                        batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: [ERROR] {error_msg}\n")
                         batch_log_fp.flush()
                     result_queue.put((sample_index, sample_id, {}))
                     if batch_log_fp:
@@ -431,7 +449,7 @@ def _vlm_worker_process(
                             # Still score with VLM on the raw image; do not zero-out the sample.
                             if batch_log_fp:
                                 batch_log_fp.write(
-                                    f"{sample_id}: ⚠️ Segmentation failed; "
+                                    f"{sample_id}: [WARN] Segmentation failed; "
                                     f"continuing VLM scoring without mask\n"
                                 )
                             sample_seg_mask = None
@@ -468,7 +486,7 @@ def _vlm_worker_process(
                     attempt_count += 1
                     try:
                         if attempt_count > 1:
-                            retry_msg = f"[GPU {gpu_id}] {sample_id}: 🔄 Retry #{attempt_count - 1}"
+                            retry_msg = f"[GPU {gpu_id}] {sample_id}: [RETRY] Retry #{attempt_count - 1}"
                             if batch_log_fp:
                                 batch_log_fp.write(f"{retry_msg}\n")
                                 batch_log_fp.flush()
@@ -501,9 +519,9 @@ def _vlm_worker_process(
                             
                             if batch_log_fp:
                                 if has_valid_results:
-                                    batch_log_fp.write(f"{sample_id}: ✅ Batch scoring complete\n")
+                                    batch_log_fp.write(f"{sample_id}: [OK] Batch scoring complete\n")
                                 else:
-                                    batch_log_fp.write(f"{sample_id}: ⚠️  Batch scoring complete but all results are None\n")
+                                    batch_log_fp.write(f"{sample_id}: [WARN]  Batch scoring complete but all results are None\n")
                                 for feat_name, value in batch_results.items():
                                     batch_log_fp.write(f"  {feat_name}: {value}\n")
                                 batch_log_fp.flush()
@@ -516,12 +534,12 @@ def _vlm_worker_process(
                             result_queue.put((sample_index, sample_id, batch_results))
                             
                             if batch_log_fp:
-                                batch_log_fp.write(f"[GPU {gpu_id}] ✅ Put result into the result queue\n")
+                                batch_log_fp.write(f"[GPU {gpu_id}] [OK] Put result into the result queue\n")
                                 batch_log_fp.flush()
                             break
                         else:
                             if batch_log_fp:
-                                batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: ⚠️  Batch feature extraction returned empty results\n")
+                                batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: [WARN]  Batch feature extraction returned empty results\n")
                                 batch_log_fp.flush()
                             result_queue.put((sample_index, sample_id, {}))
                             if batch_log_fp:
@@ -529,14 +547,14 @@ def _vlm_worker_process(
                                 batch_log_fp.flush()
                             break
                     except TimeoutError as e:
-                        error_msg = f"[GPU {gpu_id}] {sample_id}: ❌ Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
+                        error_msg = f"[GPU {gpu_id}] {sample_id}: [ERROR] Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
                         if batch_log_fp:
                             batch_log_fp.write(f"{error_msg}\n")
                             batch_log_fp.flush()
                         
                         if attempt_count >= max_attempts:
                             if batch_log_fp:
-                                batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: ❌ Timeout error, already tried {max_attempts} times, skipping this sample\n")
+                                batch_log_fp.write(f"[GPU {gpu_id}] {sample_id}: [ERROR] Timeout error, already tried {max_attempts} times, skipping this sample\n")
                                 batch_log_fp.flush()
                             result_queue.put((sample_index, sample_id, {}))
                             if batch_log_fp:
@@ -546,7 +564,7 @@ def _vlm_worker_process(
                             import time
                             time.sleep(1)
                     except Exception as e:
-                        error_msg = f"[GPU {gpu_id}] {sample_id}: ❌ {e}"
+                        error_msg = f"[GPU {gpu_id}] {sample_id}: [ERROR] {e}"
                         if batch_log_fp:
                             batch_log_fp.write(f"{error_msg}\n")
                             import traceback
@@ -613,13 +631,13 @@ def process_sample(
     
     sample_dir = data_root / sample_id
     if not sample_dir.exists():
-        print(f"⚠️  Sample directory does not exist: {sample_dir}")
+        print(f"[WARN]  Sample directory does not exist: {sample_dir}")
         return None
     
     # Note: visualize_first_sample_channels uses a generic lookup and does not depend on features
     image_paths = find_image_paths(sample_dir, dataset_description)
     if not image_paths:
-        print(f"⚠️  No image files found for sample {sample_id}")
+        print(f"[WARN]  No image files found for sample {sample_id}")
         return None
     
     state: AgentState = {
@@ -659,7 +677,7 @@ def visualize_first_sample_channels(
     print(f"\nStep 2.5: Save and visualize each channel of the first sample")
     
     if not first_image_paths:
-        print("  ⚠️  Warning: no image files found for the first sample, skipping visualization")
+        print("[WARN]  Warning: no image files found for the first sample, skipping visualization")
         return
     
     # Create the visualization directory
@@ -669,7 +687,7 @@ def visualize_first_sample_channels(
     # Try to read the first image file
     first_image_path = Path(first_image_paths[0])
     if not first_image_path.exists():
-        print(f"  ⚠️  Warning: image file does not exist: {first_image_path}")
+        print(f"  [WARN]  Warning: image file does not exist: {first_image_path}")
         return
     
     try:
@@ -685,7 +703,7 @@ def visualize_first_sample_channels(
                 data = tifffile.imread(str(first_image_path))
             except Exception as e:
                 # If tifffile fails, try reading with PIL
-                print(f"  ⚠️  Warning: tifffile read failed, trying PIL: {e}")
+                print(f"  [WARN]  Warning: tifffile read failed, trying PIL: {e}")
                 img = Image.open(str(first_image_path))
                 data = np.array(img)
         else:
@@ -720,7 +738,7 @@ def visualize_first_sample_channels(
             height, width = data.shape
             channels = [data]
         else:
-            print(f"  ⚠️  Warning: unsupported data shape: {data.shape}")
+            print(f"  [WARN]  Warning: unsupported data shape: {data.shape}")
             return
         
         print(f"  Detected {num_channels} channels")
@@ -807,10 +825,10 @@ def visualize_first_sample_channels(
         plt.close()
         print(f"  Saved summary figure: all_channels_summary.png")
         
-        print(f"  ✅ Visualization complete, files saved at: {viz_dir}")
+        print(f"  [OK] Visualization complete, files saved at: {viz_dir}")
         
     except Exception as e:
-        print(f"  ❌ Error: an error occurred while processing the image: {e}")
+        print(f"  [ERROR] Error: an error occurred while processing the image: {e}")
         import traceback
         traceback.print_exc()
 
@@ -902,7 +920,7 @@ def execute_feature_on_all_samples(
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # Intelligently select the data source (based on the feature requirements)
@@ -914,7 +932,7 @@ def execute_feature_on_all_samples(
                 if not image_paths:
                     error_msg = f"No image files found for sample {sample_id}"
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # For each sample, check and run segmentation (if needed)
@@ -925,7 +943,7 @@ def execute_feature_on_all_samples(
                     if existing_seg:
                         sample_seg_mask = str(existing_seg)
                         if log_fp:
-                            log_fp.write(f"{sample_id}: ✅ Using existing segmentation result: {existing_seg}\n")
+                            log_fp.write(f"{sample_id}: [OK] Using existing segmentation result: {existing_seg}\n")
                     else:
                         # Run segmentation (using the LangChain tool)
                         print(f"    [Sample {sample_id}] Running segmentation...")
@@ -938,21 +956,21 @@ def execute_feature_on_all_samples(
                         if seg_result.get("success"):
                             sample_seg_mask = seg_result.get("mask_path")
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ✅ Segmentation complete: {sample_seg_mask}\n")
+                                log_fp.write(f"{sample_id}: [OK] Segmentation complete: {sample_seg_mask}\n")
                         else:
                             error_msg = (
                                 f"Segmentation failed: {seg_result.get('message', 'Unknown error')}; "
                                 f"continuing VLM scoring without mask"
                             )
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ⚠️  {error_msg}\n")
-                            print(f"    ⚠️  {sample_id}: {error_msg}")
+                                log_fp.write(f"{sample_id}: [WARN]  {error_msg}\n")
+                            print(f"    [WARN]  {sample_id}: {error_msg}")
                             sample_seg_mask = None
                 sample_dir = data_root / sample_id
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # Intelligently select the data source (based on the feature requirements)
@@ -964,7 +982,7 @@ def execute_feature_on_all_samples(
                 if not image_paths:
                     error_msg = f"No image files found for sample {sample_id}"
                     if log_fp:
-                        log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # Build AgentState for VLM execution
@@ -1001,7 +1019,7 @@ def execute_feature_on_all_samples(
                     attempt_count += 1
                     try:
                         if attempt_count > 1:
-                            retry_msg = f"{sample_id}: 🔄 Retry #{attempt_count - 1} (of {max_attempts} attempts)"
+                            retry_msg = f"{sample_id}: [RETRY] Retry #{attempt_count - 1} (of {max_attempts} attempts)"
                             print(f"    {retry_msg}")
                             if log_fp:
                                 log_fp.write(f"{retry_msg}\n")
@@ -1018,21 +1036,21 @@ def execute_feature_on_all_samples(
                             feature_results[sample_id] = result
                             success = True
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ✅ {result}\n")
+                                log_fp.write(f"{sample_id}: [OK] {result}\n")
                         else:
                             # If it returns None but was not a timeout, it may be another error; do not retry
                             if log_fp:
-                                log_fp.write(f"{sample_id}: ⚠️  Feature extraction returned None\n")
+                                log_fp.write(f"{sample_id}: [WARN]  Feature extraction returned None\n")
                             break  # exit the retry loop
                     except TimeoutError as e:
-                        error_msg = f"{sample_id}: ❌ Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
+                        error_msg = f"{sample_id}: [ERROR] Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
                         if log_fp:
                             log_fp.write(f"{error_msg}\n")
                             log_fp.flush()
                         
                         if attempt_count >= max_attempts:
                             # Reached the maximum number of attempts, skip this sample
-                            final_error = f"{sample_id}: ❌ Timeout error, already tried {max_attempts} times, skipping this sample"
+                            final_error = f"{sample_id}: [ERROR] Timeout error, already tried {max_attempts} times, skipping this sample"
                             print(f"    {final_error}")
                             if log_fp:
                                 log_fp.write(f"{final_error}\n")
@@ -1043,7 +1061,7 @@ def execute_feature_on_all_samples(
                             time.sleep(1)  # wait 1 second before retrying
                     except Exception as e:
                         # Other exceptions are not retried, just skipped
-                        error_msg = f"{sample_id}: ❌ {e}"
+                        error_msg = f"{sample_id}: [ERROR] {e}"
                         if log_fp:
                             log_fp.write(f"{error_msg}\n")
                         import traceback
@@ -1081,7 +1099,7 @@ def execute_feature_on_all_samples(
                     if first_image_paths:
                         print(f"    Running segmentation on sample {sample_ids[0]}...")
                         # TODO: implement real segmentation
-                        print(f"    ⚠️  Segmentation not yet implemented, skipping features that need seg")
+                        print(f"    [WARN]  Segmentation not yet implemented, skipping features that need seg")
                         return {}
         
         # Create the log file
@@ -1101,7 +1119,7 @@ def execute_feature_on_all_samples(
                 if not sample_dir.exists():
                     error_msg = f"Sample directory does not exist: {sample_dir}"
                     if log_fp:
-                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # Intelligently select the data source (based on the feature requirements)
@@ -1113,7 +1131,7 @@ def execute_feature_on_all_samples(
                 if not image_paths:
                     error_msg = f"No image files found for sample {sample_id}"
                     if log_fp:
-                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: [ERROR] {error_msg}\n")
                     continue
                 
                 # Run the feature
@@ -1130,14 +1148,14 @@ def execute_feature_on_all_samples(
                     if result is not None:
                         feature_results[sample_id] = result
                         if log_fp:
-                            log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: ✅ {result}\n")
+                            log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: [OK] {result}\n")
                     else:
                         if log_fp:
-                            log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: ⚠️  Feature extraction returned None\n")
+                            log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: [WARN]  Feature extraction returned None\n")
                 except Exception as e:
                     error_msg = str(e)
                     if log_fp:
-                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: ❌ {error_msg}\n")
+                        log_fp.write(f"[{i}/{len(sample_ids)}] {sample_id}: [ERROR] {error_msg}\n")
                     import traceback
                     if log_fp:
                         log_fp.write(traceback.format_exc() + "\n")
@@ -1277,7 +1295,7 @@ def execute_feature_on_all_samples(
                 if seg_result.get("success"):
                     seg_mask_path = Path(seg_result.get("mask_path"))
                 else:
-                    print(f"    ⚠️  {sample_id}: Segmentation failed")
+                    print(f"    [WARN]  {sample_id}: Segmentation failed")
                     continue
             
             # Compute the relative path (relative to data_root)
@@ -1291,7 +1309,7 @@ def execute_feature_on_all_samples(
                 "absolute_segmentation_mask_path": str(seg_mask_path)
             }
         
-        print(f"    ✅ Completed segmentation check for {len(sample_paths_info)}/{len(sample_ids)} samples")
+        print(f"    [OK] Completed segmentation check for {len(sample_paths_info)}/{len(sample_ids)} samples")
     
     # Add the path information to state for use by code generation
     if needs_segmentation:
@@ -1554,7 +1572,7 @@ Examples:
     )
     
     print("="*60)
-    print("🔬 MorphAgent - batch processing mode")
+    print("MorphAgent - batch processing mode")
     print("="*60)
     print(f"Query: {args.user_query}")
     
@@ -1583,7 +1601,7 @@ Examples:
     sample_ids = read_dataset_index(data_root)
     print(f"  Found {len(sample_ids)} samples")
     if not sample_ids:
-        print("❌ Error: no processable samples found")
+        print("[ERROR] Error: no processable samples found")
         sys.exit(1)
     
     # Step 2: Dataset understanding
@@ -1735,7 +1753,7 @@ Examples:
                     seg_files_info.append({"index": idx, "name": name, "stem": path.stem})
             if seg_files_info:
                 segmentation_mask_order = _generate_mask_order_description(seg_files_info)
-                print(f"  ✅ Generated mask order description (based on sample {first_sample_with_seg}, {len(seg_files_info)} files total)")
+                print(f"  [OK] Generated mask order description (based on sample {first_sample_with_seg}, {len(seg_files_info)} files total)")
     else:
         # Segmentation not enabled: record everything as "not run"; during coding data_path_selector will not return seg, i.e. seg is None/empty
         segmentation_results = {sid: "failed" for sid in sample_ids}
@@ -1805,7 +1823,7 @@ Examples:
         if completed_rounds:
             last_completed = max(completed_rounds)
             start_round = last_completed + 1
-            print(f"  ♻️  Resume run: detected {len(completed_rounds)} completed rounds (highest round {last_completed}), continuing from round {start_round}")
+            print(f"  [RESUME]  Resume run: detected {len(completed_rounds)} completed rounds (highest round {last_completed}), continuing from round {start_round}")
             if features_csv_path.exists():
                 try:
                     _resume_df = pd.read_csv(features_csv_path)
@@ -1813,14 +1831,14 @@ Examples:
                 except Exception:
                     pass
         else:
-            print(f"  ♻️  Resume run: no completed rounds found in {results_dir}, starting from round 1")
+            print(f"  [RESUME]  Resume run: no completed rounds found in {results_dir}, starting from round 1")
         if start_round > args.num_rounds:
-            print(f"  ✅ The completed rounds ({start_round - 1}) already meet or exceed the target number of rounds ({args.num_rounds}), no need to continue")
+            print(f"  [OK] The completed rounds ({start_round - 1}) already meet or exceed the target number of rounds ({args.num_rounds}), no need to continue")
 
     # Multi-round execution loop
     for round_num in range(start_round, args.num_rounds + 1):
         print(f"\n{'='*80}")
-        print(f"🔄 Feature extraction round {round_num}/{args.num_rounds}")
+        print(f"[RETRY] Feature extraction round {round_num}/{args.num_rounds}")
         print(f"{'='*80}")
         
         # Create the results directory for this round
@@ -1954,11 +1972,11 @@ Examples:
             feature_plan = final_state.get("feature_plan")
         
         if not feature_plan or "features" not in feature_plan:
-            print("❌ Error: failed to generate a feature plan")
+            print("[ERROR] Error: failed to generate a feature plan")
             if round_num == 1:
                 sys.exit(1)
             else:
-                print("  ⚠️  Skipping this round, continuing to the next")
+                print("[WARN]  Skipping this round, continuing to the next")
                 continue
 
         # If the user query explicitly lists feature names (1) xxx_feature: ...), force the use of that list to keep the planner on track
@@ -1994,7 +2012,7 @@ Examples:
 
             feature_plan["features"] = enforced_features
             print(
-                f"  🔒 Detected an explicit user feature list; forcing the use of {len(enforced_features)} specified features (in query order)."
+                f"  [LOCK] Detected an explicit user feature list; forcing the use of {len(enforced_features)} specified features (in query order)."
             )
         
         print(f"  Generated {len(feature_plan['features'])} features")
@@ -2031,7 +2049,7 @@ Examples:
                     with open(description_path, 'r', encoding='utf-8') as f:
                         description_text = f.read()
                 except Exception as e:
-                    print(f"  ⚠️  Warning: failed to read the description file: {e}")
+                    print(f"  [WARN]  Warning: failed to read the description file: {e}")
             
             # Preprocess all samples to ensure the slices directory exists
             preprocess_results = preprocess_all_samples(
@@ -2048,15 +2066,15 @@ Examples:
         # According to the method restriction: for code/vlm, keep all features and compute them uniformly with that method, and normalize feature names (code strips the vlm_ prefix, vlm adds the vlm_ prefix)
         if args.method == "code":
             features = [{**f, "method": "code", "name": _feature_name_for_method(f.get("name", ""), "code")} for f in features]
-            print(f"  📌 Method restricted to code: all {len(features)} features are computed using code (the vlm_ prefix has been removed from names)")
+            print(f"  [NOTE] Method restricted to code: all {len(features)} features are computed using code (the vlm_ prefix has been removed from names)")
         elif args.method == "vlm":
             features = [{**f, "method": "vlm", "name": _feature_name_for_method(f.get("name", ""), "vlm")} for f in features]
-            print(f"  📌 Method restricted to vlm: all {len(features)} features are computed using VLM (the vlm_ prefix has been added to names)")
+            print(f"  [NOTE] Method restricted to vlm: all {len(features)} features are computed using VLM (the vlm_ prefix has been added to names)")
 
         # Keep planner-assigned methods as-is (do not rebalance by code-vlm-ratio).
 
         if not features:
-            print("  ⚠️  No features to extract")
+            print("[WARN]  No features to extract")
             all_results: Dict[str, Dict[str, Any]] = {}
             # If the CSV file does not exist, create an empty CSV file (with only the sample_id column)
             if not features_csv_path.exists():
@@ -2072,12 +2090,12 @@ Examples:
             if features_csv_path.exists() and round_num > 1:
                 # If the file already exists (not the first round), read the existing data
                 features_df = pd.read_csv(features_csv_path)
-                print(f"  ✅ Read existing CSV file: {features_csv_path} ({len(features_df.columns) - 1} features already present)")
+                print(f"  [OK] Read existing CSV file: {features_csv_path} ({len(features_df.columns) - 1} features already present)")
             else:
                 # Initialize the CSV file: create a DataFrame with only the sample_id column
                 features_df = pd.DataFrame({'sample_id': sample_ids})
                 features_df.to_csv(features_csv_path, index=False, encoding='utf-8')
-                print(f"  ✅ Initialized CSV file: {features_csv_path}")
+                print(f"  [OK] Initialized CSV file: {features_csv_path}")
             
             # Separate VLM features and code features
             vlm_features = [f for f in features if f.get("method", "code") == "vlm"]
@@ -2089,7 +2107,7 @@ Examples:
                 
                 # The online VLM does not need a local GPU, and multiprocessing spawn loses the apply_vlm_provider state, so force a single process
                 if args.multigpu and settings.vlm_api_provider == "online":
-                    print("  ⚠️  When vlm-api-provider=online, multi-GPU is not used; forcing single-process online API calls")
+                    print("[WARN]  When vlm-api-provider=online, multi-GPU is not used; forcing single-process online API calls")
                     args.multigpu = False
 
                 # Check whether multi-GPU is enabled
@@ -2097,12 +2115,12 @@ Examples:
                     # Multi-GPU mode: parallel processing
                     available_gpus = _detect_available_gpus()
                     if not available_gpus:
-                        print("  ⚠️  Warning: no available GPU detected, falling back to single-GPU mode")
+                        print("[WARN]  Warning: no available GPU detected, falling back to single-GPU mode")
                         use_multigpu = False
                     else:
                         use_multigpu = True
                         num_gpus = len(available_gpus)
-                        print(f"  ✅ Detected {num_gpus} GPUs: {available_gpus}")
+                        print(f"  [OK] Detected {num_gpus} GPUs: {available_gpus}")
                 else:
                     use_multigpu = False
                     available_gpus = []
@@ -2177,7 +2195,7 @@ Examples:
                                 _time.sleep(1)
                         return sample_id, None, "Unknown error"
 
-                    print(f"  🚀 Online API concurrency mode: {concurrency} concurrent threads, processing {len(sample_ids)} samples")
+                    print(f"  [INFO] Online API concurrency mode: {concurrency} concurrent threads, processing {len(sample_ids)} samples")
                     completed = 0
                     with tqdm(total=len(sample_ids), desc="  VLM batch scoring (concurrent)", leave=False, ncols=80) as pbar:
                         with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -2196,10 +2214,10 @@ Examples:
                                 if err and batch_log_file:
                                     with log_lock:
                                         with open(batch_log_file, 'a', encoding='utf-8') as _lf:
-                                            _lf.write(f"{sample_id}: ⚠️  {err}\n")
+                                            _lf.write(f"{sample_id}: [WARN]  {err}\n")
                                 completed += 1
                                 pbar.update(1)
-                    print(f"  ✅ Online concurrent processing complete: {completed}/{len(sample_ids)} samples")
+                    print(f"  [OK] Online concurrent processing complete: {completed}/{len(sample_ids)} samples")
 
                 elif use_multigpu:
                     # Multi-GPU parallel processing
@@ -2259,7 +2277,7 @@ Examples:
                     completed_count = 0
                     total_samples = len(sample_ids)
                     
-                    print(f"  🚀 Started {len(processes)} worker processes, processing {total_samples} samples in parallel")
+                    print(f"  [INFO] Started {len(processes)} worker processes, processing {total_samples} samples in parallel")
                     
                     # Use a progress bar to show progress
                     with tqdm(total=total_samples, desc="  VLM batch scoring (multi-GPU)", leave=False, ncols=80) as pbar:
@@ -2285,7 +2303,7 @@ Examples:
                                     break
                             except Exception as e:
                                 # Other exceptions: log and continue
-                                print(f"  ⚠️  Error occurred while collecting results: {e}")
+                                print(f"  [WARN]  Error occurred while collecting results: {e}")
                                 # Check whether the processes are still running
                                 if all(not p.is_alive() for p in processes):
                                     break
@@ -2311,7 +2329,7 @@ Examples:
                             if sample_id not in all_results:
                                 all_results[sample_id] = {}
                     
-                    print(f"  ✅ Multi-GPU processing complete: {completed_count}/{total_samples} samples")
+                    print(f"  [OK] Multi-GPU processing complete: {completed_count}/{total_samples} samples")
                     
                 else:
                     # Single-GPU mode: keep the original logic
@@ -2345,7 +2363,7 @@ Examples:
                             if not sample_dir.exists():
                                 error_msg = f"Sample directory does not exist: {sample_dir}"
                                 if batch_log_fp:
-                                    batch_log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                                    batch_log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                                 continue
                             
                             # Intelligently select the data source (using the requirements of the first VLM feature)
@@ -2357,7 +2375,7 @@ Examples:
                             if not image_paths:
                                 error_msg = f"No image files found for sample {sample_id}"
                                 if batch_log_fp:
-                                    batch_log_fp.write(f"{sample_id}: ❌ {error_msg}\n")
+                                    batch_log_fp.write(f"{sample_id}: [ERROR] {error_msg}\n")
                                 continue
                             
                             # Check and run segmentation (only when data segmentation is enabled and the feature requires it)
@@ -2381,7 +2399,7 @@ Examples:
                                     else:
                                         if batch_log_fp:
                                             batch_log_fp.write(
-                                                f"{sample_id}: ⚠️ Segmentation failed; "
+                                                f"{sample_id}: [WARN] Segmentation failed; "
                                                 f"continuing VLM scoring without mask\n"
                                             )
                                         sample_seg_mask = None
@@ -2418,7 +2436,7 @@ Examples:
                                 attempt_count += 1
                                 try:
                                     if attempt_count > 1:
-                                        retry_msg = f"{sample_id}: 🔄 Retry #{attempt_count - 1} (of {max_attempts} attempts)"
+                                        retry_msg = f"{sample_id}: [RETRY] Retry #{attempt_count - 1} (of {max_attempts} attempts)"
                                         print(f"    {retry_msg}")
                                         if batch_log_fp:
                                             batch_log_fp.write(f"{retry_msg}\n")
@@ -2446,24 +2464,24 @@ Examples:
                                         
                                         if batch_log_fp:
                                             if has_valid_results:
-                                                batch_log_fp.write(f"{sample_id}: ✅ Batch scoring complete\n")
+                                                batch_log_fp.write(f"{sample_id}: [OK] Batch scoring complete\n")
                                             else:
-                                                batch_log_fp.write(f"{sample_id}: ⚠️  Batch scoring complete but all results are None\n")
+                                                batch_log_fp.write(f"{sample_id}: [WARN]  Batch scoring complete but all results are None\n")
                                             for feat_name, value in batch_results.items():
                                                 batch_log_fp.write(f"  {feat_name}: {value}\n")
                                             batch_log_fp.flush()
                                     else:
                                         if batch_log_fp:
-                                            batch_log_fp.write(f"{sample_id}: ⚠️  Batch feature extraction returned empty results\n")
+                                            batch_log_fp.write(f"{sample_id}: [WARN]  Batch feature extraction returned empty results\n")
                                         break
                                 except TimeoutError as e:
-                                    error_msg = f"{sample_id}: ❌ Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
+                                    error_msg = f"{sample_id}: [ERROR] Timeout error (attempt {attempt_count}/{max_attempts}): {e}"
                                     if batch_log_fp:
                                         batch_log_fp.write(f"{error_msg}\n")
                                         batch_log_fp.flush()
                                     
                                     if attempt_count >= max_attempts:
-                                        final_error = f"{sample_id}: ❌ Timeout error, already tried {max_attempts} times, skipping this sample"
+                                        final_error = f"{sample_id}: [ERROR] Timeout error, already tried {max_attempts} times, skipping this sample"
                                         print(f"    {final_error}")
                                         if batch_log_fp:
                                             batch_log_fp.write(f"{final_error}\n")
@@ -2472,7 +2490,7 @@ Examples:
                                         import time
                                         time.sleep(1)
                                 except Exception as e:
-                                    error_msg = f"{sample_id}: ❌ {e}"
+                                    error_msg = f"{sample_id}: [ERROR] {e}"
                                     if batch_log_fp:
                                         batch_log_fp.write(f"{error_msg}\n")
                                     import traceback
@@ -2507,14 +2525,14 @@ Examples:
                                 existing_values = features_df[feature_name]
                                 valid_count = existing_values.notna().sum()
                                 if valid_count == 0:
-                                    print(f"  ⚠️  Feature '{feature_name}' already exists but is all NaN, will be updated")
+                                    print(f"  [WARN]  Feature '{feature_name}' already exists but is all NaN, will be updated")
                                 else:
                                     # Even if the feature already exists, generate a new feature (by adding a suffix)
-                                    print(f"  ℹ️  Feature '{feature_name}' already exists ({valid_count}/{len(existing_values)} valid values), will generate a new version")
+                                    print(f"  [INFO]  Feature '{feature_name}' already exists ({valid_count}/{len(existing_values)} valid values), will generate a new version")
                                     # Add a timestamp suffix to ensure the feature name is unique
                                     timestamp_suffix = datetime.now().strftime("_%Y%m%d_%H%M%S")
                                     feature_name = f"{feature_name}_new{timestamp_suffix}"
-                                    print(f"  → New feature name: {feature_name}")
+                                    print(f"  -> New feature name: {feature_name}")
                                     # Update the feature name in all_results (from original_feature_name to feature_name)
                                     for sample_id in sample_ids:
                                         if sample_id in all_results and original_feature_name in all_results[sample_id]:
@@ -2534,15 +2552,15 @@ Examples:
                             
                             features_df[feature_name] = feature_values
                             valid_count = sum(1 for v in feature_values if not pd.isna(v))
-                            print(f"  ✅ Updated CSV: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
+                            print(f"  [OK] Updated CSV: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
                         
                         # Ensure sample_id is the first column, and sort by the sample_ids order
                         cols = ['sample_id'] + [col for col in features_df.columns if col != 'sample_id']
                         features_df = features_df[cols]
                         features_df.to_csv(features_csv_path, index=False, encoding='utf-8')
-                        print(f"  ✅ CSV file saved: {features_csv_path}")
+                        print(f"  [OK] CSV file saved: {features_csv_path}")
                     except Exception as e:
-                        print(f"  ⚠️  Batch CSV update failed: {e}")
+                        print(f"  [WARN]  Batch CSV update failed: {e}")
                         import traceback
                         traceback.print_exc()
             
@@ -2631,11 +2649,11 @@ Examples:
                     )
                     
                     if extract_py_path and extract_py_path.exists():
-                        print(f"    ✅ Code generation and test succeeded: {extract_py_path}")
+                        print(f"    [OK] Code generation and test succeeded: {extract_py_path}")
                         successful_features.append(feature)
                         successful_code_paths.append(extract_py_path)
                     else:
-                        print(f"    ❌ Code generation or test failed, skipping this feature")
+                        print(f"    [ERROR] Code generation or test failed, skipping this feature")
                         failed_features.append(feature)
                 
                 # Step 2: If there are successful features, merge the code and execute
@@ -2653,7 +2671,7 @@ Examples:
                     )
                     
                     if merged_code:
-                        print(f"  ✅ Code merged successfully")
+                        print(f"  [OK] Code merged successfully")
                         
                         # Step 3: Execute the merged code
                         print(f"\n  Step 3: Executing the merged code, processing all samples...")
@@ -2693,13 +2711,13 @@ Examples:
                                     existing_values = features_df[feature_name]
                                     valid_count = existing_values.notna().sum()
                                     if valid_count == 0:
-                                        print(f"  ⚠️  Feature '{feature_name}' already exists but is all NaN, will be updated")
+                                        print(f"  [WARN]  Feature '{feature_name}' already exists but is all NaN, will be updated")
                                     else:
                                         # Generate a new version
-                                        print(f"  ℹ️  Feature '{feature_name}' already exists ({valid_count}/{len(existing_values)} valid values), will generate a new version")
+                                        print(f"  [INFO]  Feature '{feature_name}' already exists ({valid_count}/{len(existing_values)} valid values), will generate a new version")
                                         timestamp_suffix = datetime.now().strftime("_%Y%m%d_%H%M%S")
                                         feature_name = f"{feature_name}_new{timestamp_suffix}"
-                                        print(f"  → New feature name: {feature_name}")
+                                        print(f"  -> New feature name: {feature_name}")
                                 
                                 # Extract feature values (in sample_ids order); the merged code returns keys that are mostly snake_case, so resolve using the display name
                                 feature_values = []
@@ -2726,26 +2744,26 @@ Examples:
                                         all_results[sample_id] = {feature_name: value}
                                 
                                 valid_count = sum(1 for v in feature_values if not pd.isna(v))
-                                print(f"  ✅ Added feature column: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
+                                print(f"  [OK] Added feature column: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
                             
                             # Ensure sample_id is the first column, and sort by the sample_ids order
                             cols = ['sample_id'] + [col for col in features_df.columns if col != 'sample_id']
                             features_df = features_df[cols]
                             features_df.to_csv(features_csv_path, index=False, encoding='utf-8')
-                            print(f"  ✅ CSV file saved: {features_csv_path}")
+                            print(f"  [OK] CSV file saved: {features_csv_path}")
                             
                         except Exception as e:
-                            print(f"  ⚠️  Failed to organize results and save CSV: {e}")
+                            print(f"  [WARN]  Failed to organize results and save CSV: {e}")
                             import traceback
                             traceback.print_exc()
                         
                         # Handle the failed samples
                         if merged_result.errors:
-                            print(f"  ⚠️  {len(merged_result.errors)} samples failed to execute")
+                            print(f"  [WARN]  {len(merged_result.errors)} samples failed to execute")
                             for sample_id, error_msg in list(merged_result.errors.items())[:5]:
                                 print(f"    {sample_id}: {error_msg[:200]}")
                     else:
-                        print(f"  ❌ Code merge failed, falling back to per-feature execution mode")
+                        print(f"  [ERROR] Code merge failed, falling back to per-feature execution mode")
                         # Fallback: run each feature separately on all samples, then aggregate the results and write the CSV
                         from tools.code_executor import CodeExecutor, ExtractionResult
                         executor = CodeExecutor(data_root)
@@ -2776,7 +2794,7 @@ Examples:
                                 for sid, err in extraction_result.errors.items():
                                     fallback_errors[sid] = fallback_errors.get(sid, "") + f"[{fn}] {err}; "
                             except Exception as e:
-                                print(f"    ⚠️  Feature {fn} raised an exception during execution: {e}")
+                                print(f"    [WARN]  Feature {fn} raised an exception during execution: {e}")
                                 for sid in sample_ids:
                                     fallback_values[sid][fn] = np.nan
                         # Reuse Step 4: write the CSV and update all_results with the fallback results
@@ -2794,11 +2812,11 @@ Examples:
                                     existing_values = features_df[feature_name]
                                     valid_count = existing_values.notna().sum()
                                     if valid_count == 0:
-                                        print(f"  ⚠️  Feature '{feature_name}' already exists but is all NaN, will be updated")
+                                        print(f"  [WARN]  Feature '{feature_name}' already exists but is all NaN, will be updated")
                                     else:
                                         timestamp_suffix = datetime.now().strftime("_%Y%m%d_%H%M%S")
                                         feature_name = f"{feature_name}_new{timestamp_suffix}"
-                                        print(f"  → New feature name: {feature_name}")
+                                        print(f"  -> New feature name: {feature_name}")
                                 feature_values = []
                                 for sample_id in sample_ids:
                                     if sample_id in merged_result.values:
@@ -2818,25 +2836,25 @@ Examples:
                                     else:
                                         all_results[sample_id] = {feature_name: value}
                                 valid_count = sum(1 for v in feature_values if not pd.isna(v))
-                                print(f"  ✅ Added feature column: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
+                                print(f"  [OK] Added feature column: {feature_name} ({valid_count}/{len(feature_values)} valid values)")
                             cols = ["sample_id"] + [c for c in features_df.columns if c != "sample_id"]
                             features_df = features_df[cols]
                             features_df.to_csv(features_csv_path, index=False, encoding="utf-8")
-                            print(f"  ✅ CSV file saved: {features_csv_path}")
+                            print(f"  [OK] CSV file saved: {features_csv_path}")
                         except Exception as e:
-                            print(f"  ⚠️  Failed to organize results and save CSV: {e}")
+                            print(f"  [WARN]  Failed to organize results and save CSV: {e}")
                             import traceback
                             traceback.print_exc()
                         if merged_result.errors:
-                            print(f"  ⚠️  {len(merged_result.errors)} samples had execution failures")
+                            print(f"  [WARN]  {len(merged_result.errors)} samples had execution failures")
                             for sample_id, error_msg in list(merged_result.errors.items())[:5]:
                                 print(f"    {sample_id}: {error_msg[:200]}")
                 else:
-                    print(f"  ⚠️  No features had successfully generated code, skipping code feature processing")
+                    print(f"  [WARN]  No features had successfully generated code, skipping code feature processing")
                 
                 # Report the failed features
                 if failed_features:
-                    print(f"\n  ⚠️  {len(failed_features)} features failed code generation or testing:")
+                    print(f"\n  [WARN]  {len(failed_features)} features failed code generation or testing:")
                     for feature in failed_features:
                         print(f"    - {feature.get('name', 'unknown')}")
         
@@ -2851,12 +2869,12 @@ Examples:
             try:
                 if features_csv_path.exists():
                     features_df = pd.read_csv(features_csv_path)
-                    print(f"  ✅ Feature CSV file exists: {features_csv_path} (shape: {features_df.shape})")
+                    print(f"  [OK] Feature CSV file exists: {features_csv_path} (shape: {features_df.shape})")
                     print(f"     Contains {len(features_df.columns) - 1} feature columns")
                 else:
-                    print(f"  ⚠️  Warning: feature CSV file does not exist: {features_csv_path}")
+                    print(f"  [WARN]  Warning: feature CSV file does not exist: {features_csv_path}")
             except Exception as e:
-                print(f"  ⚠️  Failed to validate the CSV file: {e}")
+                print(f"  [WARN]  Failed to validate the CSV file: {e}")
                 import traceback
                 traceback.print_exc()
             
@@ -2864,14 +2882,14 @@ Examples:
             if args.metadata_path:
                 metadata_path = Path(args.metadata_path).resolve()
                 if not metadata_path.exists():
-                    print(f"  ⚠️  Warning: metadata file does not exist, will fall back to unsupervised validation: {metadata_path}")
+                    print(f"  [WARN]  Warning: metadata file does not exist, will fall back to unsupervised validation: {metadata_path}")
                     metadata_path = None
 
             # Step 6: Deterministic feature validation (optional; enabled by default, falls back to unsupervised when metadata does not exist)
             if args.enable_feature_analysis:
                 print(f"\nStep 6: Deterministic feature validation (round {round_num})")
                 if not features_csv_path.exists():
-                    print(f"  ⚠️  Warning: feature file does not exist, skipping validation")
+                    print(f"  [WARN]  Warning: feature file does not exist, skipping validation")
                     print(f"    Required: {features_csv_path}")
                 else:
                     try:
@@ -2922,10 +2940,10 @@ Examples:
                             "summary": validation_result.summary,
                             "planner_feedback": validation_result.planner_feedback,
                         })
-                        print(f"  ✅ Deterministic validation complete")
+                        print(f"  [OK] Deterministic validation complete")
                         print(f"     Retained {len(validation_result.retained_feature_names)} new features, dropped {len(validation_result.dropped_feature_names)} new features")
                     except Exception as e:
-                        print(f"  ⚠️  Deterministic validation failed to execute: {e}")
+                        print(f"  [WARN]  Deterministic validation failed to execute: {e}")
                         import traceback
                         traceback.print_exc()
                         if features:
@@ -2944,7 +2962,7 @@ Examples:
                                 "total_features_so_far": _count_feature_columns(retained_features_csv_path),
                                 "all_historical_feature_names": historical_names,
                             }
-                            print(f"  ✅ Saved basic validation summary (for the next round of feature planning)")
+                            print(f"  [OK] Saved basic validation summary (for the next round of feature planning)")
             else:
                 # No feature validation performed: only build a basic summary to help the next round avoid duplicates
                 if features:
@@ -2963,7 +2981,7 @@ Examples:
                         "total_features_so_far": _count_feature_columns(retained_features_csv_path if retained_features_csv_path.exists() else features_csv_path),
                         "all_historical_feature_names": historical_names,
                     }
-                    print(f"  ⏭️  Skipped deterministic feature validation (--disable-feature-analysis); saved a basic summary for deduplication in the next round")
+                    print(f"  ⏭  Skipped deterministic feature validation (--disable-feature-analysis); saved a basic summary for deduplication in the next round")
         
         # Save the results of this round
         round_results_path = round_results_dir / "round_results.json"
@@ -2976,13 +2994,13 @@ Examples:
         with open(round_results_path, 'w', encoding='utf-8') as f:
             json.dump(round_output, f, indent=2, ensure_ascii=False)
         
-        print(f"\n✅ Round {round_num} complete!")
+        print(f"\n[OK] Round {round_num} complete!")
         print(f"   Results directory: {round_results_dir}")
         print(f"   Cumulative number of features: {len(pd.read_csv(features_csv_path).columns) - 1 if features_csv_path.exists() else 0}")
     
     # Summary after all rounds are complete
     print(f"\n{'='*80}")
-    print(f"🎉 All {args.num_rounds} rounds of feature extraction complete!")
+    print(f"[DONE] All {args.num_rounds} rounds of feature extraction complete!")
     print(f"{'='*80}")
     print(f"Final feature file: {features_csv_path}")
     if features_csv_path.exists():

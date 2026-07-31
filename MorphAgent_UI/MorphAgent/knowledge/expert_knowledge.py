@@ -298,7 +298,7 @@ def extract_expert_knowledge(
     print(f"  Found {len(text_files)} text files, {len(image_files)} image files, {len(pdf_files)} PDF files")
     
     if not (text_files or image_files or pdf_files):
-        print("  [Expert Knowledge] No supported files found")
+        print("[Expert Knowledge] No supported files found")
         return None
     
     # Process text files
@@ -349,7 +349,7 @@ def extract_expert_knowledge(
         pdf_summaries
     )
     
-    print(f"  ✅ Expert knowledge extraction complete")
+    print(f"  [OK] Expert knowledge extraction complete")
     
     # Print the expert knowledge summary
     print(f"\n[Expert Knowledge] Expert knowledge summary:")

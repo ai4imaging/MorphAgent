@@ -24,11 +24,11 @@ print("=" * 60)
 
 try:
     import aicssegmentation
-    print("✓ aicssegmentation is installed")
+    print("aicssegmentation is installed")
     print(f"  location: {aicssegmentation.__file__}")
     print(f"  version : {getattr(aicssegmentation, '__version__', 'unknown')}")
 except ImportError as e:
-    print(f"✗ aicssegmentation is NOT installed: {e}")
+    print(f" aicssegmentation is NOT installed: {e}")
     print("\nAttempting to install the vendored copy next to this script...")
     import subprocess
     # The aicssegmentation package is vendored in this same directory.
@@ -45,7 +45,7 @@ except ImportError as e:
             print("stderr:")
             print(result.stderr)
     else:
-        print(f"✗ Could not find a vendored aicssegmentation under: {aics_path}")
+        print(f" Could not find a vendored aicssegmentation under: {aics_path}")
 
 print("\n" + "=" * 60)
 print("Check core modules")
@@ -60,9 +60,9 @@ modules_to_check = [
 for module in modules_to_check:
     try:
         __import__(module)
-        print(f"✓ {module}")
+        print(f" {module}")
     except ImportError as e:
-        print(f"✗ {module}: {e}")
+        print(f" {module}: {e}")
 
 print("\n" + "=" * 60)
 print("Check other dependencies")
@@ -72,14 +72,14 @@ deps = ["numpy", "scipy", "skimage", "tifffile"]
 for dep in deps:
     try:
         mod = __import__(dep)
-        print(f"✓ {dep}: {mod.__version__ if hasattr(mod, '__version__') else 'installed'}")
+        print(f" {dep}: {mod.__version__ if hasattr(mod, '__version__') else 'installed'}")
     except ImportError:
-        print(f"✗ {dep}: NOT installed")
+        print(f" {dep}: NOT installed")
 
 # Optional: aicsimageio (not required for TIFF driver)
 try:
     import aicsimageio  # noqa: F401
-    print("✓ aicsimageio: installed (optional)")
+    print("aicsimageio: installed (optional)")
 except ImportError:
     print("· aicsimageio: not installed (OK — TIFF path uses tifffile)")
 

@@ -28,7 +28,7 @@ requests==2.32.5
 beautifulsoup4==4.14.3
 lxml==6.0.2
 
-# --- PDF text for RAG + Deep Research (lite extract → LLM; no PaddleX) -------
+# --- PDF text for RAG + Deep Research (lite extract -> LLM; no PaddleX) -------
 # Demo / UI default. Optional heavy layout OCR: pip install paddlex[ocr] paddlepaddle
 # and set RAG_PDF_BACKEND=paddlex.
 pymupdf>=1.24.0,<2

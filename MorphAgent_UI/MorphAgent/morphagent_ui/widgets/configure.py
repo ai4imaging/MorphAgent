@@ -161,7 +161,7 @@ class ConfigurePage(QWidget):
 
         demo_row = QHBoxLayout()
         demo_row.setSpacing(10)
-        self.demo_guide = QLabel("👉")
+        self.demo_guide = QLabel(">>")
         self.demo_guide.setToolTip("Start here for a ready-to-run dataset")
         self.demo_guide.setStyleSheet("font-size: 22px;")
         self.load_demo_button = QPushButton("Load demo dataset")
@@ -1046,7 +1046,7 @@ class ConfigurePage(QWidget):
                 self.config.vlm_online_model = (
                     self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
                 )
-            # Empty VLM → treat as same connection for preflight comfort.
+            # Empty VLM -> treat as same connection for preflight comfort.
             if not (self.config.vlm_base_url and self.config.vlm_online_model and self.config.vlm_api_key):
                 self.config.vlm_base_url = self.config.llm_base_url or current.get("LLM_BASE_URL", "").strip()
                 self.config.vlm_api_key = self.config.llm_api_key

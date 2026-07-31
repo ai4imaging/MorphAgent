@@ -124,7 +124,7 @@ def extract_deep_research(
     pdf_files = sorted(deep_research_dir.glob("*.pdf"))
     
     if not pdf_files and not text_files:
-        print("  [Deep Research] No .pdf / .md / .txt files found")
+        print("[Deep Research] No .pdf / .md / .txt files found")
         return None
     
     print(f"  Found {len(pdf_files)} PDF files, {len(text_files)} text/markdown files")
@@ -140,35 +140,35 @@ def extract_deep_research(
             if text.strip():
                 pdf_texts.append(text)
                 pdf_names.append(text_file.name)
-                print(f"    ✅ Read successfully, text length: {len(text)} characters")
+                print(f"    [OK] Read successfully, text length: {len(text)} characters")
         except Exception as e:
-            print(f"    ❌ Read error: {e}")
+            print(f"    [ERROR] Read error: {e}")
     
-    # 2) PDF reports (lite text extract → LLM; optional PaddleX via RAG_PDF_BACKEND).
+    # 2) PDF reports (lite text extract -> LLM; optional PaddleX via RAG_PDF_BACKEND).
     for pdf_file in pdf_files:
         print(f"  Processing PDF: {pdf_file.name}")
         try:
             text = extract_text_from_pdf(pdf_file, device=device)
             if text.startswith("[ERROR]"):
-                print(f"    ⚠️  {text}")
+                print(f"    [WARN]  {text}")
                 continue
             pdf_texts.append(text)
             pdf_names.append(pdf_file.name)
-            print(f"    ✅ Extracted successfully, text length: {len(text)} characters")
+            print(f"    [OK] Extracted successfully, text length: {len(text)} characters")
         except Exception as e:
-            print(f"    ❌ Processing error: {e}")
+            print(f"    [ERROR] Processing error: {e}")
             import traceback
             traceback.print_exc()
     
     if not pdf_texts:
-        print("  [Deep Research] Failed to extract any content")
+        print("[Deep Research] Failed to extract any content")
         return None
     
     # Summarize all PDF information
     print(f"  Summarizing the content of {len(pdf_texts)} PDFs...")
     deep_research_summary = summarize_deep_research_content(pdf_texts, pdf_names)
     
-    print(f"  ✅ Deep Research extraction complete")
+    print(f"  [OK] Deep Research extraction complete")
     
     # Print the Deep Research summary
     print(f"\n[Deep Research] Deep Research summary:")

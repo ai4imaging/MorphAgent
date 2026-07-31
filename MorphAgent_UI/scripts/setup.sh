@@ -32,6 +32,11 @@ if ! command -v conda >/dev/null 2>&1; then
   exit 1
 fi
 
+# Miniconda 24+ may prompt for Anaconda ToS via conda-anaconda-tos and hang/EOF
+# in non-interactive setup. Official workaround; we install from conda-forge.
+export CONDA_NO_PLUGINS="${CONDA_NO_PLUGINS:-true}"
+export CONDA_REPORT_ERRORS="${CONDA_REPORT_ERRORS:-false}"
+
 if [[ ! -f "${REQ_FILE}" ]]; then
   echo "ERROR: missing requirements file: ${REQ_FILE}" >&2
   exit 1
@@ -145,19 +150,25 @@ ensure_env() {
     echo "Using existing conda environment: ${env}"
   else
     echo "Creating conda environment: ${env}"
+    # Prefer --override-channels so default anaconda.com channels (ToS plugin) are skipped.
     # `conda create -y` is widely supported; keep a no -y fallback just in case.
     set +e
     set +o pipefail
-    conda create -y -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+    conda create -y -n "${env}" -c conda-forge --override-channels "python=3.10" "pip>=24"
     local rc=$?
     if [[ "${rc}" -ne 0 ]]; then
       echo "  retry: conda create --yes -n ${env} ..."
-      conda create --yes -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+      conda create --yes -n "${env}" -c conda-forge --override-channels "python=3.10" "pip>=24"
+      rc=$?
+    fi
+    if [[ "${rc}" -ne 0 ]]; then
+      echo "  retry without override-channels..."
+      conda create -y -n "${env}" -c conda-forge "python=3.10" "pip>=24"
       rc=$?
     fi
     if [[ "${rc}" -ne 0 ]]; then
       echo "  retry without -y: conda create -n ${env} ..."
-      printf 'y\ny\ny\n' | conda create -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+      printf 'a\na\na\ny\ny\ny\n' | conda create -n "${env}" -c conda-forge "python=3.10" "pip>=24"
       rc=$?
     fi
     set -o pipefail

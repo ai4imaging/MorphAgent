@@ -14,13 +14,13 @@
 
 ### 1.2 Signaling Pathways
 
-- **Oxidative stress → eIF2α phosphorylation → translational arrest → stress granule nucleation (TIA-1-dependent):** This is the canonical SG formation pathway exploited experimentally. Arsenite (0.5 mM, 30 min) induces SGs through this pathway. [Evidence: **Strong**]
+- **Oxidative stress -> eIF2α phosphorylation -> translational arrest -> stress granule nucleation (TIA-1-dependent):** This is the canonical SG formation pathway exploited experimentally. Arsenite (0.5 mM, 30 min) induces SGs through this pathway. [Evidence: **Strong**]
 
-- **eIF2α phosphatase inhibition → sustained eIF2α phosphorylation → prolonged SG formation:** Salubrinal blocks eIF2α dephosphorylation, maintaining the translational arrest state and promoting SG persistence. [Evidence: **Strong**]
+- **eIF2α phosphatase inhibition -> sustained eIF2α phosphorylation -> prolonged SG formation:** Salubrinal blocks eIF2α dephosphorylation, maintaining the translational arrest state and promoting SG persistence. [Evidence: **Strong**]
 
-- **Tau hyperphosphorylation → enhanced TIA-1 binding affinity → SG recruitment:** Pseudohyperphosphorylated Tau mutant (TauE14, 14 glutamate substitutions mimicking phosphorylation) strongly promotes TIA-1 interaction compared to wild-type Tau. This phosphorylation-dependent gain of function is critical for pathological SG association. [Evidence: **Strong**]
+- **Tau hyperphosphorylation -> enhanced TIA-1 binding affinity -> SG recruitment:** Pseudohyperphosphorylated Tau mutant (TauE14, 14 glutamate substitutions mimicking phosphorylation) strongly promotes TIA-1 interaction compared to wild-type Tau. This phosphorylation-dependent gain of function is critical for pathological SG association. [Evidence: **Strong**]
 
-- **Cell-to-cell Tau transmission pathway:** Tau secretion → extracellular release → internalization by recipient cells (via bulk endocytosis, macropinocytosis, or membrane permeabilization through lipid raft interaction) → cytosolic localization → TIA-1-dependent SG recruitment. [Evidence: **Strong**]
+- **Cell-to-cell Tau transmission pathway:** Tau secretion -> extracellular release -> internalization by recipient cells (via bulk endocytosis, macropinocytosis, or membrane permeabilization through lipid raft interaction) -> cytosolic localization -> TIA-1-dependent SG recruitment. [Evidence: **Strong**]
 
 ### 1.3 Mechanisms and Inhibition/Activation Modes
 
@@ -90,13 +90,13 @@
 
 ### 2.5 Feature-MoA Mapping
 
-- **Granularity/texture features in TIA-1 channel → SG-inducing MoA (e.g., eIF2α phosphorylation pathway activation):** Increased granularity, texture complexity, and spot count in the TIA-1/RNA-binding protein channel would indicate activation of the stress granule formation pathway. This maps to MoAs involving oxidative stress, translational arrest, or eIF2α phosphorylation. [Evidence: **Weak** — inferred from phenotype-MoA relationships, not experimentally validated with CellProfiler]
+- **Granularity/texture features in TIA-1 channel -> SG-inducing MoA (e.g., eIF2α phosphorylation pathway activation):** Increased granularity, texture complexity, and spot count in the TIA-1/RNA-binding protein channel would indicate activation of the stress granule formation pathway. This maps to MoAs involving oxidative stress, translational arrest, or eIF2α phosphorylation. [Evidence: **Weak** — inferred from phenotype-MoA relationships, not experimentally validated with CellProfiler]
 
-- **Co-localization features (Tau × TIA-1) → Tau pathology / SG recruitment MoA:** High Tau-TIA-1 co-localization specifically indicates pathological Tau recruitment to stress granules, distinguishing it from general SG induction (which increases TIA-1 granularity alone without Tau co-localization). [Evidence: **Weak** — inferred]
+- **Co-localization features (Tau × TIA-1) -> Tau pathology / SG recruitment MoA:** High Tau-TIA-1 co-localization specifically indicates pathological Tau recruitment to stress granules, distinguishing it from general SG induction (which increases TIA-1 granularity alone without Tau co-localization). [Evidence: **Weak** — inferred]
 
-- **Persistent granularity features after stress washout → SG clearance impairment MoA:** Sustained high granularity/texture values in the TIA-1 channel at late time points post-stress would indicate impaired SG dynamics, as caused by internalized pathological Tau. This would distinguish SG-clearance-impairing agents from SG-inducing agents (which would show granularity normalization). [Evidence: **Weak** — inferred from temporal dynamics data]
+- **Persistent granularity features after stress washout -> SG clearance impairment MoA:** Sustained high granularity/texture values in the TIA-1 channel at late time points post-stress would indicate impaired SG dynamics, as caused by internalized pathological Tau. This would distinguish SG-clearance-impairing agents from SG-inducing agents (which would show granularity normalization). [Evidence: **Weak** — inferred from temporal dynamics data]
 
-- **Diffuse-to-punctate transition in Tau channel → hyperphosphorylation-dependent TIA-1 binding:** A shift from low-granularity (diffuse) to high-granularity (punctate) distribution of Tau signal, co-occurring with TIA-1 puncta, would specifically indicate the hyperphosphorylation → TIA-1 interaction → SG recruitment mechanism. [Evidence: **Moderate** — the morphological phenotypes are well-characterized, but the CellProfiler feature mapping is inferred]
+- **Diffuse-to-punctate transition in Tau channel -> hyperphosphorylation-dependent TIA-1 binding:** A shift from low-granularity (diffuse) to high-granularity (punctate) distribution of Tau signal, co-occurring with TIA-1 puncta, would specifically indicate the hyperphosphorylation -> TIA-1 interaction -> SG recruitment mechanism. [Evidence: **Moderate** — the morphological phenotypes are well-characterized, but the CellProfiler feature mapping is inferred]
 
 ---
 

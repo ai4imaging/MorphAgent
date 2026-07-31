@@ -108,7 +108,7 @@ def _find_vlm_data_sources(sample_dir: Path) -> List[str]:
         return dir_files
     
     # Fallback: if there are no secondary files, use primary files
-    print(f"  [Data Selection] ⚠️  No secondary directory found; VLM features fall back to primary files")
+    print(f"  [Data Selection] [WARN]  No secondary directory found; VLM features fall back to primary files")
     return _find_code_data_sources(sample_dir, None)
 
 

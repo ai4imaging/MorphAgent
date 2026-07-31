@@ -645,11 +645,11 @@ def generate_slices_from_3d_tiff(
                 return generated_paths
         
         else:
-            print(f"  ⚠️  Warning: unsupported image dimension {img.ndim}D: {tiff_path}")
+            print(f"  [WARN]  Warning: unsupported image dimension {img.ndim}D: {tiff_path}")
             return []
     
     except Exception as e:
-        print(f"  ⚠️  Warning: failed to process TIFF file {tiff_path}: {e}")
+        print(f"  [WARN]  Warning: failed to process TIFF file {tiff_path}: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -743,7 +743,7 @@ def ensure_slices_directory(
         primary_files.extend(list(sample_dir.glob(f"*{ext.upper()}")))
     
     if not primary_files:
-        print(f"    ⚠️  Warning: no primary files (raw data) found")
+        print(f"    [WARN]  Warning: no primary files (raw data) found")
         return False, []
     
     # Process each primary file
@@ -769,7 +769,7 @@ def ensure_slices_directory(
             all_generated_paths.append(output_path)
     
     if not all_generated_paths:
-        print(f"    ⚠️  Warning: failed to generate any slice files")
+        print(f"    [WARN]  Warning: failed to generate any slice files")
     
     return False, all_generated_paths
 
@@ -799,8 +799,8 @@ def preprocess_all_samples(
     icf_cache = {}  # Cache of ICFs, keyed by channel index
     if settings.enable_illumination_correction:
         if not SCIPY_AVAILABLE:
-            print("  ⚠️  Warning: illumination correction is enabled, but scipy is not installed. Skipping illumination correction.")
-            print("     Install command: pip install scipy")
+            print("[WARN]  Warning: illumination correction is enabled, but scipy is not installed. Skipping illumination correction.")
+            print("Install command: pip install scipy")
         else:
             print(f"\n[Data Preprocessing] Computing Illumination Correction Factor (ICF)...")
             
@@ -814,7 +814,7 @@ def preprocess_all_samples(
                 all_tiff_files.extend(tiff_files)
             
             if len(all_tiff_files) == 0:
-                print("  ⚠️  Warning: no TIFF files found; skipping illumination correction")
+                print("[WARN]  Warning: no TIFF files found; skipping illumination correction")
             else:
                 # Group by channel (assuming all images are in (C, H, W) format)
                 if settings.illumination_correction_group_by_channel:
@@ -837,11 +837,11 @@ def preprocess_all_samples(
                                     downsample_factor=settings.illumination_correction_downsample_factor
                                 )
                                 icf_cache[channel_idx] = icf
-                                print(f"  ✅ Channel {channel_idx} ICF computed (shape: {icf.shape})")
+                                print(f"  [OK] Channel {channel_idx} ICF computed (shape: {icf.shape})")
                             except Exception as e:
-                                print(f"  ⚠️  Warning: ICF computation failed for channel {channel_idx}: {e}")
+                                print(f"  [WARN]  Warning: ICF computation failed for channel {channel_idx}: {e}")
                     except Exception as e:
-                        print(f"  ⚠️  Warning: unable to determine the number of channels; skipping grouping by channel: {e}")
+                        print(f"  [WARN]  Warning: unable to determine the number of channels; skipping grouping by channel: {e}")
                 else:
                     # Compute over all images together (not grouped by channel)
                     try:
@@ -851,9 +851,9 @@ def preprocess_all_samples(
                             downsample_factor=settings.illumination_correction_downsample_factor
                         )
                         icf_cache[0] = icf  # Use channel 0 as the key
-                        print(f"  ✅ ICF computed (shape: {icf.shape})")
+                        print(f"  [OK] ICF computed (shape: {icf.shape})")
                     except Exception as e:
-                        print(f"  ⚠️  Warning: ICF computation failed: {e}")
+                        print(f"  [WARN]  Warning: ICF computation failed: {e}")
     
     # Store the ICF cache in a module-level variable for use by generate_slices_from_3d_tiff
     _icf_cache = icf_cache
@@ -878,7 +878,7 @@ def preprocess_all_samples(
     existed_count = sum(1 for existed, _ in results.values() if existed)
     generated_count = len(sample_ids) - existed_count
     
-    print(f"  ✅ Preprocessing complete: {existed_count} samples already existed, {generated_count} samples generated")
+    print(f"  [OK] Preprocessing complete: {existed_count} samples already existed, {generated_count} samples generated")
     
     return results
 

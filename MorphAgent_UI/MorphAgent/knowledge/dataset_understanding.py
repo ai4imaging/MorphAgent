@@ -105,7 +105,7 @@ def understand_dataset(
         try:
             description_text = load_dataset_description(description_path)
         except Exception as e:
-            print(f"⚠️  Warning: Unable to load description file: {e}")
+            print(f"[WARN]  Warning: Unable to load description file: {e}")
     
     # 2. Analyze the dataset structure
     structure_info = analyze_dataset_structure(data_root)

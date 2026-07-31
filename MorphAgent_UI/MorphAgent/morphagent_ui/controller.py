@@ -43,7 +43,7 @@ class StageDetector:
         (re.compile(r"^Step 3(?:\.5)?:"), 2),
         (re.compile(r"^Step 4:"), 3),
         (re.compile(r"^Step (?:5(?:\.5)?|6):"), 4),
-        (re.compile(r"^(?:✅ Round \d+ complete!|🎉 All \d+ rounds .*complete!)"), 5),
+        (re.compile(r"^(?:\[OK\] Round \d+ complete!|\[DONE\] All \d+ rounds .*complete!)"), 5),
         (re.compile(r"^Final feature file:"), 5),
         (re.compile(r"^Step [12]:"), 0),
     )
@@ -149,6 +149,10 @@ class PipelineWorker(QThread):
                 log_handle.write(f"[{datetime.now().isoformat(timespec='seconds')}] UI launch\n")
                 env = os.environ.copy()
                 env.update(self.config.pipeline_environment())
+                # Child prints may include non-ASCII; force UTF-8 so Windows GBK
+                # consoles/pipes do not raise UnicodeEncodeError mid-run.
+                env.setdefault("PYTHONUTF8", "1")
+                env.setdefault("PYTHONIOENCODING", "utf-8")
                 self._process = subprocess.Popen(
                     self.config.build_command(),
                     cwd=self.config.repository_root,

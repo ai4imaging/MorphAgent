@@ -50,6 +50,8 @@ set "MORPHAGENT_NO_PAUSE=1"
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 set "CONDA_REPORT_ERRORS=false"
+REM Skip conda-anaconda-tos interactive prompt (EOFError in double-click setup).
+set "CONDA_NO_PLUGINS=true"
 
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1" %*
 set "EXITCODE=%ERRORLEVEL%"

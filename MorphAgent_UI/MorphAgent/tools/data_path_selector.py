@@ -54,7 +54,7 @@ class DataPathSelector:
         
         if not available_sources:
             if self.verbose:
-                print(f"  [Data Path Selector] ⚠️  No data source found")
+                print(f"  [Data Path Selector] [WARN]  No data source found")
             if method == "code":
                 return {"image_paths": [], "segmentation_paths": []}
             return []
@@ -280,7 +280,7 @@ class DataPathSelector:
             return paths
         
         if self.verbose:
-            print(f"  [Data Path Selector] ⚠️  VLM feature: no data source found")
+            print(f"  [Data Path Selector] [WARN]  VLM feature: no data source found")
         return []
     
     def _llm_select_file(
@@ -340,7 +340,7 @@ Please select the most appropriate file (return only the file name):"""
             return None
         except Exception as e:
             if self.verbose:
-                print(f"  [Data Path Selector] ⚠️  LLM selection failed: {e}")
+                print(f"  [Data Path Selector] [WARN]  LLM selection failed: {e}")
             return None
 
 
