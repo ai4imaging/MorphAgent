@@ -4,29 +4,13 @@ Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao N
 
 ---
 
-## For coding agents (Codex / Claude Code / Cursor)
-
-If you are an autonomous agent asked to **install or run MorphAgent**, read the matching skill file first and follow it step-by-step (including every verification):
-
-| Goal | Read this file | Working directory |
-|------|----------------|-------------------|
-| CLI pipeline (`main.py`, Cellpose-SAM env) | [`installation_skill.md`](installation_skill.md) | **git repo root** |
-| Desktop Qt UI (demo + Configure / Run) | [`installation_skill_UI.md`](installation_skill_UI.md) | **`MorphAgent_UI/`** |
-
-- Prefer the UI skill when the user mentions the GUI, demo app, `MorphAgent_UI`, or “start the UI”.
-- Prefer the CLI skill when the user wants a headless / scripted `python main.py …` run.
-- Do **not** invent alternate install paths; the skill files are the source of truth for agents.
-- Humans: the [Online demo](#online-demo) section below is the short path; agents should still use the skill files above.
-
----
-
 ## Abstract
 
 Microscopy-based cell profiling typically relies on predefined morphological features that may not capture the structures present across imaging modalities. We developed MorphAgent, an agentic AI framework that autonomously designs, implements and validates biologically grounded morphological features. Drawing on biological knowledge bases, MorphAgent generates candidate morphology features, quantifies them using agent-generated code or vision-language model scoring, and iteratively refines and validates them through statistical and visual evaluation. On 3,552 wide-field BBBC021 profiles, MorphAgent features improved perturbation-retrieval mean average precision by 48% over CellProfiler and 20% over DeepProfiler while using substantially fewer dimensions. In confocal mitochondrial imaging, MorphAgent identified a 25-feature vocabulary from only 110 hematopoietic stem cells with paired imaging and transcriptomic data. When applied without reselection to an independent dataset of 162 cells, these features enabled classifiers trained within the new dataset to achieve an age-state AUC of 0.905. In Tau-labeled samples, MorphAgent enabled cell profiling to use the structural information uniquely resolved by super-resolution microscopy, increasing the wild-type-versus-mutant classification AUC from 0.864 in wide-field images to 0.947. In image–transcriptome-paired data, MorphAgent further organized morphology–gene associations into a three-level hierarchy, linking super-resolution structural phenotypes across spatial scales to their underlying transcriptional programs. MorphAgent establishes agentic feature design as a general framework for converting advances in microscopy into compact, biologically grounded and predictive representations of cellular state.
 
 ---
 
-## Online demo
+## UI Demo
 
 Prefer not to drive everything from the command line? This repo ships a desktop Qt UI under [`MorphAgent_UI/`](MorphAgent_UI/) that wraps the same `main.py` pipeline with a guided workflow: **Home → Configure → Run → Features → Evidence**.
 
@@ -102,6 +86,22 @@ Full install/usage instructions, system requirements, and troubleshooting live i
 
 ---
 
+## For coding agents (Codex / Claude Code / Cursor)
+
+If you are an autonomous agent asked to **install or run MorphAgent**, read the matching skill file first and follow it step-by-step (including every verification):
+
+| Goal | Read this file | Working directory |
+|------|----------------|-------------------|
+| CLI pipeline (`main.py`, Cellpose-SAM env) | [`installation_skill.md`](installation_skill.md) | **git repo root** |
+| Desktop Qt UI (demo + Configure / Run) | [`installation_skill_UI.md`](installation_skill_UI.md) | **`MorphAgent_UI/`** |
+
+- Prefer the UI skill when the user mentions the GUI, demo app, `MorphAgent_UI`, or “start the UI”.
+- Prefer the CLI skill when the user wants a headless / scripted `python main.py …` run.
+- Do **not** invent alternate install paths; the skill files are the source of truth for agents.
+- Humans: the [UI Demo](#ui-demo) section above is the short path; agents should still use the skill files above.
+
+---
+
 ## MorphAgent (software)
 
 MorphAgent is an **automatic microscopy image feature extraction agent** built on large language models (LLMs) and multimodal vision-language models (VLMs). Given a batch of microscopy images and a one-sentence natural-language task description, it automatically:
@@ -121,7 +121,8 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 
 ## Table of Contents
 
-- [Online demo](#online-demo)
+- [UI Demo](#ui-demo)
+- [For coding agents (Codex / Claude Code / Cursor)](#for-coding-agents-codex--claude-code--cursor)
 - [MorphAgent (software)](#morphagent-software)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
@@ -212,7 +213,7 @@ export SEGMENTATION_CONDA_ENV=morphagent_allen
 export SEGMENTATION_BACKEND=allen
 ```
 
-> For the desktop UI install path, prefer the [Online demo](#online-demo) scripts under `MorphAgent_UI/`. See `envs/README.md` for CLI environment details.
+> For the desktop UI install path, prefer the [UI Demo](#ui-demo) scripts under `MorphAgent_UI/`. See `envs/README.md` for CLI environment details.
 
 ---
 
@@ -371,7 +372,7 @@ python main.py "Generate unbiased morphological features for these microscopy im
 - The positional argument is the **natural-language task description** (it feeds into the feature planning prompt).
 - `--method both`: use both code and vlm; you can also use `code` or `vlm`.
 - The first run automatically: understands the dataset → (optionally) segments → plans features → generates/executes code + VLM scoring → validates → writes CSV.
-- For a guided first run with the bundled Tau demo, use the [Online demo](#online-demo) UI instead.
+- For a guided first run with the bundled Tau demo, use the [UI Demo](#ui-demo) UI instead.
 
 ---
 
