@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import re
+import unittest
+from pathlib import Path
+
+
+UI_ROOT = Path(__file__).resolve().parents[2]
+DOCKER_DIR = UI_ROOT / "docker"
+
+
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+class DockerRuntimeContractTests(unittest.TestCase):
+    def test_compose_is_local_only_and_persists_state_and_workspace(self) -> None:
+        compose = read(DOCKER_DIR / "docker-compose.yml")
+
+        self.assertIn("platform: linux/amd64", compose)
+        self.assertIn(
+            '127.0.0.1:${MORPHAGENT_NOVNC_PORT:-6080}:6080',
+            compose,
+        )
+        self.assertNotIn(":5900", compose)
+        self.assertIn("${MORPHAGENT_STATE_DIR:-../docker-data}:/data", compose)
+        self.assertIn("${MORPHAGENT_WORKSPACE:-../workspace}:/workspace", compose)
+        self.assertIn("no-new-privileges:true", compose)
+        self.assertIn("cap_drop:", compose)
+        self.assertIn("- ALL", compose)
+
+    def test_image_builds_docker_environments_without_host_setup_script(self) -> None:
+        dockerfile = read(DOCKER_DIR / "Dockerfile")
+        installer = read(DOCKER_DIR / "install-environments.sh")
+
+        self.assertNotIn("scripts/setup.sh", dockerfile)
+        self.assertIn("docker/install-environments.sh", dockerfile)
+        self.assertIn("docker/healthcheck.sh", dockerfile)
+        self.assertIn("ARG INSTALL_ALLEN=1", dockerfile)
+        self.assertIn("verify_install.py", dockerfile)
+        self.assertIn('ENTRYPOINT ["tini", "--"', dockerfile)
+
+        self.assertIn('conda create -y -n "${UI_ENV}"', installer)
+        self.assertIn('conda create -y -n "${SANDBOX_ENV}"', installer)
+        self.assertIn('conda create -y -n "${ALLEN_ENV}"', installer)
+        self.assertNotIn("conda env create -y", installer)
+        self.assertIn("requirements-demo-ui.txt", installer)
+        self.assertIn("requirements-sandbox.txt", installer)
+        self.assertIn("requirements-allen.txt", installer)
+
+    def test_entrypoint_persists_config_and_demo_results_and_secures_vnc(self) -> None:
+        entrypoint = read(DOCKER_DIR / "entrypoint.sh")
+
+        self.assertRegex(entrypoint, r"RESOLUTION.*\^\[0-9\]\+x\[0-9\]\+x")
+        self.assertIn('${DATA_ROOT}/config/.env', entrypoint)
+        self.assertIn("ln -s", entrypoint)
+        self.assertIn("/opt/morphagent-seed/completed_demo_run", entrypoint)
+        self.assertIn('${DATA_ROOT}/demo-results', entrypoint)
+        self.assertIn("-localhost", entrypoint)
+        self.assertIn("websockify", entrypoint)
+        self.assertIn("conda run --no-capture-output", entrypoint)
+
+    def test_legacy_platform_packages_and_generated_dockerfile_are_removed(self) -> None:
+        obsolete = (
+            DOCKER_DIR / "docker-compose.package.yml",
+            DOCKER_DIR / "linux" / "MorphAgent-UI.sh",
+            DOCKER_DIR / "mac" / "MorphAgent-UI.command",
+            DOCKER_DIR / "win" / "MorphAgent-UI.bat",
+            UI_ROOT / "scripts" / "build_docker_packages.sh",
+        )
+
+        existing = [str(path.relative_to(UI_ROOT)) for path in obsolete if path.exists()]
+        self.assertEqual([], existing)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,40 @@
+name: morphagent
+
+services:
+  morphagent-ui:
+    image: ${MORPHAGENT_IMAGE:-morphagent-ui:local}
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_ALLEN: ${MORPHAGENT_INSTALL_ALLEN:-1}
+    ports:
+      # Browser UI is reachable from this computer only, never the LAN.
+      - "127.0.0.1:${MORPHAGENT_NOVNC_PORT:-6080}:6080"
+    environment:
+      RESOLUTION: ${MORPHAGENT_RESOLUTION:-1920x1080x24}
+      NO_VNC_PORT: "6080"
+      VNC_PORT: "5900"
+      VNC_PASSWORD: ${MORPHAGENT_VNC_PASSWORD:-}
+      MORPHAGENT_DATA_ROOT: /data
+      MORPHAGENT_WORKSPACE_ROOT: /workspace
+    volumes:
+      # API config, UI preferences, logs, and demo results survive replacement.
+      - "${MORPHAGENT_STATE_DIR:-../docker-data}:/data"
+      # Select /workspace in the UI to use host datasets and persist new runs.
+      - "${MORPHAGENT_WORKSPACE:-../workspace}:/workspace"
+    shm_size: "1gb"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/morphagent-healthcheck"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 90s

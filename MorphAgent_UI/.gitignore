@@ -2,6 +2,6 @@
 logs/
 *.log
 
-# Docker one-click packages stay local only (do not commit / push).
-# Upload zip artifacts from docker/dist/ to GitHub Releases manually.
-docker/
+# Local Docker runtime state and user-selected datasets
+docker-data/
+workspace/
