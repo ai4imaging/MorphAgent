@@ -31,24 +31,28 @@ There are **two ways** to run the MorphAgent UI — pick one:
 
 One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC).
 
-**Download:** [MorphAgent-UI-Docker.zip](https://github.com/ai4imaging/MorphAgent/releases/download/ui-docker-20260731/MorphAgent-UI-Docker.zip)
-
-**Use:**
-
-1. Install and start Docker.
-2. Unzip → run `start.command` (macOS) / `start.bat` (Windows) / `bash start.sh` (Linux).
-3. Browser opens [http://localhost:6080/morphagent.html](http://localhost:6080/morphagent.html).
-
-First launch builds the image (several minutes). Later starts are fast. Quick review without an API key: **Home → Load a previous run →** `completed_demo_run`. Stop with `docker compose down`.
-
-From this repo after cloning (developers):
+After cloning, build and start the tracked Compose runtime from
+`MorphAgent_UI/`:
 
 ```bash
 cd MorphAgent/MorphAgent_UI
-bash docker/start.sh
+mkdir -p docker-data workspace
+docker compose -f docker/docker-compose.yml build
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-More Docker notes: [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
+Then open
+[http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale](http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale).
+The first build installs all three Conda environments inside the image; later
+starts only need `docker compose -f docker/docker-compose.yml up -d`.
+
+For a quick review without an API key, choose **Home → Load a previous run →**
+`completed_demo_run`. Stop with
+`docker compose -f docker/docker-compose.yml down`.
+
+Windows PowerShell commands, persistent data paths, verification, and
+troubleshooting are documented in
+[`MorphAgent_UI/docker/README.md`](MorphAgent_UI/docker/README.md).
 
 #### 2. Manual install (software package)
 
