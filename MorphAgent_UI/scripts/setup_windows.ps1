@@ -768,8 +768,18 @@ try {
             # pip<22 MUST go through conda.exe (same "<" redirection trap via conda.bat).
             & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install --upgrade "pip<22" "setuptools<59" "wheel"
             if ($LASTEXITCODE -ne 0) { throw "Allen pip bootstrap failed" }
-            & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install -r $AllenReq
-            if ($LASTEXITCODE -ne 0) { throw "Allen requirements install failed" }
+            # Old pip on py3.6 decodes -r with the locale codec (GBK on Chinese Windows).
+            # Always feed an ASCII-only temp requirements file.
+            $allenFiltered = Join-Path $env:TEMP ("morphagent-allen-req-" + [guid]::NewGuid().ToString("N") + ".txt")
+            try {
+                Write-AsciiPipRequirements -Src $AllenReq -Dst $allenFiltered
+                & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install -r $allenFiltered
+                if ($LASTEXITCODE -ne 0) { throw "Allen requirements install failed" }
+            } finally {
+                if (Test-Path -LiteralPath $allenFiltered) {
+                    Remove-Item -LiteralPath $allenFiltered -Force -ErrorAction SilentlyContinue
+                }
+            }
             Write-Host "Installing vendored aicssegmentation..."
             & $script:CondaExe run --no-capture-output -n $AllenEnvName python -m pip install -e $AllenPkg --no-deps
             if ($LASTEXITCODE -ne 0) { throw "aicssegmentation editable install failed" }
@@ -785,9 +795,14 @@ try {
         Write-Host "[INFO] Skipping Allen env (-SkipAllen)."
     }
 
-    Write-Host "Running install verification (UI smoke, offscreen)..."
+    Write-Host "Running install verification (UI smoke)..."
+    # Do not force QT_QPA_PLATFORM=offscreen here: conda pyqt on Windows often
+    # lacks qoffscreen.dll and the process aborts. verify_install.py chooses a
+    # working platform (and sets QT_PLUGIN_PATH when needed).
     $prevQt = $env:QT_QPA_PLATFORM
-    $env:QT_QPA_PLATFORM = "offscreen"
+    if ($env:QT_QPA_PLATFORM -eq "offscreen") {
+        Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    }
     try {
         & $script:CondaExe run --no-capture-output -n $EnvName python $Verifier --ui-smoke
         if ($LASTEXITCODE -ne 0) {

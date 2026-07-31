@@ -177,8 +177,38 @@ def check_sandbox_environment() -> None:
     print(f"[OK] Code sandbox environment '{sandbox_env}' imports numpy/skimage ({result.stdout.strip()})")
 
 
-def ui_smoke_test() -> None:
+def _configure_qt_for_smoke() -> str:
+    """Pick a Qt platform that conda pyqt can actually load on this OS."""
+
+    prefix = Path(sys.prefix)
+    for candidate in (
+        prefix / "Library" / "plugins",
+        prefix / "plugins",
+        prefix / "lib" / "qt5" / "plugins",
+        prefix / "lib" / "qt" / "plugins",
+    ):
+        if (candidate / "platforms").is_dir():
+            os.environ.setdefault("QT_PLUGIN_PATH", str(candidate))
+            break
+
+    # conda-forge pyqt on Windows often ships without qoffscreen.dll. Forcing
+    # QT_QPA_PLATFORM=offscreen then aborts the process before Python can catch it.
+    if sys.platform.startswith("win"):
+        platforms = Path(os.environ.get("QT_PLUGIN_PATH", "")) / "platforms"
+        offscreen = platforms / "qoffscreen.dll"
+        if offscreen.is_file():
+            os.environ["QT_QPA_PLATFORM"] = "offscreen"
+            return "offscreen"
+        # Clear a parent-shell offscreen override from setup_windows.ps1.
+        os.environ.pop("QT_QPA_PLATFORM", None)
+        return "windows-default"
+
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return os.environ.get("QT_QPA_PLATFORM", "offscreen")
+
+
+def ui_smoke_test() -> None:
+    platform_name = _configure_qt_for_smoke()
     sys.path.insert(0, str(REPOSITORY))
     from launch_ui import create_standalone_window
 
@@ -188,7 +218,7 @@ def ui_smoke_test() -> None:
     require(widget is not None and window.centralWidget() is widget, "Qt window did not initialize")
     window.close()
     application.processEvents()
-    print("[OK] Qt UI initialized Home/Configure/Run/Features/Evidence")
+    print(f"[OK] Qt UI initialized Home/Configure/Run/Features/Evidence (platform={platform_name})")
 
 
 def main() -> int:

@@ -1,6 +1,6 @@
 # Core pip stack for morphagent_allen (TIFF Allen segmentation).
 # Installed by scripts/setup.sh AFTER conda create python=3.6.
-# Do not add aicsimageio / aicspylibczi — the TIFF driver uses tifffile.
+# Do not add aicsimageio / aicspylibczi - the TIFF driver uses tifffile.
 
 numpy==1.19.5
 scipy==1.5.4
