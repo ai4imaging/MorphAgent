@@ -22,9 +22,12 @@ https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 
 ### Try it
 
-**Prerequisite (Setup path):** install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda so `conda` is available on your PATH. Prefer **Docker** below if you do not want a local conda install.
+There are **two ways** to run the MorphAgent UI — pick one:
 
-#### Docker
+1. **Docker** — download the zip, one-click start; UI opens in the browser (no local conda).
+2. **Manual install (software package)** — clone this repo, create a local conda env with the setup scripts, launch the desktop Qt app.
+
+#### 1. Docker
 
 One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC).
 
@@ -47,7 +50,9 @@ bash docker/start.sh
 
 More Docker notes: [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
 
-#### Setup
+#### 2. Manual install (software package)
+
+**Prerequisite:** install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda so `conda` is available on your PATH.
 
 All setup and launch scripts live under **`MorphAgent_UI/scripts/`**. After cloning, you must `cd` into `MorphAgent_UI` before running them.
 
