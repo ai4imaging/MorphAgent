@@ -194,7 +194,8 @@ class WidgetSmokeTests(unittest.TestCase):
         self.app.processEvents()
 
         self.assertEqual(page.llm_base_url_edit.text(), "https://api.gpugeek.com/v1")
-        self.assertEqual(page.llm_model_edit.text(), "Vendor2/GPT-4o")
+        self.assertEqual(page.llm_model_edit.text(), "gpt-5.5")
+        self.assertTrue(page.llm_model_edit.isReadOnly())
         self.assertTrue(page.llm_api_key_edit.text())
         self.assertTrue(page.reuse_llm_for_vlm.isChecked())
         self.assertEqual(page.rounds_spin.value(), FREE_DEMO_ROUNDS)
@@ -205,6 +206,11 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertFalse(page.target_spin.isEnabled())
         self.assertTrue(page.config_section.isHidden())
         self.assertIn("token", page.free_api_note.text().lower())
+        # Model must stay fixed even if the user tries to edit it.
+        page.llm_model_edit.setText("should-not-stick")
+        page._fields_changed()
+        self.assertEqual(page.llm_model_edit.text(), "gpt-5.5")
+        self.assertEqual(widget.config.llm_model, "gpt-5.5")
 
         page.llm_base_url_edit.setText("https://api.openai.com/v1")
         self.app.processEvents()

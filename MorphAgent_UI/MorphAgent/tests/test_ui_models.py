@@ -9,6 +9,7 @@ from pathlib import Path
 
 from morphagent_ui.demo_api import (
     FREE_DEMO_CANDIDATES,
+    FREE_DEMO_MODEL,
     FREE_DEMO_ROUNDS,
     FREE_DEMO_TARGET,
     is_free_demo_connection,
@@ -410,7 +411,9 @@ class FreeDemoApiTests(unittest.TestCase):
     def test_obfuscated_credentials_decode_for_morphagent_ui(self) -> None:
         creds = load_free_demo_credentials()
         self.assertEqual(creds["base_url"], "https://api.gpugeek.com/v1")
-        self.assertEqual(creds["model"], "Vendor2/GPT-4o")
+        self.assertEqual(creds["model"], "gpt-5.5")
+        self.assertEqual(FREE_DEMO_MODEL, "gpt-5.5")
+        self.assertNotIn("/", creds["model"])
         self.assertTrue(creds["api_key"])
         self.assertTrue(is_free_demo_connection(creds["base_url"], creds["api_key"]))
         self.assertFalse(is_free_demo_connection("https://api.openai.com/v1", creds["api_key"]))

@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
 
 from ..demo_api import (
     FREE_DEMO_CANDIDATES,
+    FREE_DEMO_MODEL,
     FREE_DEMO_NOTICE,
     FREE_DEMO_ROUNDS,
     FREE_DEMO_TARGET,
@@ -629,6 +630,9 @@ class ConfigurePage(QWidget):
             self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
             self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
             self.target_spin.setValue(FREE_DEMO_TARGET)
+            self.llm_model_edit.setText(FREE_DEMO_MODEL)
+            if self.reuse_llm_for_vlm.isChecked():
+                self.vlm_model_edit.setText(FREE_DEMO_MODEL)
             self.free_api_note.setText(FREE_DEMO_NOTICE)
             self.free_api_note.setProperty("role", "warning")
         else:
@@ -646,6 +650,16 @@ class ConfigurePage(QWidget):
             self.vlm_concurrency_spin,
         ):
             spin.setEnabled(not locked)
+        # Free demo model is fixed; users cannot edit it while the free key is active.
+        self.llm_model_edit.setReadOnly(locked)
+        self.llm_model_edit.setEnabled(True)
+        self.vlm_model_edit.setReadOnly(locked)
+        if locked:
+            self.llm_model_edit.setToolTip(f"Free restricted API model is fixed to {FREE_DEMO_MODEL}")
+            self.vlm_model_edit.setToolTip(f"Free restricted API model is fixed to {FREE_DEMO_MODEL}")
+        else:
+            self.llm_model_edit.setToolTip("")
+            self.vlm_model_edit.setToolTip("")
         # Re-open the panel when leaving the free demo API.
         self._refresh_config_visibility(ensure_open=not locked)
         self.free_api_note.style().unpolish(self.free_api_note)
@@ -758,8 +772,13 @@ class ConfigurePage(QWidget):
 
         current = read_model_environment(self.config.repository_root)
         llm_base = self.llm_base_url_edit.text().strip() or current.get("LLM_BASE_URL", "").strip()
-        llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
         llm_key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
+        using_free = is_free_demo_connection(llm_base, llm_key)
+        if using_free:
+            llm_model = FREE_DEMO_MODEL
+            self.llm_model_edit.setText(FREE_DEMO_MODEL)
+        else:
+            llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
         if not llm_base or not llm_model or not llm_key:
             self.api_status_label.setText("Base URL, model, and API key are required before running.")
             self.api_status_label.setProperty("role", "warning")
@@ -777,7 +796,7 @@ class ConfigurePage(QWidget):
         vlm_model = self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
         vlm_key = self.vlm_api_key_edit.text().strip() or current.get("VLM_API_KEY", "").strip()
         # Comfort: empty VLM fields reuse the LLM connection automatically.
-        if reuse or not (vlm_base and vlm_model and vlm_key):
+        if reuse or not (vlm_base and vlm_model and vlm_key) or using_free:
             values.update({
                 "VLM_BASE_URL": llm_base,
                 "VLM_API_KEY": llm_key,
@@ -982,6 +1001,7 @@ class ConfigurePage(QWidget):
             self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
             self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
             self.target_spin.setValue(FREE_DEMO_TARGET)
+            self.llm_model_edit.setText(FREE_DEMO_MODEL)
         else:
             # Own API: keep target usable with the chosen candidates-per-round.
             if int(self.target_spin.value()) < int(self.candidates_spin.value()):
@@ -998,7 +1018,10 @@ class ConfigurePage(QWidget):
         self.config.vlm_online_concurrency = vlm_conc
         self.config.llm_base_url = self.llm_base_url_edit.text().strip()
         self.config.llm_api_key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
-        self.config.llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
+        if using_free:
+            self.config.llm_model = FREE_DEMO_MODEL
+        else:
+            self.config.llm_model = self.llm_model_edit.text().strip() or current.get("LLM_MODEL", "").strip()
         self.config.reuse_llm_for_vlm = self.reuse_llm_for_vlm.isChecked()
         if self.config.reuse_llm_for_vlm:
             self.config.vlm_base_url = self.config.llm_base_url
@@ -1009,9 +1032,12 @@ class ConfigurePage(QWidget):
             self.config.vlm_api_key = (
                 self.vlm_api_key_edit.text().strip() or current.get("VLM_API_KEY", "").strip()
             )
-            self.config.vlm_online_model = (
-                self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
-            )
+            if using_free:
+                self.config.vlm_online_model = FREE_DEMO_MODEL
+            else:
+                self.config.vlm_online_model = (
+                    self.vlm_model_edit.text().strip() or current.get("VLM_MODEL", "").strip()
+                )
             # Empty VLM → treat as same connection for preflight comfort.
             if not (self.config.vlm_base_url and self.config.vlm_online_model and self.config.vlm_api_key):
                 self.config.vlm_base_url = self.config.llm_base_url or current.get("LLM_BASE_URL", "").strip()

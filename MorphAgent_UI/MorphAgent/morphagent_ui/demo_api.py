@@ -26,17 +26,19 @@ _BINDER = b"MorphAgent.UI.demo.gpugeek.v1"
 _BLOB = (
     b"T5bW8Fr_XRA6Pb85yUtW4OJBDCxRruoixNPm2xMKaJAa19v8BuwzR2Rz_HOCfEnx"
     b"6xAMIU7_7zqIgvPXGV1jzlvQhKAZqjIBIzPwN5gWR-6jAVloTv_qftvf5J9WQy-"
-    b"WW9DR_QugIDMtP_lsmREN08JmGzcR7ec="
+    b"WW9DR_QugIAI4JbA2xRYA6Q=="
 )
 
 # Free/demo gateway is token-limited — keep UI scale at demo size.
 FREE_DEMO_ROUNDS = 1
 FREE_DEMO_CANDIDATES = 5
 FREE_DEMO_TARGET = 5
+FREE_DEMO_MODEL = "gpt-5.5"
 
 FREE_DEMO_NOTICE = (
     "Free restricted API for MorphAgent testing only. "
     "Token quota is limited. Scale is locked to 1 round × 5 candidates · target 5. "
+    f"Model is fixed to {FREE_DEMO_MODEL}. "
     "Same Base URL with your own API key is unrestricted."
 )
 
@@ -64,7 +66,8 @@ def load_free_demo_credentials() -> FreeDemoCredentials:
     data = json.loads(plain.decode("utf-8"))
     base_url = str(data.get("base_url", "")).strip()
     api_key = str(data.get("api_key", "")).strip()
-    model = str(data.get("model", "")).strip()
+    # Free demo always uses the fixed model name (no vendor prefix).
+    model = FREE_DEMO_MODEL
     if not (base_url and api_key and model):
         raise RuntimeError("Free demo API credentials are incomplete.")
     return {"base_url": base_url, "api_key": api_key, "model": model}
