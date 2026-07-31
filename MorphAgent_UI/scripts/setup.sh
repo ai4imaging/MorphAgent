@@ -49,17 +49,123 @@ env_exists() {
   conda env list | awk '{print $1}' | grep -Fxq "$1"
 }
 
+# Older conda (e.g. 23.1) rejects `conda env create -y` / `conda env remove -y`
+# with: conda-env: error: unrecognized arguments: -y
+# Try common variants until one works.
+conda_env_remove() {
+  local name="$1"
+  local rc=1
+  set +e
+  set +o pipefail
+
+  echo "  try: conda env remove -y -n ${name}"
+  conda env remove -y -n "${name}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]]; then set -o pipefail; set -e; return 0; fi
+
+  echo "  try: conda env remove --yes -n ${name}"
+  conda env remove --yes -n "${name}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]]; then set -o pipefail; set -e; return 0; fi
+
+  echo "  try: printf y | conda env remove -n ${name}"
+  printf 'y\ny\ny\n' | conda env remove -n "${name}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]]; then set -o pipefail; set -e; return 0; fi
+
+  echo "  try: conda remove -y -n ${name} --all"
+  conda remove -y -n "${name}" --all
+  rc=$?
+  set -o pipefail
+  set -e
+  return "${rc}"
+}
+
+conda_env_create_from_yaml() {
+  # Usage: [CONDA_SUBDIR=...] conda_env_create_from_yaml NAME FILE.yml
+  # Inherits CONDA_SUBDIR from the caller when set (Apple Silicon osx-64).
+  local name="$1"
+  local yml="$2"
+  local rc=1
+
+  _cleanup_partial_env() {
+    if env_exists "${name}"; then
+      echo "  cleaning partial env ${name} before next create attempt…"
+      conda_env_remove "${name}" || true
+    fi
+  }
+
+  set +e
+  set +o pipefail
+
+  echo "  try: conda env create -y -n ${name} -f ${yml}"
+  conda env create -y -n "${name}" -f "${yml}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]] && env_exists "${name}"; then set -o pipefail; set -e; return 0; fi
+  _cleanup_partial_env
+
+  echo "  try: conda env create --yes -n ${name} -f ${yml}"
+  conda env create --yes -n "${name}" -f "${yml}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]] && env_exists "${name}"; then set -o pipefail; set -e; return 0; fi
+  _cleanup_partial_env
+
+  echo "  try: conda env create -n ${name} -f ${yml}  (no -y; older conda-env)"
+  conda env create -n "${name}" -f "${yml}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]] && env_exists "${name}"; then set -o pipefail; set -e; return 0; fi
+  _cleanup_partial_env
+
+  echo "  try: printf y | conda env create -n ${name} -f ${yml}"
+  printf 'y\ny\ny\n' | conda env create -n "${name}" -f "${yml}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]] && env_exists "${name}"; then set -o pipefail; set -e; return 0; fi
+  _cleanup_partial_env
+
+  echo "  try: conda create -y -n ${name} -f ${yml}"
+  conda create -y -n "${name}" -f "${yml}"
+  rc=$?
+  if [[ "${rc}" -eq 0 ]] && env_exists "${name}"; then set -o pipefail; set -e; return 0; fi
+  _cleanup_partial_env
+
+  set -o pipefail
+  set -e
+  echo "ERROR: all conda env create variants failed for ${name} from ${yml}" >&2
+  echo "ERROR: conda version: $(conda --version 2>/dev/null || echo unknown)" >&2
+  return 1
+}
+
 ensure_env() {
   local env="$1"
   if [[ "${RECREATE_ENVS}" == "1" ]] && env_exists "${env}"; then
     echo "MORPHAGENT_RECREATE_ENVS=1 → removing conda env ${env}"
-    conda env remove -y -n "${env}"
+    conda_env_remove "${env}"
   fi
   if env_exists "${env}"; then
     echo "Using existing conda environment: ${env}"
   else
     echo "Creating conda environment: ${env}"
+    # `conda create -y` is widely supported; keep a no -y fallback just in case.
+    set +e
+    set +o pipefail
     conda create -y -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+    local rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+      echo "  retry: conda create --yes -n ${env} ..."
+      conda create --yes -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+      rc=$?
+    fi
+    if [[ "${rc}" -ne 0 ]]; then
+      echo "  retry without -y: conda create -n ${env} ..."
+      printf 'y\ny\ny\n' | conda create -n "${env}" -c conda-forge "python=3.10" "pip>=24"
+      rc=$?
+    fi
+    set -o pipefail
+    set -e
+    if [[ "${rc}" -ne 0 ]] || ! env_exists "${env}"; then
+      echo "ERROR: failed to create conda env ${env}" >&2
+      exit 1
+    fi
   fi
 }
 
@@ -243,11 +349,12 @@ setup_allen_env() {
     echo "Using existing conda environment: ${ALLEN_ENV_NAME}"
   else
     echo "Creating Allen segmentation environment: ${ALLEN_ENV_NAME}"
+    echo "conda: $(conda --version 2>/dev/null || echo unknown)"
     if [[ "${arch}" == "arm64" ]]; then
       echo "Apple Silicon detected: using CONDA_SUBDIR=osx-64 (Rosetta)"
-      CONDA_SUBDIR=osx-64 conda env create -y -n "${ALLEN_ENV_NAME}" -f "${yml}"
+      CONDA_SUBDIR=osx-64 conda_env_create_from_yaml "${ALLEN_ENV_NAME}" "${yml}"
     else
-      conda env create -y -n "${ALLEN_ENV_NAME}" -f "${yml}"
+      conda_env_create_from_yaml "${ALLEN_ENV_NAME}" "${yml}"
     fi
   fi
 

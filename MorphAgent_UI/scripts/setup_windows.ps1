@@ -374,6 +374,85 @@ function Test-CondaEnv([string]$Name) {
     return $false
 }
 
+function Remove-CondaEnvCompat([string]$Name) {
+    # Older conda-env rejects -y (unrecognized arguments: -y). Try common forms.
+    $attempts = @(
+        { & $script:CondaExe env remove -y -n $Name },
+        { & $script:CondaExe env remove --yes -n $Name },
+        { "y`ny`ny" | & $script:CondaExe env remove -n $Name },
+        { & $script:CondaExe remove -y -n $Name --all }
+    )
+    foreach ($attempt in $attempts) {
+        Write-Host "  try: conda env remove variant for $Name"
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $attempt | Out-Null
+            if (($LASTEXITCODE -eq 0) -and -not (Test-CondaEnv $Name)) { return }
+        } catch {
+            # try next
+        } finally {
+            $ErrorActionPreference = $prevEap
+            $global:LASTEXITCODE = 0
+        }
+    }
+    throw "Failed to remove conda env '$Name' with all remove variants"
+}
+
+function New-CondaEnvFromYamlCompat([string]$Name, [string]$Yml) {
+    # Older conda (e.g. 23.1): `conda env create -y` -> unrecognized arguments: -y
+    $attempts = @(
+        @{ Label = "env create -y -n -f"; Script = { & $script:CondaExe env create -y -n $Name -f $Yml } },
+        @{ Label = "env create --yes -n -f"; Script = { & $script:CondaExe env create --yes -n $Name -f $Yml } },
+        @{ Label = "env create -n -f (no yes)"; Script = { & $script:CondaExe env create -n $Name -f $Yml } },
+        @{ Label = "yes | env create -n -f"; Script = { "y`ny`ny" | & $script:CondaExe env create -n $Name -f $Yml } },
+        @{ Label = "create -y -n -f"; Script = { & $script:CondaExe create -y -n $Name -f $Yml } }
+    )
+    foreach ($attempt in $attempts) {
+        Write-Host "  try: conda $($attempt.Label)"
+        if (Test-CondaEnv $Name) {
+            Write-Host "  cleaning partial env $Name before retry..."
+            try { Remove-CondaEnvCompat $Name } catch { }
+        }
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $attempt.Script
+            if (($LASTEXITCODE -eq 0) -and (Test-CondaEnv $Name)) {
+                Write-Host "[OK] created $Name via: $($attempt.Label)"
+                return
+            }
+        } catch {
+            # try next
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+    }
+    $ver = (& $script:CondaExe --version 2>$null | Out-String).Trim()
+    throw "All conda env create variants failed for '$Name' from $Yml (conda: $ver)"
+}
+
+function New-CondaEnvPythonCompat([string]$Name) {
+    $attempts = @(
+        { & $script:CondaExe create -y -n $Name -c conda-forge "python=3.10" "pip" },
+        { & $script:CondaExe create --yes -n $Name -c conda-forge "python=3.10" "pip" },
+        { "y`ny`ny" | & $script:CondaExe create -n $Name -c conda-forge "python=3.10" "pip" }
+    )
+    foreach ($attempt in $attempts) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $attempt
+            if (($LASTEXITCODE -eq 0) -and (Test-CondaEnv $Name)) { return }
+        } catch {
+            # try next
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+    }
+    throw "Failed to create conda env '$Name' (python=3.10)"
+}
+
 function Install-CoreCondaPackages([string]$Name) {
     Write-Host "Installing core conda packages into $Name (PyQt5 / numpy / scipy / ...)..."
     # Specs keep "<"/">="; calling conda.exe (not .bat) so cmd does not treat "<" as redirect.
@@ -543,10 +622,7 @@ try {
 
     if (-not (Test-CondaEnv $EnvName)) {
         Write-Host "Creating conda environment: $EnvName"
-        & $script:CondaExe create -y -n $EnvName -c conda-forge "python=3.10" "pip"
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to create conda env '$EnvName'"
-        }
+        New-CondaEnvPythonCompat $EnvName
     } else {
         Write-Host "Using existing conda environment: $EnvName"
     }
@@ -558,10 +634,7 @@ try {
 
     if (-not (Test-CondaEnv $SandboxEnvName)) {
         Write-Host "Creating code-sandbox conda environment: $SandboxEnvName"
-        & $script:CondaExe create -y -n $SandboxEnvName -c conda-forge "python=3.10" "pip"
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to create conda env '$SandboxEnvName'"
-        }
+        New-CondaEnvPythonCompat $SandboxEnvName
     } else {
         Write-Host "Using existing conda environment: $SandboxEnvName"
     }
@@ -614,10 +687,9 @@ try {
 
             if (-not (Test-CondaEnv $AllenEnvName)) {
                 Write-Host "Creating Allen segmentation environment: $AllenEnvName (win-64 / Python 3.6)"
-                & $script:CondaExe env create -y -n $AllenEnvName -f $AllenYml
-                if ($LASTEXITCODE -ne 0) {
-                    throw "conda env create failed for '$AllenEnvName'"
-                }
+                $ver = (& $script:CondaExe --version 2>$null | Out-String).Trim()
+                Write-Host "conda: $ver"
+                New-CondaEnvFromYamlCompat -Name $AllenEnvName -Yml $AllenYml
             } else {
                 Write-Host "Using existing conda environment: $AllenEnvName"
             }
