@@ -97,8 +97,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
-    conda install -y -n base -c conda-forge --override-channels conda-libmamba-solver; \
-    conda config --set solver libmamba; \
+    conda config --set solver classic; \
     conda config --remove channels defaults 2>/dev/null || true; \
     conda config --add channels conda-forge; \
     conda config --set channel_priority strict
