@@ -16,15 +16,69 @@ segmentation environment has one reproducible target. Apple Silicon runs the
 image through Docker Desktop emulation, so the first build and segmentation
 can be slower than on an x86-64 computer.
 
-## Build and start
+## What the image contains
+
+The Docker build does not run the host `scripts/setup.sh`. Instead, the
+Docker-specific installer creates the same required runtime in a controlled
+Linux image:
+
+- `morphagent`: Python 3.10, PyQt5, and the MorphAgent UI/pipeline packages;
+- `morphagent_sandbox`: the isolated environment for generated feature code;
+- `morphagent_allen`: the legacy Python 3.6 Allen segmentation environment.
+
+It also installs the virtual X11 desktop, noVNC browser bridge, and system Qt
+libraries. A successful image build finishes with the repository's offscreen
+UI smoke test.
+
+## First build and start
 
 Run from `MorphAgent_UI/`:
+
+### macOS or Linux
 
 ```bash
 mkdir -p docker-data workspace
 docker compose -f docker/docker-compose.yml build
 docker compose -f docker/docker-compose.yml up -d
 ```
+
+### Windows PowerShell
+
+```powershell
+New-Item -ItemType Directory -Force docker-data, workspace
+docker compose -f docker/docker-compose.yml build
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Wait until `docker compose -f docker/docker-compose.yml ps` reports
+`healthy`, then open:
+
+```text
+http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale
+```
+
+On macOS, the page can also be opened from the terminal:
+
+```bash
+open 'http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale'
+```
+
+On Windows PowerShell:
+
+```powershell
+Start-Process 'http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale'
+```
+
+## Later starts
+
+The environments are already stored in the image. Normal starts do not run
+the installation again:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+## Browser access
 
 Open:
 
@@ -46,12 +100,6 @@ Stop without deleting data:
 
 ```bash
 docker compose -f docker/docker-compose.yml down
-```
-
-Normal restarts do not need another build:
-
-```bash
-docker compose -f docker/docker-compose.yml up -d
 ```
 
 ## Persistent directories
