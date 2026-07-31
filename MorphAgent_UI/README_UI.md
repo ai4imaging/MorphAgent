@@ -14,7 +14,7 @@ docker compose -f docker/docker-compose.yml build
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-Open `http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=remote`. The
+Open `http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale`. The
 existing Qt interface is rendered inside the container and sent to this local
 browser page through noVNC. Port 6080 is bound to the current computer only;
 raw VNC port 5900 is not published.

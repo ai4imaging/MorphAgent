@@ -86,6 +86,19 @@ class DockerRuntimeContractTests(unittest.TestCase):
         self.assertIn("conda run --no-capture-output", entrypoint)
         self.assertIn("/vnc.html", healthcheck)
 
+    def test_browser_ui_scales_the_complete_desktop_to_the_viewport(self) -> None:
+        entrypoint = read(DOCKER_DIR / "entrypoint.sh")
+        docker_readme = read(DOCKER_DIR / "README.md")
+        ui_readme = read(UI_ROOT / "README_UI.md")
+        browser_entrypoints = entrypoint + "\n" + docker_readme + "\n" + ui_readme
+
+        self.assertIn("resize=scale", browser_entrypoints)
+        self.assertNotIn(
+            "resize=remote",
+            browser_entrypoints,
+            "Remote resize leaves the fixed 1920x1080 Xvfb canvas cropped in smaller browser viewports",
+        )
+
     def test_legacy_platform_packages_and_generated_dockerfile_are_removed(self) -> None:
         obsolete = (
             DOCKER_DIR / "docker-compose.package.yml",

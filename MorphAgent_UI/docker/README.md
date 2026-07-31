@@ -29,7 +29,7 @@ docker compose -f docker/docker-compose.yml up -d
 Open:
 
 ```text
-http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=remote
+http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale
 ```
 
 The browser endpoint is bound to `127.0.0.1`; it is not exposed to the local

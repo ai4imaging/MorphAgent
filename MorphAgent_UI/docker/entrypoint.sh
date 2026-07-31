@@ -125,7 +125,7 @@ websockify --web=/usr/share/novnc "${NO_VNC_PORT}" "127.0.0.1:${VNC_PORT}" \
   >"${LOG_DIR}/novnc.log" 2>&1 &
 PIDS+=("$!")
 
-echo "[MorphAgent] browser UI: http://127.0.0.1:${NO_VNC_PORT}/vnc.html?autoconnect=true&resize=remote"
+echo "[MorphAgent] browser UI: http://127.0.0.1:${NO_VNC_PORT}/vnc.html?autoconnect=true&resize=scale"
 echo "[MorphAgent] custom data inside the container: ${WORKSPACE_ROOT}"
 
 cd "${HANDOFF_ROOT}"
