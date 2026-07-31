@@ -563,10 +563,12 @@ class ConfigurePage(QWidget):
         self.vlm_connection_fields.setVisible(not reuse)
 
     def _using_free_demo_api(self) -> bool:
-        return is_free_demo_connection(
-            self.llm_base_url_edit.text(),
-            self.llm_api_key_edit.text(),
-        )
+        # Resolve blank fields from .env so "leave key blank to keep it" still
+        # unlocks when the saved key is the user's own key on the free host.
+        current = read_model_environment(self.config.repository_root)
+        url = self.llm_base_url_edit.text().strip() or current.get("LLM_BASE_URL", "").strip()
+        key = self.llm_api_key_edit.text().strip() or current.get("LLM_API_KEY", "").strip()
+        return is_free_demo_connection(url, key)
 
     def _refresh_config_visibility(self, *, ensure_open: bool = False) -> None:
         """Show run-config UI only when the form is not using the free demo API."""
@@ -632,7 +634,7 @@ class ConfigurePage(QWidget):
         else:
             self.free_api_note.setText(
                 "Optional · free restricted API for testing only (token-limited). "
-                "Your own Base URL / API key unlocks Run config."
+                "Same host with your own API key unlocks Run config."
             )
             self.free_api_note.setProperty("role", "muted")
         for spin in (
@@ -975,14 +977,15 @@ class ConfigurePage(QWidget):
         self.config.temperature = float(self.temperature_spin.value())
         # Temperature 0 ⇒ reproducible Code + VLM (seed, deterministic decoding, cache).
         self.config.reproduce = self.config.temperature <= 0.0
-        using_free = is_free_demo_connection(
-            self.llm_base_url_edit.text(),
-            self.llm_api_key_edit.text(),
-        )
+        using_free = self._using_free_demo_api()
         if using_free:
             self.rounds_spin.setValue(FREE_DEMO_ROUNDS)
             self.candidates_spin.setValue(FREE_DEMO_CANDIDATES)
             self.target_spin.setValue(FREE_DEMO_TARGET)
+        else:
+            # Own API: keep target usable with the chosen candidates-per-round.
+            if int(self.target_spin.value()) < int(self.candidates_spin.value()):
+                self.target_spin.setValue(int(self.candidates_spin.value()))
         self.config.num_rounds = int(self.rounds_spin.value())
         self.config.features_per_iteration = int(self.candidates_spin.value())
         self.config.target_feature_count = int(self.target_spin.value())

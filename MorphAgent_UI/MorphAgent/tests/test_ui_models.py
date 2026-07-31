@@ -95,15 +95,18 @@ class RunConfigTests(unittest.TestCase):
     def test_only_repository_grounded_preset_is_exposed(self) -> None:
         self.assertEqual(list(RunPreset), [RunPreset.PILOT])
 
-    def test_pilot_preset_matches_demo_scale(self) -> None:
+    def test_pilot_preset_does_not_lock_run_scale(self) -> None:
         config = RunConfig()
+        config.features_per_iteration = 10
+        config.target_feature_count = 10
+        config.num_rounds = 2
 
         config.apply_preset(RunPreset.PILOT)
 
         self.assertEqual(config.method, "both")
-        self.assertEqual(config.features_per_iteration, 5)
-        self.assertEqual(config.target_feature_count, 5)
-        self.assertEqual(config.num_rounds, 1)
+        self.assertEqual(config.features_per_iteration, 10)
+        self.assertEqual(config.target_feature_count, 10)
+        self.assertEqual(config.num_rounds, 2)
 
     def test_low_frequency_run_defaults_can_come_from_environment(self) -> None:
         values = {
@@ -128,9 +131,10 @@ class RunConfigTests(unittest.TestCase):
             self.assertEqual(config.vlm_online_concurrency, 6)
 
             config.apply_preset(RunPreset.PILOT)
-            self.assertEqual(config.features_per_iteration, 5)
-            self.assertEqual(config.target_feature_count, 5)
-            self.assertEqual(config.num_rounds, 1)
+            # Preset must not clobber env-driven / user-chosen scale.
+            self.assertEqual(config.features_per_iteration, 7)
+            self.assertEqual(config.target_feature_count, 21)
+            self.assertEqual(config.num_rounds, 3)
         finally:
             for name, value in previous.items():
                 if value is None:
@@ -160,6 +164,9 @@ class RunConfigTests(unittest.TestCase):
             )
 
             config = RunConfig(repository_root=str(repo))
+            config.features_per_iteration = 10
+            config.target_feature_count = 10
+            config.num_rounds = 2
             self.assertTrue(hasattr(config, "apply_reference_demo"))
             cache_path = config.apply_reference_demo()
 
@@ -170,9 +177,10 @@ class RunConfigTests(unittest.TestCase):
             self.assertEqual(config.results_dir, "")
             self.assertIn("Tau protein aggregation", config.query)
             self.assertEqual(config.method, "both")
-            self.assertEqual(config.features_per_iteration, 5)
-            self.assertEqual(config.target_feature_count, 5)
-            self.assertEqual(config.num_rounds, 1)
+            # Loading demo data must preserve the user's chosen scale.
+            self.assertEqual(config.features_per_iteration, 10)
+            self.assertEqual(config.target_feature_count, 10)
+            self.assertEqual(config.num_rounds, 2)
             self.assertEqual(config.dataset_source, "demo")
             self.assertTrue(config.enable_expert_knowledge)
             self.assertTrue(config.enable_deep_research)
@@ -406,6 +414,9 @@ class FreeDemoApiTests(unittest.TestCase):
         self.assertTrue(creds["api_key"])
         self.assertTrue(is_free_demo_connection(creds["base_url"], creds["api_key"]))
         self.assertFalse(is_free_demo_connection("https://api.openai.com/v1", creds["api_key"]))
+        # Same free host with another key (or blank key) is not the free-demo lock.
+        self.assertFalse(is_free_demo_connection(creds["base_url"], "sk-user-own-key"))
+        self.assertFalse(is_free_demo_connection(creds["base_url"], ""))
         self.assertEqual(FREE_DEMO_ROUNDS, 1)
         self.assertEqual(FREE_DEMO_CANDIDATES, 5)
         self.assertEqual(FREE_DEMO_TARGET, 5)

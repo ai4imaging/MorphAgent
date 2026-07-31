@@ -215,6 +215,30 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertTrue(page.target_spin.isEnabled())
         widget.close()
 
+    def test_gpugeek_host_with_own_key_unlocks_run_config(self) -> None:
+        widget = MorphAgentWidget()
+        page = widget.configure_page
+        page.free_api_button.click()
+        self.app.processEvents()
+        self.assertTrue(page.config_section.isHidden())
+
+        # Keep the free host, replace only the API key → unrestricted scale.
+        page.llm_api_key_edit.setText("sk-user-own-gpugeek-key")
+        self.app.processEvents()
+        self.assertFalse(page.config_section.isHidden())
+        self.assertTrue(page.rounds_spin.isEnabled())
+        page.rounds_spin.setValue(1)
+        page.candidates_spin.setValue(10)
+        page.target_spin.setValue(10)
+        page._fields_changed()
+        self.assertEqual(widget.config.features_per_iteration, 10)
+        self.assertEqual(widget.config.target_feature_count, 10)
+        self.assertEqual(widget.config.num_rounds, 1)
+        command = widget.config.build_command()
+        self.assertIn("--features-per-iteration", command)
+        self.assertEqual(command[command.index("--features-per-iteration") + 1], "10")
+        widget.close()
+
     def test_own_api_can_save_run_config_to_env(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repository = Path(raw)
@@ -717,6 +741,10 @@ class WidgetSmokeTests(unittest.TestCase):
             widget = MorphAgentWidget()
             widget.config.repository_root = str(repo)
             page = widget.configure_page
+            page.rounds_spin.setValue(2)
+            page.candidates_spin.setValue(10)
+            page.target_spin.setValue(10)
+            page._fields_changed()
 
             self.assertTrue(hasattr(page, "load_demo_button"))
             page.load_demo_button.click()
@@ -725,9 +753,9 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertEqual(page.dataset_summary.sample_count, 1)
             self.assertEqual(page.dataset_picker.text(), str((demo / "data").resolve()))
             self.assertIn("Tau protein aggregation", page.query_edit.toPlainText())
-            self.assertEqual(widget.config.features_per_iteration, 5)
-            self.assertEqual(widget.config.target_feature_count, 5)
-            self.assertEqual(widget.config.num_rounds, 1)
+            self.assertEqual(widget.config.features_per_iteration, 10)
+            self.assertEqual(widget.config.target_feature_count, 10)
+            self.assertEqual(widget.config.num_rounds, 2)
             self.assertEqual(widget.config.dataset_source, "demo")
             command = widget.config.build_command()
             self.assertNotIn("--auto-deep-research", command)

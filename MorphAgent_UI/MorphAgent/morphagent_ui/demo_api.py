@@ -37,7 +37,7 @@ FREE_DEMO_TARGET = 5
 FREE_DEMO_NOTICE = (
     "Free restricted API for MorphAgent testing only. "
     "Token quota is limited. Scale is locked to 1 round × 5 candidates · target 5. "
-    "Use your own API key to remove this limit."
+    "Same Base URL with your own API key is unrestricted."
 )
 
 
@@ -71,7 +71,12 @@ def load_free_demo_credentials() -> FreeDemoCredentials:
 
 
 def is_free_demo_connection(base_url: str, api_key: str = "") -> bool:
-    """True when the form still points at the free demo gateway (and key, if given)."""
+    """True only for the bundled free-demo Base URL + free-demo API key.
+
+    The free gateway host alone is not enough: a different key on the same
+    Base URL (e.g. api.gpugeek.com) is treated as the user's own unrestricted API.
+    An empty key never counts as free-demo by itself.
+    """
 
     try:
         creds = load_free_demo_credentials()
@@ -82,4 +87,4 @@ def is_free_demo_connection(base_url: str, api_key: str = "") -> bool:
     if url != expected:
         return False
     key = (api_key or "").strip()
-    return not key or key == creds["api_key"]
+    return bool(key) and key == creds["api_key"]

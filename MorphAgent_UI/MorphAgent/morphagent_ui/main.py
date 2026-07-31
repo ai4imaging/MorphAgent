@@ -17,7 +17,7 @@ from qtpy.QtWidgets import (
 )
 
 from .controller import RunController
-from .models import RunConfig, RunPreset
+from .models import RunConfig
 from .theme import STYLESHEET
 from .widgets.configure import ConfigurePage
 from .widgets.home import HomePage
@@ -122,10 +122,12 @@ class MorphAgentWidget(QWidget):
         if self.controller.running:
             self.navigate(2)
             return
-        self.config.apply_preset(RunPreset.PILOT)
+        # Keep the user's run scale (and any values saved in .env). Only the
+        # free restricted API path locks scale to 1 round × 5 candidates.
         self.config.resume = False
         self.config.results_dir = ""
         self.configure_page.load_from_config()
+        self.configure_page.load_run_scale_settings()
         self.configure_page.refresh_preflight(scan=False)
         self.navigate(1)
 

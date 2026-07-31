@@ -1918,18 +1918,36 @@ Examples:
             "enable_feature_analysis": args.enable_feature_analysis,
         }
         
-        # Run the graph to get the feature plan (in reproduce mode, reuse the cross-run canonical feature_plan)
+        # Run the graph to get the feature plan (in reproduce mode, reuse the
+        # cross-run canonical feature_plan only when it matches the requested scale).
         feature_plan = None
         plan_cache_path = None
         if settings.reproduce_mode and settings.reproduce_cache_dir and round_num == 1:
-            plan_cache_path = Path(settings.reproduce_cache_dir) / f"feature_plan_{args.method}.json"
-            if plan_cache_path.exists():
-                with open(plan_cache_path, "r", encoding="utf-8") as f:
-                    feature_plan = json.load(f)
+            requested_n = int(settings.features_per_iteration)
+            requested_t = int(settings.target_feature_count)
+            plan_cache_path = (
+                Path(settings.reproduce_cache_dir)
+                / f"feature_plan_{args.method}_n{requested_n}_t{requested_t}.json"
+            )
+            legacy_plan_cache = Path(settings.reproduce_cache_dir) / f"feature_plan_{args.method}.json"
+            for candidate in (plan_cache_path, legacy_plan_cache):
+                if not candidate.exists():
+                    continue
+                with open(candidate, "r", encoding="utf-8") as f:
+                    cached_plan = json.load(f)
+                cached_n = len(cached_plan.get("features", []) or [])
+                if cached_n != requested_n:
+                    print(
+                        f"  [reproduce] Ignoring cached feature_plan with {cached_n} features "
+                        f"(requested {requested_n}): {candidate}"
+                    )
+                    continue
+                feature_plan = cached_plan
                 print(
                     f"  [reproduce] Reusing cached feature_plan "
-                    f"({len(feature_plan.get('features', []))} features): {plan_cache_path}"
+                    f"({cached_n} features): {candidate}"
                 )
+                break
 
         if feature_plan is None:
             final_state = app.invoke(initial_state)

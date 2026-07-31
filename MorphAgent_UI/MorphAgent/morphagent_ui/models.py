@@ -124,7 +124,7 @@ class RunPreset(str, Enum):
 
     @property
     def description(self) -> str:
-        return "Demo scale · 1 round × 5 candidates · target 5"
+        return "Both routes · scale is user-controlled (free API locks to 1×5)"
 
 
 @dataclass
@@ -170,11 +170,14 @@ class RunConfig:
     repository_root: str = field(default_factory=lambda: str(Path(__file__).resolve().parents[1]))
 
     def apply_preset(self, preset: RunPreset | str) -> None:
+        """Apply route/runtime defaults without locking run scale.
+
+        Run scale (rounds / candidates / target) stays user-controlled.
+        Only the free restricted API path in Configure locks to 1×5.
+        """
+
         RunPreset(preset)
         self.method = "both"
-        self.features_per_iteration = 5
-        self.target_feature_count = 5
-        self.num_rounds = 1
         self.temperature = 0.0
         self.reproduce = True
         self.code_parallel_workers = 1
@@ -231,7 +234,9 @@ class RunConfig:
             "Generate unbiased morphological features that quantify Tau protein "
             "aggregation and neuronal structure in these images"
         )
-        self.apply_preset(RunPreset.PILOT)
+        # Preserve the user's run scale. Demo dataset load must not force 1×5;
+        # only the free restricted API lock in Configure does that.
+        self.method = "both"
         self.dataset_source = "demo"
         self.enable_expert_knowledge = True
         self.enable_deep_research = True
