@@ -1,0 +1,143 @@
+# Implementation Plan for `axon_to_soma_tau_intensity_ratio`
+
+The goal of this feature is to compute the ratio of the mean Tau fluorescence intensity in axonal regions to the mean intensity in the soma. This ratio quantifies the proper enrichment of Tau in axons versus the soma and serves as a metric for detecting Tau mislocalization, which is a hallmark of pathological changes.
+
+---
+
+### **1. Understanding the Feature**
+**Biological Property Captured:**
+- Healthy neurons exhibit Tau primarily localized in axons (axonal enrichment), with minimal accumulation in the soma, creating a high axon-to-soma intensity ratio.
+- Pathological conditions often involve Tau mislocalization, where the axonal Tau enrichment decreases, and abnormal Tau accumulation appears in the soma. This results in a lower axon-to-soma intensity ratio.
+- This feature, therefore, measures the degree to which this mislocalization has occurred.
+
+**Key Insight:**
+- The feature requires us to focus on two regions: soma and axons. Using the fluorescence intensity values from these regions, we compute the mean intensity in each and calculate the axon-to-soma ratio.
+
+---
+
+### **2. Input Analysis**
+
+#### **Inputs**
+1. **Primary Image (`img`)**:
+   - A 2D single-channel grayscale fluorescence image (shape: `(2048, 2048)` or `(1536, 1536)`).
+   - Intensity represents Tau protein fluorescence.
+   - dtype: `uint16`, value range: `0` to `9042`.
+
+2. **Segmentation Masks** (Optional):
+   - Segmentation masks help define specific regions of interest (ROI) in the image. Here, we will use two keys:
+     - **`seg["mask_cell"]`:** Defines the whole cell boundary (soma + dendrites + axons).
+     - **`seg["mask_filament"]`:** Defines thin filament-like structures, which include axonal regions.
+   - Masks are binary (value range = {0, 1}), with the same spatial dimensions as `img` (e.g., `(2048, 2048)`).
+   - If a segmentation mask is empty or unavailable (e.g., all zeros), fallback logic must be implemented.
+
+---
+
+#### **Relevance of Each Input**
+1. **Image (`img`)**:
+   - Primary source for fluorescence intensity values of Tau protein.
+   - Will be used to compute mean intensities for defined regions of interest (soma, axons).
+
+2. **Segmentation Masks (`seg`)**:
+   - **`mask_cell`**: Extracts the soma region (the cytoplasmic area excluding axons and dendrites). Used to calculate mean Tau intensity in the soma.
+   - **`mask_filament`**: Extracts the axonal regions for axonal Tau intensity measurement.
+
+---
+
+### **3. Algorithm Design**
+
+To compute the `axon_to_soma_tau_intensity_ratio`, follow these steps:
+
+#### **3.1 Preprocessing**
+1. **Validate Inputs**:
+   - Ensure `img` is a 2D array (not 3D or multi-channel) of the expected shape and `uint16` dtype.
+   - Check if required keys (`mask_cell`, `mask_filament`) exist in segmentation dictionaries. If not available, return `NaN` or a pre-defined error value (e.g., `-1`).
+
+2. **Normalize Image Intensities**:
+   - Convert image intensities to a 0-1 range for stability in calculations:
+     ```math
+     img_norm = (img - img.min()) / (img.max() - img.min())
+     ```
+
+#### **3.2 Mask-Based Region Extraction**
+3. **Extract Regions of Interest**:
+   - Identify the axonal regions by masking `img` with `mask_filament`.
+   - Identify the soma region by masking `img` with the difference between `mask_cell` and `mask_filament`:
+     ```math
+     soma_mask = mask_cell - mask_filament
+     ```
+
+   This ensures that overlapping regions are not double-counted.
+
+4. **Filter Out Invalid Masks**:
+   - If `mask_cell` or `mask_filament` contains all zeros, return `NaN` or `-1` to indicate no valid segmentation.
+
+#### **3.3 Compute Mean Intensities**
+5. **Mean Tau Intensity in Axons**:
+   - Compute the mean intensity of the axonal regions:
+     ```math
+     mean_axon_intensity = mean(img_norm[mask_filament > 0])
+     ```
+
+6. **Mean Tau Intensity in Soma**:
+   - Compute the mean intensity of the soma regions:
+     ```math
+     mean_soma_intensity = mean(img_norm[soma_mask > 0])
+     ```
+
+#### **3.4 Calculate Intensity Ratio**
+7. **Axon-to-Soma Ratio**:
+   - Compute the intensity ratio as:
+     ```math
+     axon_to_soma_ratio = mean_axon_intensity / mean_soma_intensity
+     ```
+   - This ratio quantifies the relative enrichment of Tau in axons compared to the soma.
+   - Return `NaN` if `mean_soma_intensity == 0` to avoid division by zero.
+
+---
+
+### **4. Edge Cases**
+
+1. **Empty Masks**:
+   - If `mask_cell` or `mask_filament` contains only zeros (e.g., no segmentation for soma or axons is found), return `NaN` or `-1`.
+
+2. **Invalid Image Input**:
+   - If `img` is not a 2D single-channel grayscale image, raise a `ValueError` indicating incorrect input format.
+
+3. **Zero Soma Intensity**:
+   - If `mean_soma_intensity == 0`, return `NaN` as the ratio would be undefined (division by zero).
+
+4. **Invalid Region Overlap**:
+   - If there is excessive overlap between `mask_filament` and `mask_cell` such that there is no dedicated soma region left, return a warning or `NaN`.
+
+---
+
+### **5. Implementation Notes**
+
+1. **Dataset Format Handling**:
+   - Use the `tifffile` library for loading TIFF files if required.
+   - Ensure segmentation masks are loaded correctly using the `seg` dictionary keys (`seg["mask_cell"]`, `seg["mask_filament"]`).
+
+2. **Numerical Stability**:
+   - Normalize the image intensity before processing to handle variations in intensity ranges between samples.
+
+3. **Single-Output Restriction**:
+   - The function should return a single `float` value (the axon-to-soma intensity ratio).
+
+4. **Computation Bounds**:
+   - Use carefully designed conditions to ensure computational logic avoids errors (e.g., dividing by zero, region-less masks).
+
+---
+
+### **Summary of Steps**
+
+1. Validate inputs and check for required segmentation masks.
+2. Normalize the input image `img` to a 0-1 range.
+3. Extract axonal and soma regions using `mask_filament` and `mask_cell`.
+4. Compute mean intensity in axonal and soma regions.
+5. Calculate the axonal-to-soma intensity ratio as `mean_axon_intensity / mean_soma_intensity`.
+6. Handle edge cases such as missing masks, empty regions, or zero soma intensity.
+7. Return the computed ratio as a single float.
+
+### **Output**
+- A single `float` value representing the axon-to-soma Tau intensity ratio.
+- Return `NaN` or `-1` for error cases such as missing/empty masks or invalid inputs.

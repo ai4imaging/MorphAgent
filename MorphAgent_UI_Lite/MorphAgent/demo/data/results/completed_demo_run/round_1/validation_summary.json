@@ -1,0 +1,68 @@
+{
+  "thresholds": {
+    "availability_rate": 0.7,
+    "min_unique_values": 5,
+    "cv_floor": 0.1,
+    "deterministic_corr_threshold": 0.98,
+    "ambiguous_corr_threshold": 0.95,
+    "min_transcriptome_alignment": 0.3,
+    "min_base_validation_score": 0.35
+  },
+  "metadata": {
+    "has_explicit_metadata": false,
+    "categorical_fields": [],
+    "continuous_fields": [],
+    "ignored_fields": [],
+    "sample_id_prefix_counts": {
+      "WT": 5
+    },
+    "fallback_notes": [
+      "No aggressive pseudo-metadata inference was applied.",
+      "Sample ID prefixes are logged for context only and are not used for biological ranking."
+    ]
+  },
+  "counts": {
+    "round_features": 5,
+    "retained": 2,
+    "dropped": 3,
+    "retained_total_live": 2
+  },
+  "retained_features": [
+    "vlm_tau_aggregation_pattern_proportion",
+    "vlm_somatic_nft_density"
+  ],
+  "dropped_features": [
+    "axon_to_soma_tau_intensity_ratio",
+    "tau_neurite_bead_density",
+    "distal_to_proximal_axon_tau_intensity_ratio"
+  ],
+  "top_reason_codes": [
+    [
+      "low_unique_values",
+      3
+    ],
+    [
+      "passed_hard_filters",
+      2
+    ],
+    [
+      "low_availability",
+      1
+    ]
+  ],
+  "top_retained_features": [
+    {
+      "feature_name": "vlm_somatic_nft_density",
+      "validation_score": 0.8,
+      "availability_rate": 1.0,
+      "unsupervised_signal": 0.22792022792022468
+    },
+    {
+      "feature_name": "vlm_tau_aggregation_pattern_proportion",
+      "validation_score": 0.6732142857142829,
+      "availability_rate": 1.0,
+      "unsupervised_signal": 0.12755102040816163
+    }
+  ],
+  "redundancy_resolutions": []
+}

@@ -1,0 +1,135 @@
+### Implementation Plan for `dendrite_tau_bead_count` Feature
+
+---
+
+#### **1. Understanding the Feature**
+
+The `dendrite_tau_bead_count` feature aims to compute the number of *Tau-positive beaded inclusions* along segmented dendritic structures in Tau-stained maximum-intensity projection (MIP) grayscale fluorescence microscopy images. This feature captures the **morphological property of Tau pathology in dendrites**, specifically focusing on the presence of bead-like aggregates (discrete, localized bright regions) that form irregularly along dendrite-like structures. These Tau inclusions are considered pathological and are associated with intermediate stages of Tau-related neurodegenerative diseases.
+
+Key biological contexts and morphological features to observe:
+1. **Healthy Dendrites**: Smooth, linear Tau distribution along dendritic shafts.
+2. **Pathological Dendrites**: Irregular **beaded (granular)** and **thread-like** Tau inclusions showing punctate, string-of-pearls-like patterns along dendrites.
+
+**Output**:
+The function must return a **single float value**, which represents the **count of Tau-positive beads in dendrites**.
+
+---
+
+#### **2. Input Analysis**
+
+The function will accept the following inputs:
+1. **`img` (required)**:
+   - Grayscale input image as a 2D numpy array, shape `(2048, 2048)`, dtype `uint16`, intensity values in the range `[0, 9042]`.
+   - Represents a fluorescence microscopy MIP image capturing Tau protein signal.
+
+2. **`segmentation_masks` (optional)**:
+   - Precomputed binary segmentation masks provided as arguments, using the file stems as keys (e.g., `seg["mask_filament"]`, `seg["mask_cell"]`).
+   - Among the available masks:
+     - **`seg["mask_filament"]`**: Dendritic (filament) masks are the most relevant.
+     - **`seg["mask_cell"]`** may help in isolating the neuronal regions of interest.
+     - Other masks like `seg["mask_bundle"]`, `seg["mask_nucleus"]`, and `seg["mask_droplet"]` are irrelevant to the task.
+
+**Key Assumptions**:
+- If `segmentation_masks` are **None or empty**, a fallback dendrite segmentation methodology will be applied (e.g., adaptive local thresholding, morphological filtering, skeletonization).
+- The input image is pre-aligned and calibrated, with Tau signal captured in a single fluorescent channel.
+- Only bead-like inclusions **along the dendritic segments** are to be counted, ignoring other regions such as soma or axons.
+
+---
+
+#### **3. Algorithm Design**
+
+##### **Step 1: Input Validation**
+- Validate the input `img` to ensure:
+  1. It is a 2D numpy array of shape `(2048, 2048)` or `(1536, 1536)`.
+  2. Intensity values are in the expected range `[0, 9042]`.
+- Validate `segmentation_masks`:
+  - Ensure provided masks are of consistent shape with `img`.
+  - Validate if `seg["mask_filament"]` exists; fallback to automatic segmentation if not provided.
+  - If `seg["mask_cell"]` exists, use it to restrict bead detection to neuronal regions.
+
+##### **Step 2: Preprocessing**
+1. **Normalize the image intensities**:
+   Normalize intensity values of `img` to the range `[0, 1]` by dividing pixel values by `9042`. This ensures uniform brightness normalization across images.
+
+2. **Denoising**:
+   Apply a **Gaussian filter** to smoothen the image and suppress high-frequency noise, which could interfere with bead detection. Use a small kernel size (e.g., σ=1–2) to preserve features.
+
+3. **Segmentation Mask Processing**:
+   - If `seg["mask_filament"]` is available, use it to extract regions of interest corresponding to dendritic structures.
+     - **Optional refinement**: Apply morphological operations (closing, opening) to smooth edges and fill small holes in the dendrite mask.
+   - If no `mask_filament` is provided, generate a custom dendrite segmentation mask using:
+     1. Adaptive local thresholding (e.g., Otsu's method or Sauvola’s thresholding).
+     2. Morphological operations to refine shapes and remove noise.
+     3. Skeletonization to identify initial dendritic pathways.
+   - If `seg["mask_cell"]` exists:
+     - Use it to exclude non-neuronal areas (e.g., background pixels).
+
+##### **Step 3: Main Computation**
+1. **Mask the Image**:
+   - Apply the binary dendrite mask (`seg["mask_filament"]` or generated mask) to isolate the dendritic regions of the normalized and preprocessed image.
+
+2. **Enhanced Contrast**:
+   - Utilize **Contrast Limited Adaptive Histogram Equalization (CLAHE)** to enhance contrast and amplify faint bead structures.
+
+3. **Bead Segmentation**:
+   - Apply a **top-hat filter** (morphological operation) with a predefined structural element simulating the size and shape of the beaded inclusions (e.g., circular kernel with approximate bead radius, ~2–5 pixels).
+   - Use **morphological maxima detection** to identify bright, small, localized bead-like regions in the processed image.
+
+4. **Blob/Bead Detection**:
+   - Apply a **blob detection algorithm** (e.g., `skimage.feature.blob_log` or `peak_local_max`) to identify and extract individual bead-like structures. Use appropriate parameter settings:
+     - `min_sigma` and `max_sigma`: Define bead size range in pixels (e.g., ~2–5).
+     - `threshold`: Set intensity threshold for detecting significantly bright foci (e.g., based on normalized intensity).
+
+5. **Filter Beads by Location**:
+   - Ensure detected blobs are located **along dendritic skeletons**:
+     - Apply a **distance transform** on the dendritic mask to compute the distance of each bead to the dendritic skeleton.
+     - Retain beads only within a small **distance threshold** (e.g., ~2–3 pixels) from the dendrite skeleton.
+
+##### **Step 4: Post-Processing**
+1. **Aggregate Bead Count**:
+   - Collect all valid bead detections (blobs) and count their total occurrence.
+   - Return the **total bead count** as a single float value.
+
+2. **Optional Normalizations**:
+   - Normalize the raw bead count by the total dendrite mask area (if requested).
+   - Return the normalized bead count as the primary feature.
+
+---
+
+#### **4. Edge Cases**
+
+1. **Empty Masks**:
+   - If `seg["mask_filament"]` exists but is completely empty (all zeros), return `0.0`.
+   - If no `seg["mask_filament"]` is provided, use fallback segmentation, but ensure the algorithm can handle completely dark images by returning `0.0` when no dendritic regions or blobs are detected.
+
+2. **Unexpected Image Size**:
+   - Ensure the shape of `img` matches `(2048, 2048)` or `(1536, 1536)`; otherwise, raise a `ValueError`.
+   - If any provided mask does not match the image dimensions, raise a `ValueError`.
+
+3. **Low Signal-to-Noise Ratio (SNR)**:
+   - If the image intensity is too low (e.g., mean intensity < 1% of the normalized range), apply histogram equalization to improve SNR but ensure not to over-saturate.
+
+---
+
+#### **5. Implementation Notes**
+
+1. **Segmentation Mask Utilization**:
+   - Prioritize the use of `seg["mask_filament"]` for dendritic segmentation. It is accurate and avoids computational overhead from additional segmentation steps.
+   - Use `seg["mask_cell"]` for contextual restriction, ensuring analysis is limited to neuron regions.
+
+2. **Datasets and File Format**:
+   - The function will handle single-channel 2D grayscale numpy arrays from TIFF images. Use the `tifffile` package to load TIFF data if required.
+   - Segmentation masks will have the same resolution and are binary (`uint8`), but their existence must be checked to determine whether to use precomputed masks or fallback segmentation.
+
+3. **Settings**:
+   - Parameters like operational thresholds (e.g., intensity thresholds, connectivity thresholds) and kernel sizes for morphological operations must align with the dataset resolution (2048 × 2048 or 1536 × 1536).
+
+4. **Performance Considerations**:
+   - Use optimized libraries like `scipy.ndimage`, `numpy`, and `scikit-image` to ensure efficient image processing.
+
+5. **Output**:
+   - Return a single float value: the total bead count or normalized value (if specified).
+
+---
+
+This comprehensive implementation strategy ensures that the `dendrite_tau_bead_count` feature is robust to the dataset properties, aligned with biological and morphological knowledge, and can effectively handle edge cases while providing reliable and reproducible results.
