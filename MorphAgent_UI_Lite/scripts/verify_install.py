@@ -30,6 +30,8 @@ REQUIRED_MODULES = (
     "langgraph",
     "openai",
     "dotenv",
+    "socksio",
+    "httpx",
 )
 
 

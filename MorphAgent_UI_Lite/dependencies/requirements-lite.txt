@@ -6,6 +6,8 @@ langchain-openai==1.3.5
 langgraph==1.2.9
 openai>=2.45.0,<3
 python-dotenv==1.2.1
+# httpx needs socksio when ALL_PROXY/HTTPS_PROXY is socks:// (common on campus networks).
+socksio==1.0.0
 
 numpy==2.2.6
 pandas==2.3.3
