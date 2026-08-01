@@ -160,16 +160,12 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertTrue(button.property("choiceTile"))
             self.assertGreaterEqual(button.minimumHeight(), 42)
 
-        multi_choices = (
-            page.expert_check,
-            page.deep_check,
-            page.rag_check,
-        )
-        for checkbox in multi_choices:
+        for checkbox in (page.expert_check, page.deep_check, page.rag_check):
             self.assertIsInstance(checkbox, QCheckBox)
             self.assertTrue(checkbox.property("choiceTile"))
             self.assertGreaterEqual(checkbox.minimumHeight(), 46)
             self.assertFalse(checkbox.isChecked())
+            self.assertFalse(checkbox.isHidden())
         self.assertFalse(page.validation_check.isChecked())
         self.assertFalse(widget.config.enable_expert_knowledge)
         self.assertFalse(widget.config.enable_deep_research)
@@ -770,15 +766,14 @@ class WidgetSmokeTests(unittest.TestCase):
             demo = repo / "demo"
             dataset = demo / "data" / "dataset"
             sample = dataset / "WT_1"
-            rag = demo / "data" / "RAG"
             precomputed = demo / "precomputed"
             sample.mkdir(parents=True)
-            rag.mkdir(parents=True)
             precomputed.mkdir(parents=True)
             (sample / "image.tif").touch()
             (dataset / "dataset_index.txt").write_text("Tau demo", encoding="utf-8")
-            (rag / "paper.pdf").write_bytes(b"reference")
-            (precomputed / "rag_knowledge_summary.txt").write_text("cached knowledge", encoding="utf-8")
+            (precomputed / "expert_knowledge_summary.txt").write_text("expert", encoding="utf-8")
+            (precomputed / "deep_research_summary.txt").write_text("deep", encoding="utf-8")
+            (precomputed / "rag_knowledge_summary.txt").write_text("rag", encoding="utf-8")
             (demo / "data" / "metadata.csv").write_text(
                 "sample_id,group,genotype\nWT_1,WT,wild_type\n",
                 encoding="utf-8",
@@ -807,6 +802,12 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertEqual(widget.config.target_feature_count, 10)
             self.assertEqual(widget.config.num_rounds, 2)
             self.assertEqual(widget.config.dataset_source, "demo")
+            self.assertFalse(page.expert_check.isChecked())
+            self.assertFalse(page.deep_check.isChecked())
+            self.assertFalse(page.rag_check.isChecked())
+            self.assertFalse(widget.config.enable_expert_knowledge)
+            self.assertFalse(widget.config.enable_deep_research)
+            self.assertFalse(widget.config.enable_rag)
             self.assertTrue(page.validation_check.isChecked())
             self.assertTrue(widget.config.enable_feature_analysis)
             self.assertTrue(widget.config.metadata_path.endswith("metadata.csv"))
@@ -814,6 +815,7 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertNotIn("--auto-deep-research", command)
             self.assertNotIn("--auto-literature-retrieval", command)
             self.assertNotIn("--disable-feature-analysis", command)
+            self.assertIn("--disable-expert-knowledge", command)
             self.assertIn("--metadata-path", command)
             widget.close()
 

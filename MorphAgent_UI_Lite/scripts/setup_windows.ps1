@@ -1,5 +1,8 @@
 ﻿# MorphAgent UI Lite Windows setup — single env morphagent_lite.
 # ASCII-only. Dot-sources conda_windows.ps1 for conda discovery.
+#
+# Avoids classic+conda-forge mega-solves that crash old conda.exe (0xc0000005).
+# Flow: accept ToS -> conda create python+pip only -> pip install requirements.
 param(
     [string]$EnvName = $(if ($env:MORPHAGENT_ENV_NAME) { $env:MORPHAGENT_ENV_NAME } else { "morphagent_lite" }),
     [switch]$Recreate
@@ -20,7 +23,7 @@ function Write-Status([string]$Text) {
 }
 
 . (Join-Path $ScriptDir "conda_windows.ps1")
-Ensure-CondaNonInteractiveEnv
+Ensure-CondaUtf8Env
 
 function Find-CondaExe {
     $root = Find-CondaRootOnDisk
@@ -37,7 +40,12 @@ try {
     }
 
     Write-Host "[OK] Using conda: $($script:CondaExe)"
+    Accept-AnacondaTosBestEffort
+    Write-Host "[OK] Lite: conda only creates python+pip; numpy/PyQt/etc install via pip"
     Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) CONDA_SOLVER=$($env:CONDA_SOLVER)"
+    Write-Host "[..] Lite scope: Tau demo + Code/VLM; knowledge via precomputed txt"
+    Write-Host "[..] Skips PDF parse / PubMed / auto deep-research / Allen"
+    Write-Host "[..] Live PDF/literature/Allen: use MorphAgent_UI\"
 
     $envList = & $script:CondaExe env list 2>$null | Out-String
     $exists = $envList -match "(?m)^\s*$([regex]::Escape($EnvName))\s"
@@ -48,24 +56,28 @@ try {
         $exists = $false
     }
     if (-not $exists) {
-        Write-Host "[..] Creating $EnvName (python=3.10 + pip only)"
-        & $script:CondaExe create -n $EnvName python=3.10 pip -y
-        if ($LASTEXITCODE -ne 0) { throw "conda create failed ($LASTEXITCODE)" }
+        New-MorphAgentLiteEnv -EnvName $EnvName
     } else {
         Write-Host "[OK] Env $EnvName already exists"
     }
+
+    # Clear classic fallback before pip/run so we do not keep a broken solver mode around.
+    Clear-CondaClassicFallback
+    Ensure-CondaUtf8Env
 
     Write-Host "[..] Upgrading pip"
     & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -U pip setuptools wheel
     if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed ($LASTEXITCODE)" }
 
-    Write-Host "[..] pip install -r requirements-lite.txt"
-    & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -r $ReqFile
+    Write-Host "[..] pip install -r requirements-lite.txt (includes PyQt5; no conda-forge science solve)"
+    & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -r $ReqFile --retries 5
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[WARN] pip failed; trying conda-forge pyqt=5 then retry"
-        & $script:CondaExe install -n $EnvName -c conda-forge --override-channels "pyqt=5" -y
-        & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -r $ReqFile
-        if ($LASTEXITCODE -ne 0) { throw "pip install requirements failed ($LASTEXITCODE)" }
+        Write-Host "[WARN] Full pip install failed; retrying PyQt5 via pip only, then requirements again"
+        & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install "PyQt5>=5.15,<5.16" qtpy --retries 5
+        & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -r $ReqFile --retries 5
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install requirements failed ($LASTEXITCODE). Check network/SSL; do not conda-install the science stack on Lite."
+        }
     }
 
     Write-Host "[..] pip install -e MorphAgent"
@@ -115,7 +127,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "verify_install.py failed ($LASTEXITCODE)" }
 
     Write-Status "OK env=$EnvName"
-    Write-Host "[OK] Lite setup complete. Next: start_ui_windows.bat"
+    Write-Host "[OK] Lite setup complete (Tau demo trial). Next: start_ui_windows.bat"
+    Write-Host "[..] Knowledge: demo/precomputed/*.txt injected into prompts"
     exit 0
 } catch {
     $msg = "$_"

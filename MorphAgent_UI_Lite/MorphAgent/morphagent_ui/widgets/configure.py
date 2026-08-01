@@ -168,7 +168,7 @@ class ConfigurePage(QWidget):
         self.load_demo_button.setProperty("choiceAction", True)
         self.load_demo_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.load_demo_button.setToolTip(
-            "Load the demo samples, biological question, existing masks, and prepared knowledge sources."
+            "Load the demo samples, biological question, and existing masks."
         )
         demo_row.addWidget(self.demo_guide, 0, Qt.AlignVCenter)
         demo_row.addWidget(self.load_demo_button, 1)

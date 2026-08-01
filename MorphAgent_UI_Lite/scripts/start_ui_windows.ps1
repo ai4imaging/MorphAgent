@@ -8,7 +8,7 @@ $EnvName = if ($env:MORPHAGENT_ENV_NAME) { $env:MORPHAGENT_ENV_NAME } else { "mo
 $Launch = Join-Path $Handoff "MorphAgent\launch_ui.py"
 
 . (Join-Path $ScriptDir "conda_windows.ps1")
-Ensure-CondaNonInteractiveEnv
+Ensure-CondaUtf8Env
 
 function Find-CondaExe {
     $root = Find-CondaRootOnDisk

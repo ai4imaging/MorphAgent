@@ -262,108 +262,12 @@ def extract_expert_knowledge(
     """
     if not enable_expert_knowledge:
         return None
-    
-    # Try to find the expert_knowledge folder (supports different naming)
-    expert_knowledge_dir = None
-    possible_names = ["expert_knowledge", "expert-knowledge", "Expert_Knowledge", "Expert-Knowledge"]
-    
-    for name in possible_names:
-        candidate_dir = project_root / name
-        if candidate_dir.exists() and candidate_dir.is_dir():
-            expert_knowledge_dir = candidate_dir
-            break
-    
-    if expert_knowledge_dir is None:
-        print(f"  [Expert Knowledge] expert_knowledge folder does not exist (tried: {', '.join(possible_names)})")
-        print(f"  Project root directory: {project_root}")
-        return None
-    
-    print(f"\n[Expert Knowledge] Starting to process the expert knowledge folder: {expert_knowledge_dir}")
-    
-    # Collect all files
-    text_files = []
-    image_files = []
-    pdf_files = []
-    
-    for file_path in expert_knowledge_dir.iterdir():
-        if file_path.is_file() and not file_path.name.startswith('.'):
-            file_type = get_file_type(file_path)
-            if file_type == 'text':
-                text_files.append(file_path)
-            elif file_type == 'image':
-                image_files.append(file_path)
-            elif file_type == 'pdf':
-                pdf_files.append(file_path)
-    
-    print(f"  Found {len(text_files)} text files, {len(image_files)} image files, {len(pdf_files)} PDF files")
-    
-    if not (text_files or image_files or pdf_files):
-        print("[Expert Knowledge] No supported files found")
-        return None
-    
-    # Process text files
-    text_summaries = []
-    if text_files:
-        print(f"  Processing {len(text_files)} text files...")
-        for text_file in text_files:
-            print(f"    Processing: {text_file.name}")
-            try:
-                text_content = load_text_file(text_file)
-                summary = process_text_with_llm(text_content, text_file)
-                text_summaries.append(summary)
-            except Exception as e:
-                print(f"    Error: error while processing {text_file.name}: {e}")
-                text_summaries.append(f"[text file] {text_file.name} - processing error: {e}")
-    
-    # Process image files
-    image_summaries = []
-    if image_files:
-        print(f"  Processing {len(image_files)} image files...")
-        for image_file in image_files:
-            print(f"    Processing: {image_file.name}")
-            try:
-                summary = process_image_with_vlm(image_file)
-                image_summaries.append(summary)
-            except Exception as e:
-                print(f"    Error: error while processing {image_file.name}: {e}")
-                image_summaries.append(f"[image file] {image_file.name} - processing error: {e}")
-    
-    # Process PDF files
-    pdf_summaries = []
-    if pdf_files:
-        print(f"  Processing {len(pdf_files)} PDF files...")
-        for pdf_file in pdf_files:
-            print(f"    Processing: {pdf_file.name}")
-            try:
-                summary = process_pdf_file(pdf_file)
-                pdf_summaries.append(summary)
-            except Exception as e:
-                print(f"    Error: error while processing {pdf_file.name}: {e}")
-                pdf_summaries.append(f"[PDF file] {pdf_file.name} - processing error: {e}")
-    
-    # Aggregate all information
-    print(f"  Aggregating all expert knowledge information...")
-    expert_knowledge_summary = synthesize_expert_knowledge(
-        text_summaries,
-        image_summaries,
-        pdf_summaries
-    )
-    
-    print(f"  [OK] Expert knowledge extraction complete")
-    
-    # Print the expert knowledge summary
-    print(f"\n[Expert Knowledge] Expert knowledge summary:")
-    print("=" * 80)
-    if expert_knowledge_summary:
-        # Print the first 500 characters
-        preview = expert_knowledge_summary[:500]
-        print(preview)
-        if len(expert_knowledge_summary) > 500:
-            print(f"\n... ({len(expert_knowledge_summary)} characters total, full content saved)")
-        else:
-            print(expert_knowledge_summary)
-    else:
-        print("No expert knowledge content")
-    print("=" * 80)
-    
-    return expert_knowledge_summary
+
+    # Lite: only inject prepared txt; never run LLM/PDF/image extraction.
+    from knowledge.precomputed_lite import load_precomputed_summary
+
+    precomputed = load_precomputed_summary(project_root, "expert")
+    if precomputed:
+        return precomputed
+    print("  [Expert Knowledge] No precomputed summary; skipping (Lite)")
+    return None

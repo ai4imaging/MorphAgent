@@ -1,9 +1,7 @@
-"""Policy for installs into the MorphAgent UI code sandbox.
+"""Policy for installs into the MorphAgent UI Lite extract environment.
 
-Feature code runs in an isolated conda env (`morphagent_sandbox` by default),
-separate from the UI/agent env (`morphagent`). Runtime install scripts and
-auto-install may only *add* missing non-core packages — never pin/change
-versions or touch the frozen scientific stack.
+Lite runs UI + extract() in morphagent_lite. Runtime install may only *add*
+missing non-core packages — never pin/change versions of the frozen core set.
 """
 
 from __future__ import annotations
@@ -11,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-# Top-level names as they appear in pip / ImportError messages.
+# Top-level names as they appear in pip / ImportError messages (Lite keep-list).
 CORE_SCIENCE_PACKAGES = frozenset(
     {
         "numpy",
@@ -28,18 +26,9 @@ CORE_SCIENCE_PACKAGES = frozenset(
         "pil",
         "matplotlib",
         "tifffile",
-        "networkx",
-        "mahotas",
-        "h5py",
-        "statsmodels",
         "imageio",
-        "pywavelets",
-        "pyyaml",
-        "yaml",
-        "tqdm",
-        "natsort",
         "imagecodecs",
-        "seaborn",
+        "tqdm",
     }
 )
 
@@ -49,8 +38,6 @@ _IMPORT_TO_PIP = {
     "sklearn": "scikit-learn",
     "cv2": "opencv-python-headless",
     "pil": "pillow",
-    "yaml": "pyyaml",
-    "pywavelets": "PyWavelets",
 }
 
 _VERSION_SPEC_RE = re.compile(

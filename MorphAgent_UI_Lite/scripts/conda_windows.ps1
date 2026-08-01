@@ -1,17 +1,64 @@
 ﻿# Shared Windows conda helpers for setup_windows.ps1 / start_ui_windows.ps1.
 # ASCII-only (Windows PowerShell 5.1 / GBK consoles).
 # Dot-source from the caller so $script:CondaExe stays in the caller's scope.
+#
+# Lite policy: never force classic+conda-forge mega-solves (that crashes old conda.exe).
+# Prefer: accept Anaconda ToS -> keep plugins/libmamba -> conda create python+pip only -> pip rest.
 
-function Ensure-CondaNonInteractiveEnv {
-    # Miniconda 24+ conda-anaconda-tos prompts interactively and EOF-crashes
-    # double-click .bat setup. Official workaround; we use conda-forge anyway.
-    # With plugins disabled, a global libmamba solver config becomes invalid.
-    # Force the built-in classic solver for this process without touching user config.
-    $env:CONDA_NO_PLUGINS = "true"
-    $env:CONDA_SOLVER = "classic"
+function Ensure-CondaUtf8Env {
     $env:CONDA_REPORT_ERRORS = "false"
     if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = "1" }
     if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = "utf-8" }
+}
+
+function Enable-CondaClassicFallback {
+    # Last resort for ToS-interactive hangs on old Miniconda.
+    # Safe for Lite only because we install python+pip (tiny solve), never the science stack via conda.
+    $env:CONDA_NO_PLUGINS = "true"
+    $env:CONDA_SOLVER = "classic"
+    Write-Host "[WARN] Using classic solver fallback (python+pip create only; science stack stays on pip)"
+}
+
+function Clear-CondaClassicFallback {
+    Remove-Item Env:\CONDA_NO_PLUGINS -ErrorAction SilentlyContinue
+    Remove-Item Env:\CONDA_SOLVER -ErrorAction SilentlyContinue
+}
+
+function Accept-AnacondaTosBestEffort {
+    # Persist ToS acceptance so plugins/libmamba can stay enabled (avoids classic mega-solves).
+    if (-not $script:CondaExe) { return }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $hadPlugins = $env:CONDA_NO_PLUGINS
+        $hadSolver = $env:CONDA_SOLVER
+        Clear-CondaClassicFallback
+        foreach ($ch in @(
+            "https://repo.anaconda.com/pkgs/main",
+            "https://repo.anaconda.com/pkgs/r",
+            "https://repo.anaconda.com/pkgs/msys2"
+        )) {
+            try {
+                & $script:CondaExe tos accept --override-channels --channel $ch 2>$null | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    & $script:CondaExe tos accept -c $ch 2>$null | Out-Null
+                }
+            } catch {}
+        }
+        if ($null -ne $hadPlugins -and "$hadPlugins" -ne "") { $env:CONDA_NO_PLUGINS = $hadPlugins }
+        if ($null -ne $hadSolver -and "$hadSolver" -ne "") { $env:CONDA_SOLVER = $hadSolver }
+        Write-Host "[OK] Best-effort Anaconda ToS accept (plugins may stay enabled)"
+    } catch {
+        # ignore missing tos subcommand / plugin
+    } finally {
+        $ErrorActionPreference = $prevEap
+        Ensure-CondaUtf8Env
+    }
+}
+
+# Backward-compatible alias used by older callers.
+function Ensure-CondaNonInteractiveEnv {
+    Ensure-CondaUtf8Env
 }
 
 function Test-PathSafe {
@@ -75,7 +122,7 @@ function Resolve-CondaExeFromRoot {
 
 function Use-CondaRoot {
     param([string]$Root)
-    Ensure-CondaNonInteractiveEnv
+    Ensure-CondaUtf8Env
     $condaExe = Resolve-CondaExeFromRoot $Root
     if (-not $condaExe) { return $false }
     $prepend = @(
@@ -167,4 +214,28 @@ function Find-CondaRootOnDisk {
         }
     }
     return $null
+}
+
+function New-MorphAgentLiteEnv {
+    # Create morphagent_lite with python+pip only (defaults channels; no conda-forge mega-solve).
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvName
+    )
+    if (-not $script:CondaExe) { throw "conda.exe not set" }
+
+    Write-Host "[..] Creating $EnvName (python=3.10 + pip only; science stack via pip)"
+    Clear-CondaClassicFallback
+    Ensure-CondaUtf8Env
+
+    & $script:CondaExe create -n $EnvName python=3.10 pip -y `
+        -c defaults --override-channels
+    if ($LASTEXITCODE -eq 0) { return }
+
+    Write-Host "[WARN] conda create failed (exit $LASTEXITCODE); retry with classic fallback (still python+pip only)"
+    Enable-CondaClassicFallback
+    & $script:CondaExe create -n $EnvName python=3.10 pip -y `
+        -c defaults --override-channels
+    if ($LASTEXITCODE -ne 0) {
+        throw "conda create failed ($LASTEXITCODE). Upgrade Miniconda (>=23.9 recommended) or check network/SSL, then re-run."
+    }
 }

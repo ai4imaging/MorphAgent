@@ -97,92 +97,12 @@ def extract_deep_research(
     """
     if not enable_deep_research:
         return None
-    
-    # Try to find the deep_research folder (supports different naming)
-    deep_research_dir = None
-    possible_names = ["deep_research", "deep-research", "Deep_Research", "Deep-Research"]
-    
-    for name in possible_names:
-        candidate_dir = project_root / name
-        if candidate_dir.exists() and candidate_dir.is_dir():
-            deep_research_dir = candidate_dir
-            break
-    
-    if deep_research_dir is None:
-        print(f"  [Deep Research] deep_research folder does not exist (tried: {', '.join(possible_names)})")
-        print(f"  Project root directory: {project_root}")
-        return None
-    
-    print(f"\n[Deep Research] Starting to process the Deep Research folder: {deep_research_dir}")
-    
-    # Text/markdown reports are read directly; PDFs use lite extraction by default.
-    text_files = sorted(
-        list(deep_research_dir.glob("*.md"))
-        + list(deep_research_dir.glob("*.markdown"))
-        + list(deep_research_dir.glob("*.txt"))
-    )
-    pdf_files = sorted(deep_research_dir.glob("*.pdf"))
-    
-    if not pdf_files and not text_files:
-        print("[Deep Research] No .pdf / .md / .txt files found")
-        return None
-    
-    print(f"  Found {len(pdf_files)} PDF files, {len(text_files)} text/markdown files")
-    
-    pdf_texts = []
-    pdf_names = []
-    
-    # 1) Plain-text / markdown reports (preferred).
-    for text_file in text_files:
-        print(f"  Reading text report: {text_file.name}")
-        try:
-            text = text_file.read_text(encoding="utf-8", errors="ignore")
-            if text.strip():
-                pdf_texts.append(text)
-                pdf_names.append(text_file.name)
-                print(f"    [OK] Read successfully, text length: {len(text)} characters")
-        except Exception as e:
-            print(f"    [ERROR] Read error: {e}")
-    
-    # 2) PDF reports (lite text extract -> LLM; optional PaddleX via RAG_PDF_BACKEND).
-    for pdf_file in pdf_files:
-        print(f"  Processing PDF: {pdf_file.name}")
-        try:
-            text = extract_text_from_pdf(pdf_file, device=device)
-            if text.startswith("[ERROR]"):
-                print(f"    [WARN]  {text}")
-                continue
-            pdf_texts.append(text)
-            pdf_names.append(pdf_file.name)
-            print(f"    [OK] Extracted successfully, text length: {len(text)} characters")
-        except Exception as e:
-            print(f"    [ERROR] Processing error: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    if not pdf_texts:
-        print("[Deep Research] Failed to extract any content")
-        return None
-    
-    # Summarize all PDF information
-    print(f"  Summarizing the content of {len(pdf_texts)} PDFs...")
-    deep_research_summary = summarize_deep_research_content(pdf_texts, pdf_names)
-    
-    print(f"  [OK] Deep Research extraction complete")
-    
-    # Print the Deep Research summary
-    print(f"\n[Deep Research] Deep Research summary:")
-    print("=" * 80)
-    if deep_research_summary:
-        # Print the first 500 characters
-        preview = deep_research_summary[:500]
-        print(preview)
-        if len(deep_research_summary) > 500:
-            print(f"\n... ({len(deep_research_summary)} characters total, full content saved)")
-        else:
-            print(deep_research_summary)
-    else:
-        print("No Deep Research content")
-    print("=" * 80)
-    
-    return deep_research_summary
+
+    # Lite: only inject prepared txt; never PDF OCR / LLM re-summarization.
+    from knowledge.precomputed_lite import load_precomputed_summary
+
+    precomputed = load_precomputed_summary(project_root, "deep_research")
+    if precomputed:
+        return precomputed
+    print("  [Deep Research] No precomputed summary; skipping (Lite)")
+    return None

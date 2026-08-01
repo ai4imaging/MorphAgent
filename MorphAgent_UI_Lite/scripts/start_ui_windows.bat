@@ -24,8 +24,8 @@ if errorlevel 1 (
 set "MORPHAGENT_NO_PAUSE=1"
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
-set "CONDA_NO_PLUGINS=true"
-set "CONDA_SOLVER=classic"
+set "CONDA_REPORT_ERRORS=false"
+REM Launch only needs conda run; do not force classic solver.
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_ui_windows.ps1" %*
 set "EXITCODE=%ERRORLEVEL%"
 

@@ -143,21 +143,20 @@ class RunConfigTests(unittest.TestCase):
                 else:
                     os.environ[name] = value
 
-    def test_reference_demo_config_seeds_rag_cache(self) -> None:
+    def test_reference_demo_config_enables_precomputed_knowledge(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo = Path(raw)
             demo = repo / "demo"
             dataset = demo / "data" / "dataset"
             sample = dataset / "WT_1"
-            rag = demo / "data" / "RAG"
             precomputed = demo / "precomputed"
             sample.mkdir(parents=True)
-            rag.mkdir(parents=True)
             precomputed.mkdir(parents=True)
             (sample / "image.tif").touch()
             (dataset / "dataset_index.txt").write_text("Tau demo", encoding="utf-8")
-            (rag / "paper.pdf").write_bytes(b"reference")
-            (precomputed / "rag_knowledge_summary.txt").write_text("cached knowledge", encoding="utf-8")
+            (precomputed / "expert_knowledge_summary.txt").write_text("expert summary", encoding="utf-8")
+            (precomputed / "deep_research_summary.txt").write_text("deep research summary", encoding="utf-8")
+            (precomputed / "rag_knowledge_summary.txt").write_text("rag summary", encoding="utf-8")
             metadata_csv = demo / "data" / "metadata.csv"
             metadata_csv.write_text(
                 "sample_id,group,genotype\nWT_1,WT,wild_type\n",
@@ -169,7 +168,7 @@ class RunConfigTests(unittest.TestCase):
             config.target_feature_count = 10
             config.num_rounds = 2
             self.assertTrue(hasattr(config, "apply_reference_demo"))
-            cache_path = config.apply_reference_demo()
+            summary_path = config.apply_reference_demo()
 
             self.assertEqual(config.data_root, str((demo / "data").resolve()))
             self.assertEqual(config.description_path, str((dataset / "dataset_index.txt").resolve()))
@@ -186,10 +185,10 @@ class RunConfigTests(unittest.TestCase):
             self.assertFalse(config.enable_expert_knowledge)
             self.assertFalse(config.enable_deep_research)
             self.assertFalse(config.enable_rag)
+            self.assertTrue(config.enable_background_knowledge_in_planning)
             self.assertTrue(config.enable_segmentation)
             self.assertTrue(config.segmentation_skip_if_present)
-            self.assertTrue(cache_path.is_file())
-            self.assertIn("cached knowledge", cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary_path.resolve(), (precomputed / "rag_knowledge_summary.txt").resolve())
             command = config.build_command()
             self.assertIn("--metadata-path", command)
             self.assertNotIn("--disable-feature-analysis", command)
@@ -200,10 +199,10 @@ class RunConfigTests(unittest.TestCase):
             self.assertNotIn("--auto-literature-retrieval", command)
             env = config.pipeline_environment()
             self.assertEqual(env["CODE_MAX_RETRIES"], "3")
-            self.assertEqual(env["SEGMENTATION_BACKEND"], "allen")
-            self.assertEqual(env["SEGMENTATION_CONDA_ENV"], "morphagent_allen")
+            self.assertEqual(env["SEGMENTATION_BACKEND"], "none")
+            self.assertEqual(env["CONDA_ENV"], "morphagent_lite")
 
-    def test_custom_dataset_passes_auto_knowledge_flags(self) -> None:
+    def test_lite_never_emits_auto_knowledge_flags(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             config = RunConfig(
@@ -215,10 +214,12 @@ class RunConfigTests(unittest.TestCase):
                 enable_rag=True,
             )
             command = config.build_command()
-            self.assertIn("--auto-deep-research", command)
-            self.assertIn("--auto-literature-retrieval", command)
-            self.assertIn("--pubmed-max-results", command)
-            self.assertIn("10", command)
+            self.assertNotIn("--auto-deep-research", command)
+            self.assertNotIn("--auto-literature-retrieval", command)
+            self.assertNotIn("--disable-deep-research", command)
+            self.assertNotIn("--disable-rag", command)
+            self.assertTrue(config.enable_deep_research)
+            self.assertTrue(config.enable_rag)
 
     def test_sample_count_warning_for_small_datasets(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

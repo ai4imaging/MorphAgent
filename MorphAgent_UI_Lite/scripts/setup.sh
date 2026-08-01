@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # MorphAgent UI Lite — single-env setup (macOS / Linux).
-# Creates conda env morphagent_lite (Python only), then pip-installs everything else.
+# Creates conda env morphagent_lite (Python + pip only), then pip-installs everything else.
+#
+# Avoids classic+conda-forge mega-solves that crash old conda on large indexes.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,14 +12,17 @@ REQ_FILE="${HANDOFF_ROOT}/dependencies/requirements-lite.txt"
 ENV_FILE="${HANDOFF_ROOT}/MorphAgent/.env"
 ENV_EXAMPLE="${HANDOFF_ROOT}/MorphAgent/.env.example"
 
-export CONDA_NO_PLUGINS="${CONDA_NO_PLUGINS:-true}"
-export CONDA_SOLVER="${CONDA_SOLVER:-classic}"
 export CONDA_REPORT_ERRORS="${CONDA_REPORT_ERRORS:-false}"
+# Do not force CONDA_NO_PLUGINS / CONDA_SOLVER=classic by default (keeps libmamba when available).
+# Classic fallback is applied only around a tiny python+pip create if needed.
 
 echo "============================================================"
 echo " MorphAgent UI Lite setup"
+echo " Scope: Tau demo + Code/VLM; knowledge via precomputed txt"
+echo "        (skips PDF parse / PubMed / auto deep-research / Allen)"
 echo " Root: ${HANDOFF_ROOT}"
-echo " Env:  ${ENV_NAME} (single environment; no Allen / no sandbox)"
+echo " Env:  ${ENV_NAME} (python+pip via conda; science stack via pip)"
+echo " Live PDF/literature/Allen: use MorphAgent_UI/"
 echo "============================================================"
 
 if ! command -v conda >/dev/null 2>&1; then
@@ -33,6 +38,37 @@ CONDA_BASE="$(conda info --base)"
 # shellcheck source=/dev/null
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 
+accept_anaconda_tos_best_effort() {
+  # Best-effort; ignore failures on Miniforge / old conda without tos plugin.
+  local ch
+  for ch in \
+    "https://repo.anaconda.com/pkgs/main" \
+    "https://repo.anaconda.com/pkgs/r" \
+    "https://repo.anaconda.com/pkgs/msys2"
+  do
+    conda tos accept --override-channels --channel "${ch}" >/dev/null 2>&1 \
+      || conda tos accept -c "${ch}" >/dev/null 2>&1 \
+      || true
+  done
+  echo "[OK] Best-effort Anaconda ToS accept"
+}
+
+create_lite_env() {
+  # Tiny solve only — never conda-install numpy/scipy/pyqt/etc.
+  echo "[..] Creating ${ENV_NAME} (python=3.10 + pip only; science stack via pip)"
+  unset CONDA_NO_PLUGINS CONDA_SOLVER || true
+  if conda create -n "${ENV_NAME}" python=3.10 pip -y -c defaults --override-channels; then
+    return 0
+  fi
+  echo "[WARN] conda create failed; retry with classic fallback (still python+pip only)"
+  export CONDA_NO_PLUGINS=true
+  export CONDA_SOLVER=classic
+  conda create -n "${ENV_NAME}" python=3.10 pip -y -c defaults --override-channels
+  unset CONDA_NO_PLUGINS CONDA_SOLVER || true
+}
+
+accept_anaconda_tos_best_effort
+
 if conda env list | awk '{print $1}' | grep -Fxq "${ENV_NAME}"; then
   if [[ "${MORPHAGENT_RECREATE_ENVS:-0}" == "1" ]]; then
     echo "[..] Removing existing env ${ENV_NAME}"
@@ -43,18 +79,17 @@ if conda env list | awk '{print $1}' | grep -Fxq "${ENV_NAME}"; then
 fi
 
 if ! conda env list | awk '{print $1}' | grep -Fxq "${ENV_NAME}"; then
-  echo "[..] Creating ${ENV_NAME} (python=3.10 + pip only)"
-  conda create -n "${ENV_NAME}" python=3.10 pip -y
+  create_lite_env
 fi
 
 echo "[..] Upgrading pip"
 conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -U pip setuptools wheel
 
-echo "[..] pip install -r dependencies/requirements-lite.txt"
-if ! conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}"; then
-  echo "[WARN] pip install failed; retrying PyQt via conda-forge then pip again"
-  conda install -n "${ENV_NAME}" -c conda-forge --override-channels "pyqt=5" -y || true
-  conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}"
+echo "[..] pip install -r dependencies/requirements-lite.txt (includes PyQt5; no conda-forge science solve)"
+if ! conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}" --retries 5; then
+  echo "[WARN] Full pip install failed; retrying PyQt5 via pip only, then requirements again"
+  conda run --no-capture-output -n "${ENV_NAME}" python -m pip install "PyQt5>=5.15,<5.16" qtpy --retries 5 || true
+  conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}" --retries 5
 fi
 
 echo "[..] pip install -e MorphAgent"
@@ -101,6 +136,7 @@ echo "[..] verify_install.py"
 conda run --no-capture-output -n "${ENV_NAME}" python "${SCRIPT_DIR}/verify_install.py"
 
 echo
-echo "[OK] Lite setup complete."
+echo "[OK] Lite setup complete (Tau demo trial)."
 echo "     Launch: bash scripts/start_ui.sh"
+echo "     Knowledge: demo/precomputed/*.txt injected into prompts"
 echo "============================================================"

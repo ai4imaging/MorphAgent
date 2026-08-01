@@ -184,46 +184,25 @@ class RunConfig:
         self.vlm_online_concurrency = 1
 
     def apply_reference_demo(self) -> Path:
-        """Load the demo dataset and seed its precomputed RAG cache."""
+        """Load the Tau demo dataset and enable precomputed knowledge summaries."""
 
         repository = Path(self.repository_root).expanduser().resolve()
         demo = repository / "demo"
         project_root = demo / "data"
         dataset = project_root / "dataset"
         description = dataset / "dataset_index.txt"
-        rag_dir = project_root / "RAG"
-        precomputed = demo / "precomputed" / "rag_knowledge_summary.txt"
-        required = (project_root, dataset, description, rag_dir, precomputed)
+        precomputed = demo / "precomputed"
+        required = (
+            project_root,
+            dataset,
+            description,
+            precomputed / "expert_knowledge_summary.txt",
+            precomputed / "deep_research_summary.txt",
+            precomputed / "rag_knowledge_summary.txt",
+        )
         missing = [str(path) for path in required if not path.exists()]
         if missing:
             raise FileNotFoundError("Demo dataset is incomplete: " + ", ".join(missing))
-
-        pdf_files = sorted(rag_dir.glob("*.pdf"))
-        xml_files = sorted(rag_dir.glob("*.xml"))
-        if not pdf_files and not xml_files:
-            raise FileNotFoundError(f"Demo RAG folder has no PDF/XML files: {rag_dir}")
-
-        # Import only for this explicit action so routine UI preflight remains
-        # dependency-light.
-        from knowledge.rag import _compute_rag_folder_hash
-
-        rag_hash = _compute_rag_folder_hash(rag_dir, pdf_files, xml_files)
-        cache_dir = project_root / ".rag_cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = cache_dir / f"rag_cache_{rag_hash}.txt"
-        content = precomputed.read_text(encoding="utf-8")
-        metadata = {
-            "hash": rag_hash,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "content_length": len(content),
-        }
-        cache_path.write_text(
-            "# RAG Cache Metadata\n"
-            f"# {json.dumps(metadata, ensure_ascii=False)}\n"
-            "# End Metadata\n\n"
-            f"{content}",
-            encoding="utf-8",
-        )
 
         self.data_root = str(project_root)
         self.description_path = str(description)
@@ -238,15 +217,17 @@ class RunConfig:
         # only the free restricted API lock in Configure does that.
         self.method = "both"
         self.dataset_source = "demo"
-        # Knowledge sources stay off by default; user can opt in on Configure.
-        # Validation is on when demo metadata.csv is present so Features gets
-        # route/category/score via feature_registry.json (same as completed_demo_run).
-        self.enable_feature_analysis = bool(self.metadata_path)
+        # Knowledge stays off by default; when enabled, Lite injects precomputed txt.
+        self.enable_expert_knowledge = False
+        self.enable_deep_research = False
+        self.enable_rag = False
         self.enable_background_knowledge_in_planning = True
+        # Validation is on when demo metadata.csv is present so Features gets scores.
+        self.enable_feature_analysis = bool(self.metadata_path)
         self.enable_segmentation = True
         self.segmentation_skip_if_present = True
         self.resume = False
-        return cache_path
+        return precomputed / "rag_knowledge_summary.txt"
 
     @property
     def resolved_results_dir(self) -> Path | None:
@@ -427,20 +408,9 @@ class RunConfig:
             if not enabled:
                 command.append(disable_flag)
         command.append("--enable-segmentation" if self.enable_segmentation else "--disable-segmentation")
-        # Masks are always reused when present; missing masks use Allen internally.
+        # Reuse user masks when present; SEGMENTATION_BACKEND=none skips auto-seg.
         command.append("--segmentation-skip-if-present")
-
-        # Demo path digests prepared knowledge folders only. Custom datasets may
-        # optionally auto-generate deep research / pull PubMed literature.
-        if self.dataset_source != "demo":
-            if self.enable_deep_research:
-                command.append("--auto-deep-research")
-            if self.enable_rag:
-                command.extend([
-                    "--auto-literature-retrieval",
-                    "--pubmed-max-results",
-                    str(max(1, int(self.pubmed_max_results))),
-                ])
+        # Lite never auto-generates deep research or pulls PubMed literature.
 
         if self.reproduce:
             command.extend(["--reproduce", "--reproduce-seed", str(self.reproduce_seed)])

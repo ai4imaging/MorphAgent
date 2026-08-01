@@ -18,9 +18,11 @@ chcp 65001 >nul 2>&1
 
 echo ============================================================
 echo  MorphAgent UI Lite setup (Windows)
+echo  Scope: Tau demo + Code/VLM
+echo  Knowledge: precomputed txt (skip PDF/PubMed/Allen)
 echo  Working directory: %CD%
 echo  Creates single conda env: morphagent_lite
-echo  (no Allen / no sandbox)
+echo  Live PDF/literature/Allen: use MorphAgent_UI\
 echo ============================================================
 echo.
 
@@ -41,8 +43,8 @@ set "MORPHAGENT_NO_PAUSE=1"
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 set "CONDA_REPORT_ERRORS=false"
-set "CONDA_NO_PLUGINS=true"
-set "CONDA_SOLVER=classic"
+REM Do not force CONDA_NO_PLUGINS / CONDA_SOLVER=classic here.
+REM setup_windows.ps1 accepts ToS and only falls back to classic for a tiny python+pip create.
 
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1" %*
 set "EXITCODE=%ERRORLEVEL%"
