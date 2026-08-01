@@ -30,6 +30,25 @@ It also installs the virtual X11 desktop, noVNC browser bridge, and system Qt
 libraries. A successful image build finishes with the repository's offscreen
 UI smoke test.
 
+## Offline image (Google Drive)
+
+If Docker Hub or package downloads are unavailable, download the verified
+prebuilt `linux/amd64` image from
+[Google Drive](https://drive.google.com/file/d/1KGMJLRoipqaFYV5B3TbIMFh6zN-94CW3/view?usp=drive_link)
+instead of building locally. Place the archive at
+`docker/offline/morphagent-ui-linux-amd64.tar.gz`, then run from
+`MorphAgent_UI/`:
+
+```bash
+(cd docker/offline && shasum -a 256 -c morphagent-ui-linux-amd64.tar.gz.sha256)
+docker load -i docker/offline/morphagent-ui-linux-amd64.tar.gz
+mkdir -p docker-data workspace
+docker compose -f docker/docker-compose.yml up -d --no-build
+```
+
+See [`offline/README.md`](offline/README.md) for the image identity, checksum,
+Windows commands, and complete download instructions.
+
 ## First build and start
 
 Run from `MorphAgent_UI/`:
