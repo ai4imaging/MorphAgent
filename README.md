@@ -46,6 +46,21 @@ Then open
 The first build installs all three Conda environments inside the image; later
 starts only need `docker compose -f docker/docker-compose.yml up -d`.
 
+If Docker Hub is unreachable, download the verified prebuilt image from
+[Google Drive](https://drive.google.com/file/d/1KGMJLRoipqaFYV5B3TbIMFh6zN-94CW3/view?usp=drive_link),
+place it at `MorphAgent_UI/docker/offline/morphagent-ui-linux-amd64.tar.gz`,
+then load and start without building:
+
+```bash
+cd MorphAgent_UI
+docker load -i docker/offline/morphagent-ui-linux-amd64.tar.gz
+mkdir -p docker-data workspace
+docker compose -f docker/docker-compose.yml up -d --no-build
+```
+
+The SHA-256 checksum and full offline instructions are in
+[`MorphAgent_UI/docker/offline/README.md`](MorphAgent_UI/docker/offline/README.md).
+
 For a quick review without an API key, choose **Home → Load a previous run →**
 `completed_demo_run`. Stop with
 `docker compose -f docker/docker-compose.yml down`.

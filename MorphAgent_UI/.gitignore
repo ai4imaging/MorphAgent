@@ -5,3 +5,6 @@ logs/
 # Local Docker runtime state and user-selected datasets
 docker-data/
 workspace/
+
+# Optional prebuilt image downloaded from Google Drive
+docker/offline/*.tar.gz
