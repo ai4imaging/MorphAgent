@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from qtpy.QtCore import QEvent, QObject, Qt, QThread, Signal
+from qtpy.QtCore import QEvent, QObject, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QCursor, QTextDocument
 from qtpy.QtWidgets import (
     QDialog,
@@ -225,6 +225,12 @@ class AskMorphAgentPage(QWidget):
         self.history: list[dict[str, str]] = []
         self.worker: ChatWorker | None = None
         self._busy = False
+        self._thinking_label: QLabel | None = None
+        self._thinking_frame: QFrame | None = None
+        self._thinking_step = 0
+        self._thinking_timer = QTimer(self)
+        self._thinking_timer.setInterval(420)
+        self._thinking_timer.timeout.connect(self._advance_thinking_animation)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(30, 24, 30, 24)
@@ -321,6 +327,7 @@ class AskMorphAgentPage(QWidget):
         label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         label.setOpenExternalLinks(False)
         label.setProperty("role", "chatText")
+        label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         if render_markdown is None:
             render_markdown = role == "assistant"
         if render_markdown:
@@ -333,12 +340,7 @@ class AskMorphAgentPage(QWidget):
             label.setProperty("sourceMarkdown", text)
             label.setTextFormat(Qt.RichText)
             label.setText(document.toHtml())
-        if role == "user":
-            row.addStretch(1)
-            row.addWidget(label, 4)
-        else:
-            row.addWidget(label, 5)
-            row.addStretch(1)
+        row.addWidget(label, 1)
         insert_at = max(0, self.message_layout.count() - 1)
         self.message_layout.insertWidget(insert_at, frame)
         return label
@@ -354,15 +356,52 @@ class AskMorphAgentPage(QWidget):
         bar = self.message_scroll.verticalScrollBar()
         bar.setValue(bar.maximum())
 
+    def _show_thinking_message(self) -> None:
+        if self._thinking_label is not None:
+            return
+        self._thinking_step = 0
+        self._thinking_label = self._add_message(
+            "assistant",
+            "MorphAgent is thinking",
+            render_markdown=False,
+        )
+        self._thinking_frame = self._thinking_label.parentWidget()
+        set_dynamic_property(self._thinking_label, "chatState", "thinking")
+        if self._thinking_frame is not None:
+            set_dynamic_property(self._thinking_frame, "chatState", "thinking")
+        self._thinking_timer.start()
+        self._scroll_to_bottom()
+
+    def _advance_thinking_animation(self) -> None:
+        if self._thinking_label is None:
+            return
+        self._thinking_step = (self._thinking_step + 1) % 4
+        self._thinking_label.setText(
+            "MorphAgent is thinking" + "." * self._thinking_step
+        )
+
+    def _hide_thinking_message(self) -> None:
+        self._thinking_timer.stop()
+        frame = self._thinking_frame
+        self._thinking_label = None
+        self._thinking_frame = None
+        self._thinking_step = 0
+        if frame is not None:
+            self.message_layout.removeWidget(frame)
+            frame.hide()
+            frame.deleteLater()
+
     def _set_busy(self, busy: bool) -> None:
         self._busy = bool(busy)
         self.send_button.setEnabled(not busy)
         self.question_edit.setEnabled(not busy)
         self.reconnect_button.setEnabled(not busy)
         if busy:
-            self.status_label.setText("MorphAgent is thinking with manuscript and code evidence…")
-            set_dynamic_property(self.status_label, "role", "success")
-        elif not self.status_label.text().lower().startswith("provider"):
+            self._show_thinking_message()
+            self.status_label.setText("Request in progress · the answer will appear above")
+            set_dynamic_property(self.status_label, "role", "muted")
+        else:
+            self._hide_thinking_message()
             self.status_label.setText("Ready · conversations stay in memory for this session")
             set_dynamic_property(self.status_label, "role", "muted")
 
@@ -401,9 +440,9 @@ class AskMorphAgentPage(QWidget):
         self._scroll_to_bottom()
 
     def _handle_answer(self, answer: str) -> None:
+        self._set_busy(False)
         self._add_message("assistant", answer)
         self.history.append({"role": "assistant", "content": answer})
-        self._set_busy(False)
         self.status_label.setText("Answer grounded in the most relevant bundled sources")
         set_dynamic_property(self.status_label, "role", "success")
         self._scroll_to_bottom()
@@ -411,8 +450,17 @@ class AskMorphAgentPage(QWidget):
     def _handle_error(self, message: str) -> None:
         clean = message.strip() or "The model provider returned an unknown error."
         self._set_busy(False)
+        error_label = self._add_message(
+            "assistant",
+            f"Unable to complete this answer.\n\n{clean}",
+            render_markdown=False,
+        )
+        error_frame = error_label.parentWidget()
+        if error_frame is not None:
+            set_dynamic_property(error_frame, "chatState", "error")
         self.status_label.setText(clean)
         set_dynamic_property(self.status_label, "role", "error")
+        self._scroll_to_bottom()
 
     def _worker_finished(self) -> None:
         if self.worker is not None:

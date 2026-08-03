@@ -10,7 +10,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QApplication, QDialog, QLineEdit
+from qtpy.QtWidgets import QApplication, QDialog, QLabel, QLineEdit
 
 from morphagent_ui.environment import read_model_environment
 from morphagent_ui.demo_api import load_free_demo_credentials
@@ -121,6 +121,8 @@ class AskMorphAgentUiTests(unittest.TestCase):
         self.assertIn('QFrame[chatRole="user"]', STYLESHEET)
         self.assertIn('QFrame[chatRole="assistant"]', STYLESHEET)
         self.assertIn('QFrame[chatComposer="true"]', STYLESHEET)
+        self.assertIn('QFrame[chatState="thinking"]', STYLESHEET)
+        self.assertIn('QFrame[chatState="error"]', STYLESHEET)
 
     def test_reviewer_knowledge_is_declared_as_package_data(self) -> None:
         pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
@@ -150,7 +152,7 @@ class AskMorphAgentUiTests(unittest.TestCase):
             page.question_edit.setPlainText("How is the method validated?")
             page._set_busy(True)
             self.assertFalse(page.send_button.isEnabled())
-            self.assertIn("thinking", page.status_label.text().lower())
+            self.assertIn("answer will appear above", page.status_label.text().lower())
 
             page._handle_error("Provider unavailable")
             self.assertTrue(page.send_button.isEnabled())
@@ -184,6 +186,43 @@ class AskMorphAgentUiTests(unittest.TestCase):
             self.assertIn("<ul", rendered)
             self.assertNotIn("**Strong evidence**", rendered)
             self.assertIn("&lt;script&gt;", rendered)
+            page.close()
+
+    def test_user_question_is_left_aligned_inside_its_message_card(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            page = AskMorphAgentPage(root, self._bundle(root))
+
+            label = page._add_message("user", "What is the paper about?")
+            frame = label.parentWidget()
+
+            self.assertTrue(label.alignment() & Qt.AlignLeft)
+            self.assertIs(frame.layout().itemAt(0).widget(), label)
+            page.close()
+
+    def test_thinking_animation_and_errors_are_shown_in_answer_area(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            page = AskMorphAgentPage(root, self._bundle(root))
+
+            page._set_busy(True)
+            thinking = getattr(page, "_thinking_label", None)
+            self.assertIsNotNone(thinking)
+            self.assertIn("thinking", thinking.text().lower())
+            self.assertNotIn("thinking", page.status_label.text().lower())
+            first_frame = thinking.text()
+
+            page._advance_thinking_animation()
+            self.assertNotEqual(thinking.text(), first_frame)
+
+            page._handle_error("Provider unavailable")
+            self.assertIsNone(page._thinking_label)
+            self.assertFalse(page._thinking_timer.isActive())
+            transcript = "\n".join(
+                label.text()
+                for label in page.message_container.findChildren(QLabel)
+            )
+            self.assertIn("provider unavailable", transcript.lower())
             page.close()
 
     def test_chat_worker_emits_answer_without_writing_history(self) -> None:

@@ -118,6 +118,18 @@ QFrame[chatRole="user"] {{
     background: #103448;
     border: 1px solid #22D3EE;
 }}
+QFrame[chatState="thinking"] {{
+    background: #0E283A;
+    border: 1px solid {COLORS['aqua_dark']};
+}}
+QLabel[chatState="thinking"] {{
+    color: {COLORS['aqua']};
+    font-weight: 700;
+}}
+QFrame[chatState="error"] {{
+    background: #2A1923;
+    border: 1px solid {COLORS['error']};
+}}
 QFrame[chatComposer="true"] {{
     background: #101D2D;
     border: 2px solid #405269;
