@@ -73,6 +73,26 @@ class ReviewerKnowledgeBuildTests(unittest.TestCase):
         self.assertEqual(text, "Algorithm evidence")
         run.assert_called_once()
 
+    def test_current_submission_supplement_names_are_collected(self) -> None:
+        module = load_build_module()
+        with tempfile.TemporaryDirectory() as temp:
+            archive_path = Path(temp) / "MorphAgent_paper.zip"
+            with ZipFile(archive_path, "w") as archive:
+                archive.writestr("MorphAgent_paper/more.docx", b"docx")
+                archive.writestr("MorphAgent_paper/Supplementary_Table_1.pdf", b"table")
+                archive.writestr("MorphAgent_paper/Supplementary_Tau_features.pdf", b"features")
+
+            with (
+                patch.object(module, "extract_docx_bytes", return_value="Extended methods"),
+                patch.object(module, "extract_pdf_bytes", return_value="Supplementary evidence"),
+            ):
+                chunks = module.collect_submission_chunks(archive_path)
+
+        sources = {chunk["source"] for chunk in chunks}
+        self.assertIn("Extended supplementary information", sources)
+        self.assertIn("Supplementary Table S1", sources)
+        self.assertIn("Tau feature catalogue", sources)
+
     def test_code_collection_excludes_tests_secrets_and_generated_files(self) -> None:
         module = load_build_module()
         with tempfile.TemporaryDirectory() as temp:

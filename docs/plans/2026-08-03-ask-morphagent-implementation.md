@@ -20,7 +20,7 @@
 1. Write failing tests that load a small temporary bundle, preserve source labels, reject malformed entries, and rank a manuscript/code chunk for matching questions.
 2. Run each new test module with `morphagent_lite/bin/python -m unittest -v tests.test_reviewer_chat` and confirm failure because the reviewer-chat module is absent.
 3. Implement DOCX XML extraction, optional PDF extraction, source-code filtering/chunking, deterministic JSON output, and the minimal bundle loader/retriever.
-4. Generate the two distribution-local bundles from `MorphAgent_submit 4.zip` and their own code trees.
+4. Generate the two distribution-local bundles from the archive supplied through `--submission-zip` and their own code trees.
 5. Re-run the new tests and confirm green.
 
 ### Task 2: Implement evidence-grounded prompt and API client

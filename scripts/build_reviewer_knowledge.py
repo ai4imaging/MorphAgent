@@ -24,10 +24,17 @@ WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 SUBMISSION_LABELS = {
     "Manuscript.docx": ("Manuscript", "paper"),
     "Supplementary.docx": ("Supplementary", "supplement"),
+    "more.docx": ("Extended supplementary information", "supplement"),
     "Prompt.pdf": ("Prompt design", "supplement"),
     "Algorithm.pdf": ("Algorithm", "supplement"),
     "Table_s1.pdf": ("Supplementary Table S1", "supplement"),
     "Table_s2.pdf": ("Supplementary Table S2", "supplement"),
+    "Supplementary_Table_1.pdf": ("Supplementary Table S1", "supplement"),
+    "Supplementary_Table_2.pdf": ("Supplementary Table S2", "supplement"),
+    "Supplementary_Tau_features.pdf": ("Tau feature catalogue", "supplement"),
+    "Supplementary_HSC_features.pdf": ("HSC feature catalogue", "supplement"),
+    "Supplementary_BBBC021_features.pdf": ("BBBC021 feature catalogue", "supplement"),
+    "Supplementary_Tau_feature_hierarchy.pdf": ("Tau feature hierarchy", "supplement"),
 }
 EXCLUDED_CODE_PARTS = {
     ".git",
