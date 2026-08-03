@@ -102,6 +102,31 @@ QFrame[evidencePreview="true"] {{
     border: 1px solid {COLORS['slate_700']};
     border-radius: 8px;
 }}
+QScrollArea[chatTranscript="true"], QScrollArea[chatTranscript="true"] > QWidget > QWidget {{
+    background: #0A1524;
+    border: 1px solid #29405E;
+    border-radius: 10px;
+}}
+QFrame[chatMessage="true"] {{
+    border-radius: 10px;
+}}
+QFrame[chatRole="assistant"] {{
+    background: #111F33;
+    border: 1px solid #35506F;
+}}
+QFrame[chatRole="user"] {{
+    background: #103448;
+    border: 1px solid #22D3EE;
+}}
+QFrame[chatComposer="true"] {{
+    background: #101D2D;
+    border: 2px solid #405269;
+    border-radius: 11px;
+}}
+QLabel[role="chatText"] {{
+    color: #E6F6FF;
+    font-size: 14px;
+}}
 QGroupBox {{
     margin-top: 13px;
     padding: 16px 12px 12px 12px;
@@ -149,6 +174,11 @@ QPushButton[homeSecondary="true"] {{
     font-weight: 700;
 }}
 QPushButton[homeSecondary="true"]:hover {{ background: #223449; border-color: {COLORS['aqua']}; }}
+QPushButton[homeAsk="true"] {{
+    background: #102C3E;
+    border-color: {COLORS['aqua_dark']};
+}}
+QPushButton[homeAsk="true"]:hover {{ background: #153B50; border-color: {COLORS['aqua']}; }}
 QPushButton[choiceAction="true"] {{
     background: #18283A;
     color: {COLORS['text']};

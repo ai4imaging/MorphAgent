@@ -28,7 +28,8 @@ class WidgetSmokeTests(unittest.TestCase):
     def test_five_destinations_with_split_features_and_evidence(self) -> None:
         widget = MorphAgentWidget()
         self.assertEqual(widget.navigation.count(), 5)
-        self.assertEqual(widget.pages.count(), 5)
+        # Ask MorphAgent is a hidden companion page, not a sixth workflow destination.
+        self.assertEqual(widget.pages.count(), 6)
         destinations = [widget.navigation.item(index).text() for index in range(widget.navigation.count())]
         self.assertTrue(any("Features" in destination for destination in destinations))
         self.assertTrue(any("Evidence" in destination for destination in destinations))

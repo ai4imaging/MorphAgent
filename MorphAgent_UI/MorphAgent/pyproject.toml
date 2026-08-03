@@ -31,4 +31,4 @@ morphagent = "morphagent_ui:napari.yaml"
 include = ["morphagent_ui*"]
 
 [tool.setuptools.package-data]
-morphagent_ui = ["napari.yaml", "resources/*.png"]
+morphagent_ui = ["napari.yaml", "resources/*.png", "reviewer_knowledge/*.json"]
