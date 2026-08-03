@@ -22,6 +22,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from ..demo_api import load_free_demo_credentials
 from ..environment import read_model_environment, save_model_environment
 from ..reviewer_chat import ReviewerChatClient, ReviewerKnowledgeBase, WELCOME_MESSAGE
 from .common import Card, set_dynamic_property
@@ -59,6 +60,31 @@ class AskApiDialog(QDialog):
         outer.addWidget(title)
         outer.addWidget(body)
 
+        default_card = Card()
+        default_layout = QVBoxLayout(default_card)
+        default_layout.setContentsMargins(18, 16, 18, 16)
+        default_layout.setSpacing(9)
+        default_label = QLabel("RECOMMENDED · NO SETUP REQUIRED")
+        default_label.setProperty("role", "eyebrow")
+        default_copy = QLabel(
+            "Use MorphAgent’s token-limited default connection for reviewer questions."
+        )
+        default_copy.setWordWrap(True)
+        self.free_api_button = QPushButton("Use default API and start chatting")
+        self.free_api_button.setProperty("primary", True)
+        self.free_api_button.setMinimumHeight(38)
+        self.free_api_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.free_api_button.setAccessibleName("Use the default MorphAgent API and open chat")
+        self.free_api_button.clicked.connect(self._use_default_api)
+        default_layout.addWidget(default_label)
+        default_layout.addWidget(default_copy)
+        default_layout.addWidget(self.free_api_button)
+        outer.addWidget(default_card)
+
+        own_api_label = QLabel("OR USE YOUR OWN API")
+        own_api_label.setProperty("role", "eyebrow")
+        outer.addWidget(own_api_label)
+
         form = QFormLayout()
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(10)
@@ -92,7 +118,6 @@ class AskApiDialog(QDialog):
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
         self.continue_button = QPushButton("Continue to chat")
-        self.continue_button.setProperty("primary", True)
         self.continue_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.continue_button.clicked.connect(self._save_and_accept)
         actions.addWidget(cancel)
@@ -100,6 +125,25 @@ class AskApiDialog(QDialog):
         outer.addLayout(actions)
 
         self._load()
+
+    def _use_default_api(self) -> None:
+        """Persist the existing restricted demo connection and enter chat in one click."""
+
+        try:
+            credentials = load_free_demo_credentials()
+            values = {
+                "LLM_BASE_URL": credentials["base_url"],
+                "LLM_API_KEY": credentials["api_key"],
+                "LLM_MODEL": credentials["model"],
+            }
+            save_model_environment(self.repository_root, values)
+        except (OSError, RuntimeError) as exc:
+            self.status_label.setText(f"Default API unavailable: {exc}")
+            set_dynamic_property(self.status_label, "role", "warning")
+            return
+        self.credentials = values
+        self.api_key_edit.clear()
+        self.accept()
 
     def _load(self) -> None:
         current = read_model_environment(self.repository_root)
@@ -111,7 +155,7 @@ class AskApiDialog(QDialog):
             set_dynamic_property(self.status_label, "role", "success")
         else:
             self.api_key_edit.setPlaceholderText("API key")
-            self.status_label.setText("Base URL, API key, and model are required")
+            self.status_label.setText("Choose the default API above, or enter your own connection")
             set_dynamic_property(self.status_label, "role", "muted")
 
     def _save_and_accept(self) -> None:

@@ -12,6 +12,7 @@ from pathlib import Path
 from qtpy.QtWidgets import QApplication, QDialog, QLineEdit
 
 from morphagent_ui.environment import read_model_environment
+from morphagent_ui.demo_api import load_free_demo_credentials
 from morphagent_ui.main import MorphAgentWidget
 from morphagent_ui.reviewer_chat import WELCOME_MESSAGE
 from morphagent_ui.theme import STYLESHEET
@@ -80,6 +81,39 @@ class AskMorphAgentUiTests(unittest.TestCase):
             self.assertEqual(dialog.result(), QDialog.Accepted)
             values = read_model_environment(root)
             self.assertEqual(values["LLM_API_KEY"], "saved-secret")
+
+    def test_api_dialog_default_api_is_one_click_and_enters_chat(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            dialog = AskApiDialog(root)
+
+            button = getattr(dialog, "free_api_button", None)
+            self.assertIsNotNone(button)
+            self.assertEqual(button.text(), "Use default API and start chatting")
+            self.assertTrue(button.property("primary"))
+            self.assertFalse(dialog.continue_button.property("primary"))
+            self.assertIn("choose the default", dialog.status_label.text().lower())
+            button.click()
+
+            self.assertEqual(dialog.result(), QDialog.Accepted)
+            expected = load_free_demo_credentials()
+            values = read_model_environment(root)
+            self.assertEqual(values["LLM_BASE_URL"], expected["base_url"])
+            self.assertEqual(values["LLM_API_KEY"], expected["api_key"])
+            self.assertEqual(values["LLM_MODEL"], expected["model"])
+            self.assertNotEqual(dialog.api_key_edit.text(), expected["api_key"])
+
+    def test_api_dialog_keeps_open_when_default_api_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            dialog = AskApiDialog(Path(raw))
+            with patch(
+                "morphagent_ui.widgets.ask.load_free_demo_credentials",
+                side_effect=RuntimeError("Default service unavailable"),
+            ):
+                dialog.free_api_button.click()
+
+            self.assertNotEqual(dialog.result(), QDialog.Accepted)
+            self.assertIn("unavailable", dialog.status_label.text().lower())
 
     def test_theme_has_distinct_restrained_chat_messages_and_composer(self) -> None:
         self.assertIn('QFrame[chatMessage="true"]', STYLESHEET)

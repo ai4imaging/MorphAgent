@@ -20,7 +20,7 @@ The prompt does not require deception. It explicitly forbids invented experiment
 
 ## API and data flow
 
-The API dialog reads `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` through the existing environment layer. Saved URL/model values may be shown; the saved key is represented only by a placeholder. Blank key input preserves the existing secret. Continuing requires all three resolved values and updates only LLM keys in the repository-local, ignored `.env`.
+The API dialog makes the existing token-limited MorphAgent demo connection the recommended one-click path. Clicking it resolves the same obfuscated credentials used by Configure, saves only the LLM fields to the repository-local ignored `.env`, and enters chat without exposing the key in an input. Reviewers may instead enter their own `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`; saved URL/model values may be shown, the saved key is represented only by a placeholder, and blank key input preserves the existing secret.
 
 The chat page sends requests through an OpenAI-compatible `chat.completions` client in a `QThread`. The UI remains responsive, disables duplicate sends while a request is active, and restores the composer on completion or error. A missing `/v1` endpoint receives the same one-time 404 fallback used elsewhere. Keys, prompts, and conversations are never written to command previews, manifests, or logs. Conversation state remains in memory and is discarded when the app closes.
 

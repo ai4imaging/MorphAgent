@@ -170,7 +170,7 @@ Recommend **≥5 samples**. Fewer than 5 shows a Configure warning (validation u
 The window maximizes automatically on launch.
 
 1. On the home page, click **Load demo standard output** to browse the bundled completed Tau run (Features / Evidence) without starting the pipeline. You can reload it anytime; starting your own run replaces the Features view.
-2. To discuss the submission without running an experiment, click **Ask MorphAgent**, fill the same OpenAI-compatible LLM Base URL, API key, and model used by Configure, then ask about the manuscript, supplement, figures, methods, or code. Relevant bundled excerpts are sent to that provider; chat history remains only in memory for the current UI session.
+2. To discuss the submission without running an experiment, click **Ask MorphAgent**, then choose **Use default API and start chatting**. This token-limited reviewer path needs no manual fields; entering your own OpenAI-compatible LLM connection remains available below it. Ask about the manuscript, supplement, figures, methods, or code. Relevant bundled excerpts are sent to the selected provider; chat history remains only in memory for the current UI session.
 3. To run yourself: click **Start a discovery run**.
 4. Under **1 · Data**, click **Load demo dataset**, or browse to a folder that contains `dataset/<sample>/*.tif`.
 5. The system fills in the demo samples (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant), paired `metadata.csv`, the data description, and a default biological question.
