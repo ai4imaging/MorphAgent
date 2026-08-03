@@ -39,3 +39,6 @@ test_output/
 .DS_Store
 .vscode/
 .idea/
+
+# ---- Local isolated development worktrees ----
+.worktrees/

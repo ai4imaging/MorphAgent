@@ -9,6 +9,7 @@ from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
     QAction,
     QApplication,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -32,6 +33,7 @@ from .theme import (
 )
 from .widgets.configure import ConfigurePage
 from .widgets.home import HomePage, bundled_demo_results_dir
+from .widgets.ask import AskApiDialog, AskMorphAgentPage
 from .widgets.results import EvidencePage, FeaturesPage
 from .widgets.run import RunPage
 
@@ -119,12 +121,14 @@ class MorphAgentWidget(QWidget):
         self.run_page = RunPage(self.controller)
         self.features_page = FeaturesPage(viewer)
         self.evidence_page = EvidencePage(viewer)
+        self.ask_page = AskMorphAgentPage(self._repository_root)
         for page in (
             self.home_page,
             self.configure_page,
             self.run_page,
             self.features_page,
             self.evidence_page,
+            self.ask_page,
         ):
             self.pages.addWidget(page)
         root.addWidget(self.pages, 1)
@@ -338,16 +342,36 @@ class MorphAgentWidget(QWidget):
         self.home_page.new_run_requested.connect(self._new_run)
         self.home_page.previous_run_requested.connect(self._load_previous_results)
         self.home_page.demo_sample_requested.connect(self._load_demo_sample_results)
+        self.home_page.ask_morphagent_requested.connect(self._open_ask_morphagent)
         self.configure_page.run_requested.connect(self._start_run)
         self.run_page.cancel_requested.connect(self.controller.cancel)
         self.run_page.edit_requested.connect(lambda: self.navigate(1))
         self.run_page.review_requested.connect(self._show_results)
         self.features_page.feature_selected.connect(self.evidence_page.select_feature)
         self.controller.run_finished.connect(self._on_run_finished)
+        self.ask_page.back_requested.connect(lambda: self.navigate(0))
+        self.ask_page.api_setup_requested.connect(self._edit_ask_api)
 
     def navigate(self, index: int) -> None:
         self.navigation.setCurrentRow(index)
         self.pages.setCurrentIndex(index)
+
+    def _open_ask_morphagent(self) -> None:
+        """Collect the model connection before opening the reviewer chat."""
+
+        dialog = AskApiDialog(self._repository_root, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        self.navigation.blockSignals(True)
+        self.navigation.setCurrentRow(-1)
+        self.navigation.blockSignals(False)
+        self.pages.setCurrentWidget(self.ask_page)
+        self.ask_page.question_edit.setFocus()
+
+    def _edit_ask_api(self) -> None:
+        """Allow connection changes without leaving the conversation."""
+
+        AskApiDialog(self._repository_root, self).exec()
 
     @staticmethod
     def _is_bundled_demo_sample(path: str | Path | None) -> bool:

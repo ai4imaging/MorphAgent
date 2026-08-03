@@ -249,7 +249,7 @@ Notes: single cell per image; pixel size ~0.65 um.
 
 ## Graphical UI (fast path)
 
-The focused Qt workspace wraps the existing `main.py` pipeline without duplicating its scientific logic. It has five destinations—Home, Configure, Run, Features, and Evidence—with API setup merged into Configure. Home can load a completed run for result-only debugging without starting the pipeline. Features uses an equal-width table/detail layout; Evidence uses an equal-width review layout with a three-column feature selector and a compact name/description summary beside curated measurements, validation, provenance, and image previews. The default evidence preview opens the first curated source rather than prioritizing an image. The MorphAgent window opens maximized by default and contains no empty napari canvas or layer-control panel.
+The focused Qt workspace wraps the existing `main.py` pipeline without duplicating its scientific logic. It has five destinations—Home, Configure, Run, Features, and Evidence—with API setup merged into Configure. Home can load a completed run for result-only debugging or open **Ask MorphAgent**, a paper-and-code companion that does not add another workflow destination to the sidebar. Features uses an equal-width table/detail layout; Evidence uses an equal-width review layout with a three-column feature selector and a compact name/description summary beside curated measurements, validation, provenance, and image previews. The default evidence preview opens the first curated source rather than prioritizing an image. The MorphAgent window opens maximized by default and contains no empty napari canvas or layer-control panel.
 
 ![MorphAgent graphical home](docs/assets/morphagent-ui-home.png)
 
@@ -278,6 +278,12 @@ avoids reparsing the bundled PDFs. The shortest verified path is:
 5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, and provenance. Shared run-level preview folders are not shown as per-feature images.
 
 During UI/result debugging, choose **Load a previous run** on Home and select the specific completed `run_ui_*` results folder. MorphAgent loads Features and Evidence directly without launching `main.py`, making API calls, or rerunning segmentation and feature extraction.
+
+### Ask MorphAgent paper companion
+
+Choose **Ask MorphAgent** on Home, then click **Use default API and start chatting** for the one-click reviewer path—no fields need to be filled. The bundled default connection is token-limited; reviewers can instead enter their own OpenAI Chat Completions–compatible Base URL, API key, and text model. The chat retrieves relevant excerpts from the bundled manuscript, supplementary material, algorithm/prompt assets, and a sanitized snapshot of first-party source code before each answer. It is designed to explain contributions, evidence, implementation, figures, and limitations positively but must not invent results or hide documented limitations. Answers include source labels such as `[Manuscript]`, `[Supplementary]`, and `[Code: ...]`.
+
+The same repository-local `.env` fields used by Configure (`LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`) are reused. The key remains masked and is never inserted into the knowledge bundle or conversation. Relevant paper/code excerpts and the reviewer’s question are sent to the configured provider; therefore reviewers should use a provider permitted to receive manuscript text. Assistant responses render GitHub-style Markdown (headings, emphasis, lists, links, and tables) through Qt with raw HTML disabled. Chat history is kept only in memory for the current UI session.
 
 To use another dataset, select its project root or `dataset/` directory, scan it,
 and write a new biological question instead of loading the reference demo.
