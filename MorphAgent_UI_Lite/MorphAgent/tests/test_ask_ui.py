@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QApplication, QDialog, QLineEdit
 
 from morphagent_ui.environment import read_model_environment
@@ -162,6 +163,27 @@ class AskMorphAgentUiTests(unittest.TestCase):
             page._set_busy(True)
             page._handle_answer("The manuscript reports an evidence-grounded result.")
             self.assertIn("grounded", page.status_label.text().lower())
+            page.close()
+
+    def test_assistant_markdown_is_rendered_as_safe_rich_text(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            page = AskMorphAgentPage(root, self._bundle(root))
+            markdown = (
+                "## Validation\n\n**Strong evidence** supports the result.\n\n"
+                "- Manuscript evidence\n- Code evidence\n\n"
+                "<script>alert('unsafe')</script>"
+            )
+
+            label = page._add_message("assistant", markdown)
+
+            self.assertEqual(label.textFormat(), Qt.RichText)
+            self.assertEqual(label.property("sourceMarkdown"), markdown)
+            rendered = label.text()
+            self.assertIn("<h2", rendered)
+            self.assertIn("<ul", rendered)
+            self.assertNotIn("**Strong evidence**", rendered)
+            self.assertIn("&lt;script&gt;", rendered)
             page.close()
 
     def test_chat_worker_emits_answer_without_writing_history(self) -> None:

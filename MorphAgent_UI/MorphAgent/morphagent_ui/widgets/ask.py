@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from qtpy.QtCore import QEvent, QObject, Qt, QThread, Signal
-from qtpy.QtGui import QCursor
+from qtpy.QtGui import QCursor, QTextDocument
 from qtpy.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -264,7 +264,11 @@ class AskMorphAgentPage(QWidget):
         self.message_layout = QVBoxLayout(self.message_container)
         self.message_layout.setContentsMargins(20, 18, 20, 18)
         self.message_layout.setSpacing(12)
-        self.welcome_label = self._add_message("assistant", WELCOME_MESSAGE)
+        self.welcome_label = self._add_message(
+            "assistant",
+            WELCOME_MESSAGE,
+            render_markdown=False,
+        )
         self.message_layout.addStretch(1)
         self.message_scroll.setWidget(self.message_container)
         outer.addWidget(self.message_scroll, 1)
@@ -299,7 +303,13 @@ class AskMorphAgentPage(QWidget):
         footer.addWidget(self.reconnect_button, 0)
         outer.addLayout(footer)
 
-    def _add_message(self, role: str, text: str) -> QLabel:
+    def _add_message(
+        self,
+        role: str,
+        text: str,
+        *,
+        render_markdown: bool | None = None,
+    ) -> QLabel:
         frame = QFrame()
         frame.setProperty("chatMessage", True)
         frame.setProperty("chatRole", role)
@@ -311,6 +321,18 @@ class AskMorphAgentPage(QWidget):
         label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         label.setOpenExternalLinks(False)
         label.setProperty("role", "chatText")
+        if render_markdown is None:
+            render_markdown = role == "assistant"
+        if render_markdown:
+            document = QTextDocument()
+            document.setDefaultFont(label.font())
+            features = QTextDocument.MarkdownFeatures(
+                QTextDocument.MarkdownDialectGitHub | QTextDocument.MarkdownNoHTML
+            )
+            document.setMarkdown(text, features)
+            label.setProperty("sourceMarkdown", text)
+            label.setTextFormat(Qt.RichText)
+            label.setText(document.toHtml())
         if role == "user":
             row.addStretch(1)
             row.addWidget(label, 4)
