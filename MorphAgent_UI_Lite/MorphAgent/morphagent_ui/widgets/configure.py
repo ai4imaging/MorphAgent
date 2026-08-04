@@ -500,7 +500,6 @@ class ConfigurePage(QWidget):
         self.readiness_list.hide()
         self.blocker_label = QLabel(self)
         self.blocker_label.setWordWrap(True)
-        self.blocker_label.hide()
 
         action_bar = QWidget()
         action = QHBoxLayout(action_bar)
@@ -511,6 +510,7 @@ class ConfigurePage(QWidget):
         self.run_button.setProperty("runCta", True)
         self.run_button.setMinimumSize(260, 54)
         self.run_button.setAccessibleName("Run MorphAgent")
+        action.addWidget(self.blocker_label, 1)
         action.addStretch(1)
         action.addWidget(self.run_button)
         self.content_layout.addWidget(action_bar)
@@ -1079,7 +1079,9 @@ class ConfigurePage(QWidget):
             and self.dataset_summary.sample_count > 0
             and len(self.dataset_summary.empty_samples) < self.dataset_summary.sample_count
         )
-        self.run_button.setEnabled(not blockers and usable_dataset)
+        # Keep the CTA clickable so users can see exactly what needs attention
+        # instead of being left with an inert button and hidden explanation.
+        self.run_button.setEnabled(True)
         if blockers:
             self.blocker_label.setText(f"Complete {len(blockers)} required item{'s' if len(blockers) != 1 else ''}")
             self.blocker_label.setProperty("role", "error")
@@ -1165,6 +1167,17 @@ class ConfigurePage(QWidget):
             QMessageBox.warning(self, "Dataset path not usable", problem)
             return
         issues = self.refresh_preflight(scan=True)
-        if any(issue.severity is Severity.BLOCKER for issue in issues):
+        blockers = [issue for issue in issues if issue.severity is Severity.BLOCKER]
+        if blockers:
+            details = "\n".join(
+                f"• {issue.message}"
+                + (f"\n  {issue.recovery}" if issue.recovery else "")
+                for issue in blockers
+            )
+            QMessageBox.warning(
+                self,
+                "Run setup needs attention",
+                details,
+            )
             return
         self.run_requested.emit(self.config, self.dataset_summary)

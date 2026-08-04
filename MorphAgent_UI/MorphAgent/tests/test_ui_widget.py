@@ -28,8 +28,8 @@ class WidgetSmokeTests(unittest.TestCase):
     def test_five_destinations_with_split_features_and_evidence(self) -> None:
         widget = MorphAgentWidget()
         self.assertEqual(widget.navigation.count(), 5)
-        # Ask MorphAgent is a hidden companion page, not a sixth workflow destination.
-        self.assertEqual(widget.pages.count(), 6)
+        # Ask + Reuse are hidden companion pages, not extra sidebar destinations.
+        self.assertEqual(widget.pages.count(), 7)
         destinations = [widget.navigation.item(index).text() for index in range(widget.navigation.count())]
         self.assertTrue(any("Features" in destination for destination in destinations))
         self.assertTrue(any("Evidence" in destination for destination in destinations))
@@ -72,6 +72,8 @@ class WidgetSmokeTests(unittest.TestCase):
         self.assertTrue(home.new_button.property("homePrimary"))
         self.assertEqual(home.previous_run_button.text(), "Load a previous run")
         self.assertTrue(home.previous_run_button.property("homeSecondary"))
+        self.assertEqual(home.reuse_button.text(), "Reuse history features")
+        self.assertTrue(home.reuse_button.property("homeSecondary"))
         self.assertEqual(home.demo_sample_button.text(), "Load demo standard output")
         self.assertFalse(hasattr(home, "resume_button"))
         self.assertIn("From microscopy to biologically grounded features", labels)
@@ -817,6 +819,97 @@ class WidgetSmokeTests(unittest.TestCase):
             self.assertNotIn("--disable-feature-analysis", command)
             self.assertIn("--metadata-path", command)
             widget.close()
+
+    def test_home_opens_reuse_page_and_returns_home(self) -> None:
+        widget = MorphAgentWidget()
+        home = widget.home_page
+        self.assertEqual(home.reuse_button.text(), "Reuse history features")
+        self.assertGreater(
+            home.action_layout.indexOf(home.reuse_button),
+            home.action_layout.indexOf(home.previous_run_button),
+        )
+        self.assertGreater(
+            home.action_layout.indexOf(home.ask_button),
+            home.action_layout.indexOf(home.reuse_button),
+        )
+
+        home.reuse_button.click()
+        self.app.processEvents()
+        self.assertEqual(widget.pages.currentWidget(), widget.reuse_page)
+        self.assertEqual(widget.navigation.currentRow(), -1)
+        labels = " ".join(label.text() for label in widget.reuse_page.findChildren(QLabel))
+        self.assertIn("No LLM/VLM", labels)
+        self.assertEqual(widget.reuse_page.back_button.text(), "← Back to Home")
+
+        widget.reuse_page.back_requested.emit()
+        self.app.processEvents()
+        self.assertEqual(widget.pages.currentWidget(), widget.home_page)
+        self.assertEqual(widget.navigation.currentRow(), 0)
+        widget.close()
+
+    def test_reuse_page_preflight_blocks_empty_inputs(self) -> None:
+        widget = MorphAgentWidget()
+        page = widget.reuse_page
+        page.source_picker.setText("")
+        page.dataset_picker.setText("")
+        page.prepare()
+        self.app.processEvents()
+        self.assertFalse(page.blocker_label.isHidden())
+        widget.close()
+
+    def test_reuse_results_load_into_features_page(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "features.csv").write_text(
+                "sample_id,kept_feature,dropped_feature\na,1,2\n",
+                encoding="utf-8",
+            )
+            (root / "feature_registry.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "entries": [
+                            {
+                                "feature_id": "round_1:kept_feature",
+                                "name": "kept_feature",
+                                "method": "code",
+                                "category": "intensity",
+                                "current_status": "retained",
+                                "live": True,
+                                "actual_column_name": "kept_feature",
+                                "latest_round": 1,
+                                "decision_history": [{"status": "retained", "reason_codes": ["reused"]}],
+                            },
+                            {
+                                "feature_id": "round_1:dropped_feature",
+                                "name": "dropped_feature",
+                                "method": "code",
+                                "category": "morphology",
+                                "current_status": "dropped",
+                                "live": False,
+                                "actual_column_name": "dropped_feature",
+                                "latest_round": 1,
+                                "decision_history": [{"status": "dropped", "reason_codes": ["low_variability"]}],
+                            },
+                        ],
+                        "live_feature_ids": ["round_1:kept_feature"],
+                        "feature_id_to_column": {
+                            "round_1:kept_feature": "kept_feature",
+                            "round_1:dropped_feature": "dropped_feature",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            widget = MorphAgentWidget()
+            widget._show_reuse_results(str(root))
+            self.app.processEvents()
+            names = {card.name for card in widget.features_page.cards}
+            self.assertIn("kept_feature", names)
+            self.assertIn("dropped_feature", names)
+            self.assertEqual(widget.pages.currentIndex(), 3)
+            widget.close()
+
 
     def test_custom_dataset_auto_detects_context_and_clears_demo_paths(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

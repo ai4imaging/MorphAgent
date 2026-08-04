@@ -6,7 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from morphagent_ui.controller import PipelineWorker, StageDetector, artifact_snapshot
+from morphagent_ui.controller import (
+    PipelineWorker,
+    ReuseConfig,
+    ReuseProgressDetector,
+    StageDetector,
+    artifact_snapshot,
+)
 from morphagent_ui.models import RunConfig, scan_dataset
 
 
@@ -93,6 +99,63 @@ class PipelineWorkerTests(unittest.TestCase):
             self.assertTrue((results / "features.csv").is_file())
             self.assertEqual(stages[-1], 5)
             self.assertTrue(any("Feature planning" in line for line in logs))
+            self.assertEqual(successes, [str(results.resolve())])
+
+
+class ReuseControllerTests(unittest.TestCase):
+    def test_progress_detector_tracks_rounds(self) -> None:
+        detector = ReuseProgressDetector()
+        self.assertEqual(detector.feed("[Reuse] Round 1/2 · round_1 · 2 code feature(s)"), 10)
+        self.assertEqual(detector.feed("[Reuse] Round 2/2 · round_2 · 1 code feature(s)"), 50)
+        self.assertEqual(detector.feed("[Reuse] [DONE] Wrote 3 code feature column(s)"), 100)
+
+    def test_reuse_worker_streams_and_writes_log(self) -> None:
+        from morphagent_ui.controller import ReuseWorker
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repository = root / "repo"
+            dataset = root / "dataset" / "sample_1"
+            source = root / "history"
+            results = root / "results"
+            repository.mkdir()
+            dataset.mkdir(parents=True)
+            (dataset / "image.png").touch()
+            source.mkdir()
+            (repository / "reuse_code.py").write_text(
+                "import sys\n"
+                "from pathlib import Path\n"
+                "out = Path(sys.argv[sys.argv.index('--results-dir') + 1])\n"
+                "out.mkdir(parents=True, exist_ok=True)\n"
+                "print('[Reuse] Round 1/1 · round_1 · 1 code feature(s)', flush=True)\n"
+                "(out / 'features.csv').write_text('sample_id,f1\\nsample_1,0.5\\n')\n"
+                "(out / 'round_1').mkdir(exist_ok=True)\n"
+                "(out / 'round_1' / 'round_results.json').write_text('{}')\n"
+                "print('[Reuse] [DONE] Wrote 1 code feature column(s)', flush=True)\n"
+                "print(f'Final feature file: {out / \"features.csv\"}', flush=True)\n",
+                encoding="utf-8",
+            )
+            config = ReuseConfig(
+                repository_root=str(repository),
+                source_results=str(source),
+                data_root=str(root / "dataset"),
+                results_dir=str(results),
+                python_executable=sys.executable,
+            )
+            worker = ReuseWorker(config)
+            logs: list[str] = []
+            progress: list[int] = []
+            successes: list[str] = []
+            worker.log_line.connect(logs.append)
+            worker.progress_changed.connect(progress.append)
+            worker.run_succeeded.connect(lambda _code, path: successes.append(path))
+
+            worker.run()
+
+            self.assertTrue((results / "ui_console.log").is_file())
+            self.assertTrue((results / "features.csv").is_file())
+            self.assertTrue(any("[Reuse] Round 1/1" in line for line in logs))
+            self.assertIn(100, progress)
             self.assertEqual(successes, [str(results.resolve())])
 
 

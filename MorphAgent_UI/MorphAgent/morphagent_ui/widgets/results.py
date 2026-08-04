@@ -307,6 +307,9 @@ class FeaturesPage(QWidget):
                 self.table.setItem(row, column, item)
         if self.filtered_cards:
             self.table.selectRow(0)
+            # QTableWidget may keep row 0 selected across reloads and therefore
+            # emit no selection signal; refresh the detail pane explicitly.
+            self._selection_changed()
         else:
             self.detail.set_card(None)
 

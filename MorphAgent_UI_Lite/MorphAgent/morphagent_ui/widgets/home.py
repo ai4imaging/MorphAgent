@@ -32,6 +32,7 @@ def default_results_browse_dir() -> Path:
 class HomePage(QWidget):
     new_run_requested = Signal()
     previous_run_requested = Signal(str)
+    reuse_history_requested = Signal()
     demo_sample_requested = Signal()
     ask_morphagent_requested = Signal()
 
@@ -96,6 +97,10 @@ class HomePage(QWidget):
         self.previous_run_button.setProperty("homeSecondary", True)
         self.previous_run_button.setMinimumWidth(230)
         self.previous_run_button.setAccessibleName("Load results from a previous MorphAgent run")
+        self.reuse_button = QPushButton("Reuse history features")
+        self.reuse_button.setProperty("homeSecondary", True)
+        self.reuse_button.setMinimumWidth(230)
+        self.reuse_button.setAccessibleName("Reuse historical code features on a new dataset")
         self.ask_button = QPushButton("Ask MorphAgent")
         self.ask_button.setProperty("homeSecondary", True)
         self.ask_button.setProperty("homeAsk", True)
@@ -109,6 +114,7 @@ class HomePage(QWidget):
         copy.addSpacing(16)
         copy.addWidget(self.new_button, 0, Qt.AlignLeft)
         copy.addWidget(self.previous_run_button, 0, Qt.AlignLeft)
+        copy.addWidget(self.reuse_button, 0, Qt.AlignLeft)
         copy.addWidget(self.ask_button, 0, Qt.AlignLeft)
         copy.addStretch(3)
         hero_layout.addLayout(copy, 5)
@@ -123,6 +129,7 @@ class HomePage(QWidget):
 
         self.new_button.clicked.connect(self.new_run_requested)
         self.previous_run_button.clicked.connect(self._choose_previous_run)
+        self.reuse_button.clicked.connect(self.reuse_history_requested)
         self.demo_sample_button.clicked.connect(self.demo_sample_requested)
         self.ask_button.clicked.connect(self.ask_morphagent_requested)
         self.set_sample_offer_visible(bundled_demo_results_dir().is_dir())

@@ -253,7 +253,7 @@ class AskMorphAgentUiTests(unittest.TestCase):
         self.assertTrue(home.ask_button.property("homeAsk"))
         self.assertGreater(home.action_layout.indexOf(home.ask_button), home.action_layout.indexOf(home.previous_run_button))
         self.assertEqual(widget.navigation.count(), 5)
-        self.assertEqual(widget.pages.count(), 6)
+        self.assertEqual(widget.pages.count(), 7)
 
         with patch("morphagent_ui.main.AskApiDialog") as dialog_class:
             dialog_class.return_value.exec.return_value = QDialog.Accepted

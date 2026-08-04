@@ -21,7 +21,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from .controller import RunController
+from .controller import ReuseController, RunController
 from .environment import save_ui_preference_environment
 from .models import RunConfig
 from .theme import (
@@ -35,6 +35,7 @@ from .widgets.configure import ConfigurePage
 from .widgets.home import HomePage, bundled_demo_results_dir
 from .widgets.ask import AskApiDialog, AskMorphAgentPage
 from .widgets.results import EvidencePage, FeaturesPage
+from .widgets.reuse import ReusePage
 from .widgets.run import RunPage
 
 
@@ -55,6 +56,7 @@ class MorphAgentWidget(QWidget):
         self.viewer = viewer
         self.config = RunConfig()
         self.controller = RunController(self)
+        self.reuse_controller = ReuseController(self)
         self._repository_root = Path(__file__).resolve().parents[1]
         self._display_font_scale = detect_display_scale()
         self._font_scale = resolve_ui_font_scale(
@@ -122,6 +124,7 @@ class MorphAgentWidget(QWidget):
         self.features_page = FeaturesPage(viewer)
         self.evidence_page = EvidencePage(viewer)
         self.ask_page = AskMorphAgentPage(self._repository_root)
+        self.reuse_page = ReusePage(self._repository_root, self.reuse_controller)
         for page in (
             self.home_page,
             self.configure_page,
@@ -129,6 +132,7 @@ class MorphAgentWidget(QWidget):
             self.features_page,
             self.evidence_page,
             self.ask_page,
+            self.reuse_page,
         ):
             self.pages.addWidget(page)
         root.addWidget(self.pages, 1)
@@ -341,6 +345,7 @@ class MorphAgentWidget(QWidget):
         self.navigation.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.home_page.new_run_requested.connect(self._new_run)
         self.home_page.previous_run_requested.connect(self._load_previous_results)
+        self.home_page.reuse_history_requested.connect(self._open_reuse_history)
         self.home_page.demo_sample_requested.connect(self._load_demo_sample_results)
         self.home_page.ask_morphagent_requested.connect(self._open_ask_morphagent)
         self.configure_page.run_requested.connect(self._start_run)
@@ -351,6 +356,8 @@ class MorphAgentWidget(QWidget):
         self.controller.run_finished.connect(self._on_run_finished)
         self.ask_page.back_requested.connect(lambda: self.navigate(0))
         self.ask_page.api_setup_requested.connect(self._edit_ask_api)
+        self.reuse_page.back_requested.connect(lambda: self.navigate(0))
+        self.reuse_page.review_requested.connect(self._show_reuse_results)
 
     def navigate(self, index: int) -> None:
         self.navigation.setCurrentRow(index)
@@ -367,6 +374,26 @@ class MorphAgentWidget(QWidget):
         self.navigation.blockSignals(False)
         self.pages.setCurrentWidget(self.ask_page)
         self.ask_page.question_edit.setFocus()
+
+    def _open_reuse_history(self) -> None:
+        """Open the hidden reuse workspace without changing the 5-item sidebar."""
+
+        self.navigation.blockSignals(True)
+        self.navigation.setCurrentRow(-1)
+        self.navigation.blockSignals(False)
+        self.reuse_page.prepare()
+        self.pages.setCurrentWidget(self.reuse_page)
+
+    def _show_reuse_results(self, results_dir: str) -> None:
+        path = Path(results_dir).expanduser()
+        if not path.is_dir():
+            QMessageBox.warning(self, "Reuse results not found", "The reuse output folder was not found.")
+            return
+        self._dismiss_demo_sample_offer(clear_pages=False)
+        self.config.results_dir = str(path)
+        self.features_page.load_results(str(path))
+        self.evidence_page.set_results(str(path), self.features_page.cards)
+        self.navigate(3)
 
     def _edit_ask_api(self) -> None:
         """Allow connection changes without leaving the conversation."""

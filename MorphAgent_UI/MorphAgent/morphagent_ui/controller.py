@@ -249,3 +249,242 @@ class RunController(QObject):
         else:
             self.state_changed.emit("failed", message)
         self.run_finished.emit(success, path)
+
+
+@dataclass
+class ReuseConfig:
+    """Launch settings for historical code-feature reuse (no LLM/VLM)."""
+
+    repository_root: str
+    source_results: str
+    data_root: str
+    results_dir: str = ""
+    python_executable: str = ""
+    code_parallel_workers: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.python_executable.strip():
+            import sys
+
+            self.python_executable = sys.executable
+
+    def ensure_results_dir(self) -> str:
+        if self.results_dir.strip():
+            path = Path(self.results_dir).expanduser().resolve()
+        else:
+            root = Path(self.data_root).expanduser().resolve()
+            dataset_root = root / "dataset" if (root / "dataset").is_dir() else root
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = dataset_root.parent / "results" / f"reuse_ui_{timestamp}"
+        path.mkdir(parents=True, exist_ok=True)
+        self.results_dir = str(path)
+        return self.results_dir
+
+    def build_command(self) -> list[str]:
+        repo = Path(self.repository_root).expanduser().resolve()
+        results_dir = self.ensure_results_dir()
+        return [
+            self.python_executable,
+            "-u",
+            str(repo / "reuse_code.py"),
+            "--source-results",
+            str(Path(self.source_results).expanduser().resolve()),
+            "--data-root",
+            str(Path(self.data_root).expanduser().resolve()),
+            "--results-dir",
+            results_dir,
+            "--code-parallel-workers",
+            str(max(1, int(self.code_parallel_workers))),
+        ]
+
+
+class ReuseProgressDetector:
+    """Map reuse CLI lines to a simple percent progress value."""
+
+    _round_re = re.compile(r"^\[Reuse\] Round (\d+)/(\d+)")
+    _done_re = re.compile(r"^\[(?:Reuse\] \[DONE\]|DONE\])")
+
+    def __init__(self) -> None:
+        self.percent = 5
+
+    def feed(self, raw_line: str) -> int | None:
+        line = raw_line.rstrip()
+        if not line or line[0].isspace():
+            return None
+        match = self._round_re.search(line)
+        if match:
+            current = max(1, int(match.group(1)))
+            total = max(1, int(match.group(2)))
+            # Reserve the last 10% for CSV/registry export.
+            next_percent = min(90, int(10 + 80 * (current - 1) / total))
+            if next_percent > self.percent:
+                self.percent = next_percent
+                return self.percent
+            return None
+        if self._done_re.search(line) or line.startswith("Final feature file:"):
+            if self.percent < 100:
+                self.percent = 100
+                return 100
+        if line.startswith("[Reuse] [OK]"):
+            next_percent = min(95, self.percent + 5)
+            if next_percent > self.percent:
+                self.percent = next_percent
+                return self.percent
+        return None
+
+
+class ReuseWorker(QThread):
+    log_line = Signal(str)
+    progress_changed = Signal(int)
+    artifacts_changed = Signal(dict)
+    run_succeeded = Signal(int, str)
+    run_failed = Signal(str, int, str)
+    run_cancelled = Signal(str)
+
+    def __init__(self, config: ReuseConfig, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.config = config
+        self._cancel_requested = threading.Event()
+        self._process: subprocess.Popen[str] | None = None
+        self._kill_timer: threading.Timer | None = None
+
+    @property
+    def results_dir(self) -> Path:
+        return Path(self.config.ensure_results_dir())
+
+    def cancel(self) -> None:
+        self._cancel_requested.set()
+        process = self._process
+        if process is None or process.poll() is not None:
+            return
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGTERM)
+            else:
+                process.terminate()
+        except (ProcessLookupError, OSError):
+            return
+        self._kill_timer = threading.Timer(5.0, self._force_kill)
+        self._kill_timer.daemon = True
+        self._kill_timer.start()
+
+    def _force_kill(self) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            return
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except (ProcessLookupError, OSError):
+            pass
+
+    def run(self) -> None:
+        detector = ReuseProgressDetector()
+        results_dir = self.results_dir
+        results_dir.mkdir(parents=True, exist_ok=True)
+        log_path = results_dir / "ui_console.log"
+        self.progress_changed.emit(5)
+        self.artifacts_changed.emit(artifact_snapshot(results_dir))
+        return_code = -1
+
+        try:
+            with log_path.open("a", encoding="utf-8", buffering=1) as log_handle:
+                log_handle.write(f"[{datetime.now().isoformat(timespec='seconds')}] UI reuse launch\n")
+                env = os.environ.copy()
+                env.setdefault("PYTHONUTF8", "1")
+                env.setdefault("PYTHONIOENCODING", "utf-8")
+                command = self.config.build_command()
+                log_handle.write("Command: " + " ".join(command) + "\n")
+                self._process = subprocess.Popen(
+                    command,
+                    cwd=self.config.repository_root,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    start_new_session=(os.name == "posix"),
+                )
+                assert self._process.stdout is not None
+                last_snapshot: dict[str, Any] | None = None
+                with self._process.stdout as stdout:
+                    for raw_line in stdout:
+                        line = raw_line.rstrip("\r\n")
+                        log_handle.write(line + "\n")
+                        self.log_line.emit(line)
+                        percent = detector.feed(line)
+                        if percent is not None:
+                            self.progress_changed.emit(percent)
+                        current = artifact_snapshot(results_dir)
+                        if current != last_snapshot:
+                            last_snapshot = current
+                            self.artifacts_changed.emit(current)
+                return_code = self._process.wait()
+        except (OSError, subprocess.SubprocessError) as exc:
+            self.run_failed.emit(str(exc), -1, str(log_path))
+            return
+        finally:
+            if self._kill_timer is not None:
+                self._kill_timer.cancel()
+
+        self.artifacts_changed.emit(artifact_snapshot(results_dir))
+        if self._cancel_requested.is_set():
+            self.run_cancelled.emit(str(results_dir))
+        elif return_code == 0:
+            self.progress_changed.emit(100)
+            self.run_succeeded.emit(return_code, str(results_dir))
+        else:
+            self.run_failed.emit(
+                f"Code reuse exited with status {return_code}.",
+                return_code,
+                str(log_path),
+            )
+
+
+class ReuseController(QObject):
+    log_line = Signal(str)
+    progress_changed = Signal(int)
+    artifacts_changed = Signal(dict)
+    state_changed = Signal(str, str)
+    run_finished = Signal(bool, str)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.worker: ReuseWorker | None = None
+
+    @property
+    def running(self) -> bool:
+        return bool(self.worker and self.worker.isRunning())
+
+    def start(self, config: ReuseConfig) -> str:
+        if self.running:
+            raise RuntimeError("A MorphAgent reuse job is already active.")
+        results_dir = config.ensure_results_dir()
+        self.worker = ReuseWorker(config, self)
+        self.worker.log_line.connect(self.log_line)
+        self.worker.progress_changed.connect(self.progress_changed)
+        self.worker.artifacts_changed.connect(self.artifacts_changed)
+        self.worker.run_succeeded.connect(lambda _code, path: self._finish(True, "complete", path))
+        self.worker.run_failed.connect(lambda message, _code, log: self._finish(False, message, log))
+        self.worker.run_cancelled.connect(lambda path: self._finish(False, "cancelled", path))
+        self.state_changed.emit("running", "Reusing historical code features on the new dataset.")
+        self.worker.start()
+        return results_dir
+
+    def cancel(self) -> None:
+        if self.worker and self.worker.isRunning():
+            self.state_changed.emit("cancelling", "Stopping reuse after the current process boundary…")
+            self.worker.cancel()
+
+    def _finish(self, success: bool, message: str, path: str) -> None:
+        if success:
+            self.state_changed.emit("complete", "Reuse complete. Feature matrix and registry are ready.")
+        elif message == "cancelled":
+            self.state_changed.emit("cancelled", "Reuse cancelled. Existing artifacts were preserved.")
+        else:
+            self.state_changed.emit("failed", message)
+        self.run_finished.emit(success, path)
