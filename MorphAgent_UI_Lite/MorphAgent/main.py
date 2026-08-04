@@ -1375,18 +1375,16 @@ Examples:
     parser.add_argument("--paddlex-device", type=str, default=None,
                         help="Device for optional PaddleX PDF OCR when RAG_PDF_BACKEND=paddlex (cpu, gpu:0, ...). Defaults to config.paddlex_device (cpu).")
 
-    # --- Auto Deep Research (single API call -> markdown report) --------------
+    # Lite compatibility flags: generation is handled by the configured model.
     parser.add_argument("--auto-deep-research", action="store_true", default=False,
-                        help="Before extraction, generate a deep-research report with ONE call to the deep-research model "
-                             "(config.deep_research_model) and save it into the deep_research/ folder.")
+                        help="Compatibility flag. Lite automatically synthesizes Deep Research with the configured LLM when enabled and no prepared txt exists.")
     parser.add_argument("--deep-research-query", type=str, default=None,
-                        help="Keywords/topic for --auto-deep-research (defaults to the user query).")
+                        help="Optional Deep Research question override (defaults to the biological question).")
 
-    # --- Auto Literature Retrieval (PubMed / Europe PMC -> RAG PDFs) ----------
     parser.add_argument("--auto-literature-retrieval", action="store_true", default=False,
-                        help="Before RAG extraction, search PubMed/Europe PMC and download open-access PDFs into the RAG/ folder.")
+                        help="Compatibility flag. Lite synthesizes a literature summary with the configured LLM; it does not fetch PubMed/PDFs.")
     parser.add_argument("--pubmed-query", type=str, default=None,
-                        help="Keywords for --auto-literature-retrieval (defaults to the user query).")
+                        help="Optional literature-summary question override (defaults to the biological question).")
     parser.add_argument("--pubmed-max-results", type=int, default=None,
                         help="Max number of papers to download (defaults to config.pubmed_max_results).")
     parser.add_argument("--pubmed-min-year", type=int, default=None,
@@ -1626,26 +1624,16 @@ Examples:
             f.write(expert_knowledge)
         print(f"  Expert knowledge saved: {expert_knowledge_path}")
     
-    # Resolve PDF device hint (used only when RAG_PDF_BACKEND=paddlex).
+    # Kept for CLI compatibility; Lite knowledge never runs PDF/OCR.
     paddlex_device = args.paddlex_device or settings.paddlex_device
 
-    # Step 2.15: Auto Deep Research — generate a report with ONE API call and
-    # drop it into the deep_research/ folder, so the extraction step below picks
-    # it up. No local deep-research model is deployed.
-    if getattr(args, "auto_deep_research", False):
-        from knowledge.deep_research_agent import generate_deep_research_report
-        dr_query = args.deep_research_query or args.user_query
-        dr_dir = project_root / "deep_research"
-        try:
-            generate_deep_research_report(dr_query, dr_dir, dataset_description=dataset_description)
-        except Exception as e:
-            print(f"  [Deep Research] Auto report generation failed (continuing): {e}")
-
-    # Step 2.2: Extract Deep Research
+    # Step 2.2: Load prepared Deep Research, or synthesize it from the question.
     deep_research = extract_deep_research(
         project_root,
         enable_deep_research=args.enable_deep_research,
-        device=paddlex_device
+        device=paddlex_device,
+        user_query=args.deep_research_query or args.user_query,
+        dataset_description=dataset_description,
     )
     
     # Save Deep Research
@@ -1655,32 +1643,13 @@ Examples:
             f.write(deep_research)
         print(f"  Deep Research saved: {deep_research_path}")
     
-    # Step 2.25: Auto Literature Retrieval — search PubMed/Europe PMC and
-    # download open-access PDFs into the RAG/ folder so extract_rag_knowledge
-    # (lite PDF text -> LLM summary) can consume them.
-    if getattr(args, "auto_literature_retrieval", False) and args.enable_rag:
-        from knowledge.pubmed_fetcher import fetch_pubmed_literature
-        lit_query = args.pubmed_query or args.user_query
-        rag_dir = project_root / "RAG"
-        max_results = args.pubmed_max_results if args.pubmed_max_results is not None else settings.pubmed_max_results
-        min_year = args.pubmed_min_year if args.pubmed_min_year is not None else settings.pubmed_min_year
-        try:
-            fetch_pubmed_literature(
-                lit_query, rag_dir,
-                max_results=max_results,
-                min_year=min_year,
-                open_access_only=not args.pubmed_include_non_oa,
-                email=settings.ncbi_email,
-                api_key=settings.ncbi_api_key,
-            )
-        except Exception as e:
-            print(f"  [Literature Retrieval] Failed (continuing with any existing PDFs): {e}")
-
-    # Step 2.3: Extract RAG knowledge
+    # Step 2.3: Load prepared literature knowledge, or synthesize it from the question.
     rag_knowledge = extract_rag_knowledge(
         project_root,
         enable_rag=args.enable_rag,
-        device=paddlex_device
+        device=paddlex_device,
+        user_query=args.pubmed_query or args.user_query,
+        dataset_description=dataset_description,
     )
     
     # Save RAG knowledge

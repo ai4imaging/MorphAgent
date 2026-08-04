@@ -6,7 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from morphagent_ui.controller import PipelineWorker, StageDetector, artifact_snapshot
+from morphagent_ui.controller import (
+    DynamicEta,
+    PipelineWorker,
+    StageDetector,
+    artifact_snapshot,
+    estimate_run_seconds,
+)
 from morphagent_ui.models import RunConfig, scan_dataset
 
 
@@ -19,7 +25,8 @@ class StageDetectorTests(unittest.TestCase):
         self.assertIsNone(detector.feed("Step 3.5: Data preprocessing"))
         self.assertEqual(detector.feed("Step 4: Batch feature extraction"), 3)
         self.assertEqual(detector.feed("Step 6: Deterministic feature validation"), 4)
-        self.assertEqual(detector.feed("[OK] Round 1 complete!"), 5)
+        self.assertIsNone(detector.feed("[OK] Round 1 complete!"))
+        self.assertEqual(detector.feed("[DONE] All 2 rounds complete!"), 5)
         self.assertIsNone(detector.feed("Step 2: Dataset understanding"))
 
     def test_indented_code_route_steps_do_not_change_stage(self) -> None:
@@ -41,6 +48,59 @@ class ArtifactSnapshotTests(unittest.TestCase):
             self.assertTrue(snapshot["files"]["features.csv"])
             self.assertEqual(snapshot["completed_rounds"], [2])
             self.assertEqual(snapshot["artifact_count"], 2)
+
+
+class RunEstimateTests(unittest.TestCase):
+    def _dataset(self, image_count: int):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            for index in range(image_count):
+                sample = root / f"sample_{index}"
+                sample.mkdir()
+                (sample / "image.png").touch()
+            return scan_dataset(root)
+
+    def test_estimate_scales_with_rounds_features_and_images(self) -> None:
+        small = RunConfig(
+            num_rounds=1,
+            features_per_iteration=5,
+            method="both",
+            code_parallel_workers=1,
+            vlm_online_concurrency=1,
+        )
+        large = RunConfig(
+            num_rounds=3,
+            features_per_iteration=10,
+            method="both",
+            code_parallel_workers=1,
+            vlm_online_concurrency=1,
+        )
+        self.assertGreater(
+            estimate_run_seconds(large, self._dataset(12)),
+            estimate_run_seconds(small, self._dataset(3)),
+        )
+
+    def test_dynamic_eta_uses_stage_and_completed_rounds(self) -> None:
+        eta = DynamicEta(initial_total_seconds=900, num_rounds=3)
+        initial_remaining = eta.remaining_seconds(60)
+        eta.update_progress(40)
+        after_plan = eta.remaining_seconds(60)
+        self.assertLess(after_plan, initial_remaining)
+
+        eta.update_completed_rounds(2)
+        self.assertEqual(eta.effective_progress, 68)
+        after_rounds = eta.remaining_seconds(60)
+        self.assertLess(after_rounds, after_plan)
+
+    def test_dynamic_eta_adjusts_to_observed_speed(self) -> None:
+        fast = DynamicEta(initial_total_seconds=600, num_rounds=1, progress_percent=50)
+        slow = DynamicEta(initial_total_seconds=600, num_rounds=1, progress_percent=50)
+        fast_elapsed = 100
+        slow_elapsed = 400
+        self.assertGreater(
+            slow_elapsed + slow.remaining_seconds(slow_elapsed),
+            fast_elapsed + fast.remaining_seconds(fast_elapsed),
+        )
 
 
 class PipelineWorkerTests(unittest.TestCase):
@@ -67,7 +127,8 @@ class PipelineWorkerTests(unittest.TestCase):
                 "(out / 'features.csv').write_text('sample_id,f1\\nsample_1,0.5\\n')\n"
                 "print('Step 6: Deterministic feature validation', flush=True)\n"
                 "(out / 'round_1' / 'round_results.json').write_text('{}')\n"
-                "print('[OK] Round 1 complete!', flush=True)\n",
+                "print('[OK] Round 1 complete!', flush=True)\n"
+                "print('[DONE] All 1 rounds of feature extraction complete!', flush=True)\n",
                 encoding="utf-8",
             )
             config = RunConfig(

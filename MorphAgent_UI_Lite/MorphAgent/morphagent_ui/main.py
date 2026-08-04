@@ -478,7 +478,7 @@ class MorphAgentWidget(QWidget):
                 self._preload_demo_sample_results()
             QMessageBox.critical(self, "Could not launch MorphAgent", str(exc))
             return
-        self.run_page.begin(results_dir)
+        self.run_page.begin(results_dir, config, dataset_summary)
         self.navigate(2)
 
     def _on_run_finished(self, success: bool, results_path: str) -> None:

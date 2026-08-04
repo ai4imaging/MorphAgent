@@ -6,7 +6,7 @@
 |--|----------|----------------------|
 | Scope | Tau demo + Code/VLM API | Full research workflow |
 | Env | **`morphagent_lite` only** | `morphagent` + sandbox (+ optional Allen) |
-| Knowledge | Prepared txt under `demo/precomputed/` injected into prompts | Live PDF / PubMed / deep-research generation |
+| Knowledge | Prepared txt, or configured-LLM synthesis from the biological question | Live PDF / PubMed / deep-research generation |
 | Segmentation | Reuse masks if present; **never auto-seg** | Allen when masks missing |
 | Install | `conda create` (Python) then slim pip | Conda + broader science stack |
 
@@ -17,16 +17,24 @@ UI flow: **Home → Configure → Run → Features → Evidence**.
 - Qt desktop UI
 - Bundled Tau demo dataset
 - Code / VLM API runs
-- Expert / Deep research / Literature toggles via **precomputed summaries** (no PDF parse, no PubMed, no online deep-research)
+- Expert notes via prepared txt
+- Deep Research / Literature toggles: prepared txt first; otherwise two configured-LLM calls synthesize summaries from the biological question + dataset description
 - Reuse existing masks (`SEGMENTATION_BACKEND=none`)
 
 ## Intentionally skipped (no popup)
 
-Lite does **not** run heavy knowledge pipelines. When a source is enabled it loads prepared text if present; otherwise that source is skipped quietly.
+Lite does **not** run heavy knowledge pipelines. When Deep Research or Literature / RAG is enabled:
+
+1. use a supplied/prepared summary txt when present;
+2. otherwise ask the configured LLM to synthesize the corresponding summary from the biological question and dataset description;
+3. cache it under `<project>/.knowledge_precomputed/` and inject it into feature-planning prompts;
+4. if the model call fails, log the error and continue without that source rather than aborting the run.
+
+The literature synthesis is explicitly instructed not to claim live retrieval or invent citations.
 
 - PDF parsing (`pymupdf`)
 - Auto PubMed / literature download
-- Auto deep-research API generation
+- Separate deep-research provider/model
 - Automatic Allen / Cellpose segmentation
 
 Prepared demo files:

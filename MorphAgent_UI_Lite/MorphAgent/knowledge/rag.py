@@ -550,29 +550,21 @@ def extract_rag_knowledge(
     enable_rag: bool = True,
     device: str = "gpu:0",
     use_cache: bool = True,
-    cache_dir: Optional[Path] = None
+    cache_dir: Optional[Path] = None,
+    user_query: str = "",
+    dataset_description: str = "",
 ) -> Optional[str]:
-    """Extract RAG knowledge base information from the RAG folder under the project root (supports caching)
-    
-    Args:
-        project_root: project root directory path (the parent directory containing dataset and RAG)
-        enable_rag: whether to enable RAG knowledge extraction
-        device: unused by the default lite PDF extractor; kept for CLI compatibility
-            (PaddleX device when ``RAG_PDF_BACKEND=paddlex``)
-        use_cache: whether to use caching (default True)
-        cache_dir: cache directory path; if None, use project_root / ".rag_cache"
-        
-    Returns:
-        The RAG knowledge summary text, or None if not enabled or not found
-    """
+    """Return prepared literature knowledge, or synthesize it from the question."""
+
+    del device, use_cache, cache_dir  # CLI compatibility; Lite never parses documents.
     if not enable_rag:
         return None
 
-    # Lite: only inject prepared txt; never PDF/XML parse or PubMed fetch.
-    from knowledge.precomputed_lite import load_precomputed_summary
+    from knowledge.precomputed_lite import load_or_generate_summary
 
-    precomputed = load_precomputed_summary(project_root, "rag")
-    if precomputed:
-        return precomputed
-    print("  [RAG] No precomputed summary; skipping (Lite)")
-    return None
+    return load_or_generate_summary(
+        project_root,
+        "rag",
+        user_query,
+        dataset_description,
+    )
