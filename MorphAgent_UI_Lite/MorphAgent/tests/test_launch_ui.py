@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from launch_ui import launch_standalone, load_repository_environment
+from launch_ui import launch_standalone, load_repository_environment, main
 
 
 class RepositoryEnvironmentTests(unittest.TestCase):
@@ -66,13 +66,36 @@ class WindowLaunchTests(unittest.TestCase):
             def showMaximized(self) -> None:
                 self.maximized_shown = True
 
+        class FakeWidget:
+            def __init__(self) -> None:
+                self.focused = False
+
+            def setFocus(self) -> None:
+                self.focused = True
+
         window = FakeWindow()
-        with patch("launch_ui.create_standalone_window", return_value=(FakeApplication(), window, object())):
+        widget = FakeWidget()
+        with patch("launch_ui.create_standalone_window", return_value=(FakeApplication(), window, widget)):
             result = launch_standalone()
 
         self.assertEqual(result, 17)
         self.assertTrue(window.maximized_shown)
         self.assertFalse(window.normal_shown)
+        self.assertTrue(widget.focused)
+
+
+class LauncherAnalyticsTests(unittest.TestCase):
+    def test_main_registers_one_visit_before_launching_ui(self) -> None:
+        with (
+            patch("launch_ui.load_repository_environment"),
+            patch("launch_ui.start_visit_registration") as register,
+            patch("launch_ui.launch_standalone", return_value=23) as launch,
+        ):
+            result = main([])
+
+        self.assertEqual(result, 23)
+        register.assert_called_once_with()
+        launch.assert_called_once_with(None)
 
 
 if __name__ == "__main__":

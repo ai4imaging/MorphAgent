@@ -9,6 +9,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from morphagent_ui.visitor_analytics import start_visit_registration
+
 
 def load_repository_environment(env_path: str | Path | None = None) -> bool:
     """Load the repository .env as the UI's single configuration source."""
@@ -99,6 +101,7 @@ def launch_with_napari(demo_page: str | None = None) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     load_repository_environment()
     args = build_parser().parse_args(argv)
+    start_visit_registration()
     if args.with_napari:
         return launch_with_napari(args.demo_page)
     return launch_standalone(args.demo_page)
