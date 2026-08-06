@@ -1,8 +1,0 @@
-.DS_Store
-.env
-__pycache__/
-*.py[cod]
-.pytest_cache/
-build/
-dist/
-*.egg-info/
