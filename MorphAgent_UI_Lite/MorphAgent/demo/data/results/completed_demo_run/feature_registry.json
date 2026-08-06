@@ -28,7 +28,7 @@
           ],
           "explanation": "Passed deterministic hard filters.",
           "compared_feature_ids": [],
-          "validation_score": 0.6732142857142829,
+          "validation_score": 0.904,
           "actual_column_name": "vlm_tau_aggregation_pattern_proportion",
           "llm_reviewed": false
         }
@@ -61,7 +61,7 @@
           ],
           "explanation": "Passed deterministic hard filters.",
           "compared_feature_ids": [],
-          "validation_score": 0.8,
+          "validation_score": 0.8400000000000001,
           "actual_column_name": "vlm_somatic_nft_density",
           "llm_reviewed": false
         }
@@ -76,8 +76,8 @@
       "category": "distribution",
       "first_round": 1,
       "latest_round": 1,
-      "current_status": "dropped",
-      "live": false,
+      "current_status": "retained",
+      "live": true,
       "actual_column_name": "axon_to_soma_tau_intensity_ratio",
       "source_paths": {
         "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_1",
@@ -88,13 +88,13 @@
         {
           "feature_id": "round_1:axon_to_soma_tau_intensity_ratio",
           "feature_name": "axon_to_soma_tau_intensity_ratio",
-          "status": "dropped",
+          "status": "retained",
           "reason_codes": [
-            "low_unique_values"
+            "passed_hard_filters"
           ],
-          "explanation": "Only 4 unique valid values were observed.",
+          "explanation": "Passed deterministic hard filters.",
           "compared_feature_ids": [],
-          "validation_score": 0.8,
+          "validation_score": 0.8560000000000001,
           "actual_column_name": "axon_to_soma_tau_intensity_ratio",
           "llm_reviewed": false
         }
@@ -109,8 +109,8 @@
       "category": "morphology",
       "first_round": 1,
       "latest_round": 1,
-      "current_status": "dropped",
-      "live": false,
+      "current_status": "retained",
+      "live": true,
       "actual_column_name": "tau_neurite_bead_density",
       "source_paths": {
         "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_1",
@@ -121,13 +121,13 @@
         {
           "feature_id": "round_1:tau_neurite_bead_density",
           "feature_name": "tau_neurite_bead_density",
-          "status": "dropped",
+          "status": "retained",
           "reason_codes": [
-            "low_unique_values"
+            "passed_hard_filters"
           ],
-          "explanation": "Only 4 unique valid values were observed.",
+          "explanation": "Passed deterministic hard filters.",
           "compared_feature_ids": [],
-          "validation_score": 0.71,
+          "validation_score": 0.984,
           "actual_column_name": "tau_neurite_bead_density",
           "llm_reviewed": false
         }
@@ -142,8 +142,8 @@
       "category": "distribution",
       "first_round": 1,
       "latest_round": 1,
-      "current_status": "dropped",
-      "live": false,
+      "current_status": "retained",
+      "live": true,
       "actual_column_name": "distal_to_proximal_axon_tau_intensity_ratio",
       "source_paths": {
         "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_1",
@@ -154,225 +154,45 @@
         {
           "feature_id": "round_1:distal_to_proximal_axon_tau_intensity_ratio",
           "feature_name": "distal_to_proximal_axon_tau_intensity_ratio",
-          "status": "dropped",
+          "status": "retained",
           "reason_codes": [
-            "low_availability",
-            "low_unique_values"
+            "passed_hard_filters"
           ],
-          "explanation": "Availability rate 0.400 is below 0.70. Only 2 unique valid values were observed.",
+          "explanation": "Passed deterministic hard filters.",
           "compared_feature_ids": [],
-          "validation_score": 0.53,
+          "validation_score": 0.8400000000000001,
           "actual_column_name": "distal_to_proximal_axon_tau_intensity_ratio",
-          "llm_reviewed": false
-        }
-      ]
-    },
-    {
-      "feature_id": "round_2:vlm_tau_fibril_presence",
-      "name": "vlm_tau_fibril_presence",
-      "canonical_name": "vlm_tau_fibril_presence",
-      "method": "vlm",
-      "description": "Determines the presence and degree of fibrillary Tau structures in Tau-positive regions, characterized as elongated, thread-like features within axons or dendrites. Fibril formation indicates an advanced stage of Tau aggregation.",
-      "category": "morphology",
-      "first_round": 2,
-      "latest_round": 2,
-      "current_status": "retained",
-      "live": true,
-      "actual_column_name": "vlm_tau_fibril_presence",
-      "source_paths": {
-        "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2",
-        "feature_plan_path": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2/feature_plan.json",
-        "raw_features_csv": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/features.csv"
-      },
-      "decision_history": [
-        {
-          "feature_id": "round_2:vlm_tau_fibril_presence",
-          "feature_name": "vlm_tau_fibril_presence",
-          "status": "retained",
-          "reason_codes": [
-            "passed_hard_filters"
-          ],
-          "explanation": "Passed deterministic hard filters.",
-          "compared_feature_ids": [],
-          "validation_score": 0.8,
-          "actual_column_name": "vlm_tau_fibril_presence",
-          "llm_reviewed": false
-        }
-      ]
-    },
-    {
-      "feature_id": "round_2:vlm_tau_pathology_stage_index",
-      "name": "vlm_tau_pathology_stage_index",
-      "canonical_name": "vlm_tau_pathology_stage_index",
-      "method": "vlm",
-      "description": "Assigns a pathology stage index based on morphological and spatial hallmarks of Tau pathology, such as somatic NFTs, dendritic beading, and axonal degradation. The index ranges from normal Tau distribution to severe aggregation patterns.",
-      "category": "spatial",
-      "first_round": 2,
-      "latest_round": 2,
-      "current_status": "dropped",
-      "live": false,
-      "actual_column_name": "vlm_tau_pathology_stage_index",
-      "source_paths": {
-        "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2",
-        "feature_plan_path": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2/feature_plan.json",
-        "raw_features_csv": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/features.csv"
-      },
-      "decision_history": [
-        {
-          "feature_id": "round_2:vlm_tau_pathology_stage_index",
-          "feature_name": "vlm_tau_pathology_stage_index",
-          "status": "dropped",
-          "reason_codes": [
-            "low_unsupervised_variability"
-          ],
-          "explanation": "Variability signal 0.084 is below 0.10.",
-          "compared_feature_ids": [],
-          "validation_score": 0.5969298245614018,
-          "actual_column_name": "vlm_tau_pathology_stage_index",
-          "llm_reviewed": false
-        }
-      ]
-    },
-    {
-      "feature_id": "round_2:tau_axon_continuity_index",
-      "name": "tau_axon_continuity_index",
-      "canonical_name": "tau_axon_continuity_index",
-      "method": "code",
-      "description": "Measures the continuity of the Tau signal along axonal structures by calculating the number and length of gaps in fluorescence along linear axonal regions. This captures potential disruptions or fragmentations in axonal Tau distribution, which are indicative of pathological alterations.",
-      "category": "morphology",
-      "first_round": 2,
-      "latest_round": 2,
-      "current_status": "dropped",
-      "live": false,
-      "actual_column_name": "tau_axon_continuity_index",
-      "source_paths": {
-        "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2",
-        "feature_plan_path": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2/feature_plan.json",
-        "raw_features_csv": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/features.csv"
-      },
-      "decision_history": [
-        {
-          "feature_id": "round_2:tau_axon_continuity_index",
-          "feature_name": "tau_axon_continuity_index",
-          "status": "dropped",
-          "reason_codes": [
-            "low_unique_values"
-          ],
-          "explanation": "Only 2 unique valid values were observed.",
-          "compared_feature_ids": [],
-          "validation_score": 0.8,
-          "actual_column_name": "tau_axon_continuity_index",
-          "llm_reviewed": false
-        }
-      ]
-    },
-    {
-      "feature_id": "round_2:soma_tau_intensity_homogeneity",
-      "name": "soma_tau_intensity_homogeneity",
-      "canonical_name": "soma_tau_intensity_homogeneity",
-      "method": "code",
-      "description": "Quantifies the variation in Tau signal intensity within segmented somatic regions using a coefficient of variation (standard deviation divided by mean intensity). Elevated variability may indicate pathological aggregation compared to the more uniform distribution in healthy cells.",
-      "category": "intensity",
-      "first_round": 2,
-      "latest_round": 2,
-      "current_status": "dropped",
-      "live": false,
-      "actual_column_name": "soma_tau_intensity_homogeneity",
-      "source_paths": {
-        "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2",
-        "feature_plan_path": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2/feature_plan.json",
-        "raw_features_csv": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/features.csv"
-      },
-      "decision_history": [
-        {
-          "feature_id": "round_2:soma_tau_intensity_homogeneity",
-          "feature_name": "soma_tau_intensity_homogeneity",
-          "status": "dropped",
-          "reason_codes": [
-            "low_unique_values"
-          ],
-          "explanation": "Only 4 unique valid values were observed.",
-          "compared_feature_ids": [],
-          "validation_score": 0.8,
-          "actual_column_name": "soma_tau_intensity_homogeneity",
-          "llm_reviewed": false
-        }
-      ]
-    },
-    {
-      "feature_id": "round_2:dendrite_tau_bead_count",
-      "name": "dendrite_tau_bead_count",
-      "canonical_name": "dendrite_tau_bead_count",
-      "method": "code",
-      "description": "Counts the number of Tau-positive beaded inclusions along segmented dendritic structures. A higher count of beads in the dendrites is associated with intermediate-stage Tau pathology.",
-      "category": "morphology",
-      "first_round": 2,
-      "latest_round": 2,
-      "current_status": "retained",
-      "live": true,
-      "actual_column_name": "dendrite_tau_bead_count",
-      "source_paths": {
-        "round_dir": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2",
-        "feature_plan_path": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/round_2/feature_plan.json",
-        "raw_features_csv": "<BUNDLE_ROOT>/MorphAgent/demo/data/results/completed_demo_run/features.csv"
-      },
-      "decision_history": [
-        {
-          "feature_id": "round_2:dendrite_tau_bead_count",
-          "feature_name": "dendrite_tau_bead_count",
-          "status": "retained",
-          "reason_codes": [
-            "passed_hard_filters"
-          ],
-          "explanation": "Passed deterministic hard filters.",
-          "compared_feature_ids": [],
-          "validation_score": 0.8,
-          "actual_column_name": "dendrite_tau_bead_count",
           "llm_reviewed": false
         }
       ]
     }
   ],
   "live_feature_ids": [
+    "round_1:axon_to_soma_tau_intensity_ratio",
+    "round_1:distal_to_proximal_axon_tau_intensity_ratio",
+    "round_1:tau_neurite_bead_density",
     "round_1:vlm_somatic_nft_density",
-    "round_1:vlm_tau_aggregation_pattern_proportion",
-    "round_2:dendrite_tau_bead_count",
-    "round_2:vlm_tau_fibril_presence"
+    "round_1:vlm_tau_aggregation_pattern_proportion"
   ],
   "feature_id_to_column": {
     "round_1:vlm_tau_aggregation_pattern_proportion": "vlm_tau_aggregation_pattern_proportion",
     "round_1:vlm_somatic_nft_density": "vlm_somatic_nft_density",
     "round_1:axon_to_soma_tau_intensity_ratio": "axon_to_soma_tau_intensity_ratio",
     "round_1:tau_neurite_bead_density": "tau_neurite_bead_density",
-    "round_1:distal_to_proximal_axon_tau_intensity_ratio": "distal_to_proximal_axon_tau_intensity_ratio",
-    "round_2:vlm_tau_fibril_presence": "vlm_tau_fibril_presence",
-    "round_2:vlm_tau_pathology_stage_index": "vlm_tau_pathology_stage_index",
-    "round_2:tau_axon_continuity_index": "tau_axon_continuity_index",
-    "round_2:soma_tau_intensity_homogeneity": "soma_tau_intensity_homogeneity",
-    "round_2:dendrite_tau_bead_count": "dendrite_tau_bead_count"
+    "round_1:distal_to_proximal_axon_tau_intensity_ratio": "distal_to_proximal_axon_tau_intensity_ratio"
   },
   "all_raw_feature_names": [
     "vlm_tau_aggregation_pattern_proportion",
     "vlm_somatic_nft_density",
     "axon_to_soma_tau_intensity_ratio",
     "tau_neurite_bead_density",
-    "distal_to_proximal_axon_tau_intensity_ratio",
-    "vlm_tau_fibril_presence",
-    "vlm_tau_pathology_stage_index",
-    "tau_axon_continuity_index",
-    "soma_tau_intensity_homogeneity",
-    "dendrite_tau_bead_count"
+    "distal_to_proximal_axon_tau_intensity_ratio"
   ],
   "all_historical_feature_names": [
     "axon_to_soma_tau_intensity_ratio",
-    "dendrite_tau_bead_count",
     "distal_to_proximal_axon_tau_intensity_ratio",
-    "soma_tau_intensity_homogeneity",
-    "tau_axon_continuity_index",
     "tau_neurite_bead_density",
     "vlm_somatic_nft_density",
-    "vlm_tau_aggregation_pattern_proportion",
-    "vlm_tau_fibril_presence",
-    "vlm_tau_pathology_stage_index"
+    "vlm_tau_aggregation_pattern_proportion"
   ]
 }

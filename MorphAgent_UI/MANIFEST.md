@@ -45,7 +45,7 @@
 - Ten Tau-neuron samples: `WT_1`–`WT_5` (wild-type) and `MU_1`–`MU_5` (mutant pseudo-labels).
 - Each sample contains `image.tif`, a VLM-ready slice, and segmentation masks.
 - Expert notes, a deep-research report, three RAG PDFs, a precomputed RAG cache, and `metadata.csv` for paired validation are included.
-- `MorphAgent/demo/data/results/completed_demo_run` contains a completed two-round run with 10 feature cards.
+- `MorphAgent/demo/data/results/completed_demo_run` contains a completed one-round run with 5 retained feature cards.
 
 ## Demonstration video
 

@@ -1,5 +1,10 @@
-WT_1: ✅ {'axon_to_soma_tau_intensity_ratio': 5.744450092315674, 'tau_neurite_bead_density': 0.038461538461538464, 'distal_to_proximal_axon_tau_intensity_ratio': 0.11744733899831772}
-WT_2: ✅ {'axon_to_soma_tau_intensity_ratio': 0.0, 'tau_neurite_bead_density': 0.022727272727272728, 'distal_to_proximal_axon_tau_intensity_ratio': nan}
-WT_3: ✅ {'axon_to_soma_tau_intensity_ratio': 4.881556987762451, 'tau_neurite_bead_density': 0.06896551724137931, 'distal_to_proximal_axon_tau_intensity_ratio': 0.2902013063430786}
-WT_4: ✅ {'axon_to_soma_tau_intensity_ratio': 5.412383556365967, 'tau_neurite_bead_density': nan, 'distal_to_proximal_axon_tau_intensity_ratio': nan}
-WT_5: ✅ {'axon_to_soma_tau_intensity_ratio': 0.0, 'tau_neurite_bead_density': 0.023255813953488372, 'distal_to_proximal_axon_tau_intensity_ratio': nan}
+MU_1: [OK] {'axon_to_soma_tau_intensity_ratio': 2.285811592372153, 'tau_neurite_bead_density': 1.5557020435069215, 'distal_to_proximal_axon_tau_intensity_ratio': 0.8200879035653363}
+MU_2: [OK] {'axon_to_soma_tau_intensity_ratio': 1.0631789996355965, 'tau_neurite_bead_density': 3.454593038471604, 'distal_to_proximal_axon_tau_intensity_ratio': 1.082459813096818}
+MU_3: [OK] {'axon_to_soma_tau_intensity_ratio': 1.1290379237936632, 'tau_neurite_bead_density': 1.736745886654479, 'distal_to_proximal_axon_tau_intensity_ratio': 1.1843590665118857}
+MU_4: [OK] {'axon_to_soma_tau_intensity_ratio': 1.1015228640448542, 'tau_neurite_bead_density': 1.835070231082918, 'distal_to_proximal_axon_tau_intensity_ratio': 1.1018077936757498}
+MU_5: [OK] {'axon_to_soma_tau_intensity_ratio': 4.871570791391183, 'tau_neurite_bead_density': 5.199550309162451, 'distal_to_proximal_axon_tau_intensity_ratio': 1.1634690528469789}
+WT_1: [OK] {'axon_to_soma_tau_intensity_ratio': 3.6998185731249307, 'tau_neurite_bead_density': 5.169575238722423, 'distal_to_proximal_axon_tau_intensity_ratio': 1.488090493656148}
+WT_2: [OK] {'axon_to_soma_tau_intensity_ratio': 1.8677861610915918, 'tau_neurite_bead_density': 6.925207756232687, 'distal_to_proximal_axon_tau_intensity_ratio': 0.796435852798654}
+WT_3: [OK] {'axon_to_soma_tau_intensity_ratio': 3.188901993105353, 'tau_neurite_bead_density': 5.270092226613966, 'distal_to_proximal_axon_tau_intensity_ratio': 0.5786741234450972}
+WT_4: [OK] {'axon_to_soma_tau_intensity_ratio': 5.52522381486326, 'tau_neurite_bead_density': 7.2727272727272725, 'distal_to_proximal_axon_tau_intensity_ratio': 2.0189727558705886}
+WT_5: [OK] {'axon_to_soma_tau_intensity_ratio': 0.9775342180127669, 'tau_neurite_bead_density': 5.539206068929436, 'distal_to_proximal_axon_tau_intensity_ratio': 0.6362723639907248}

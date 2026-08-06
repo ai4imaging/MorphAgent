@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib
+import math
 import os
 import sys
 from pathlib import Path
@@ -65,7 +67,18 @@ def check_completed_run() -> None:
 
     require((COMPLETED_RUN / "features.csv").is_file(), "Completed run features.csv is missing")
     cards = load_feature_cards(COMPLETED_RUN)
-    require(len(cards) == 10, f"Expected 10 feature cards, found {len(cards)}")
+    require(len(cards) == 5, f"Expected 5 feature cards, found {len(cards)}")
+    require(all(card.status == "retained" for card in cards), "Bundled feature cards must all be retained")
+    with (COMPLETED_RUN / "features.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    feature_names = [name for name in (rows[0].keys() if rows else ()) if name != "sample_id"]
+    require(len(rows) == 10, f"Expected 10 completed-run samples, found {len(rows)}")
+    for name in feature_names:
+        values = [float(row[name]) for row in rows if row.get(name)]
+        require(len(values) == len(rows), f"Feature {name} has missing values")
+        require(all(math.isfinite(value) for value in values), f"Feature {name} has non-finite values")
+        require(len(set(values)) > 1, f"Feature {name} has no sample-to-sample variation")
+        require(any(value != 0 for value in values), f"Feature {name} is all zero")
     artifacts = list_result_artifacts(COMPLETED_RUN)
     require(bool(artifacts), "No evidence artifacts were discovered")
     print(f"[OK] Completed run: {len(cards)} feature cards, {len(artifacts)} curated artifacts")

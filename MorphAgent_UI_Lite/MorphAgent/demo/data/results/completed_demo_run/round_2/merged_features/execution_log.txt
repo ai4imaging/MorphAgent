@@ -1,5 +1,0 @@
-WT_1: ✅ {'tau_axon_continuity_index': 1.0, 'soma_tau_intensity_homogeneity': 0.542449414730072, 'dendrite_tau_bead_count': 23.0}
-WT_2: ✅ {'tau_axon_continuity_index': 0.0, 'soma_tau_intensity_homogeneity': 0.6090307831764221, 'dendrite_tau_bead_count': 43.0}
-WT_3: ✅ {'tau_axon_continuity_index': 1.0, 'soma_tau_intensity_homogeneity': 0.0, 'dendrite_tau_bead_count': 29.0}
-WT_4: ✅ {'tau_axon_continuity_index': 1.0, 'soma_tau_intensity_homogeneity': 0.0, 'dendrite_tau_bead_count': 0.0}
-WT_5: ✅ {'tau_axon_continuity_index': 0.0, 'soma_tau_intensity_homogeneity': 0.7181103229522705, 'dendrite_tau_bead_count': 25.0}

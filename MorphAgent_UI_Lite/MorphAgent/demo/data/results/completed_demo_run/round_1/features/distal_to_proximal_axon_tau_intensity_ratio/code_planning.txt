@@ -1,149 +1,418 @@
-Here's the detailed implementation plan for the `extract(img, *segmentation_masks)` function based on the requirements and information provided.
+## Implementation Plan: `distal_to_proximal_axon_tau_intensity_ratio`
+
+### 1. Understanding the Feature
+
+`distal_to_proximal_axon_tau_intensity_ratio` measures how Tau fluorescence intensity is spatially distributed along the neuron from regions close to the nucleus/cell body toward more distal cellular or axonal extensions.
+
+Biological interpretation:
+
+- **Proximal region**: Tau signal close to the nucleus / soma, approximating the proximal axonal or perinuclear compartment.
+- **Distal region**: Tau signal far from the nucleus, approximating distal axonal or neuritic regions.
+- **Feature value**:
+
+```text
+mean Tau intensity in distal axonal/cytoplasmic region
+-------------------------------------------------------
+mean Tau intensity in proximal axonal/cytoplasmic region
+```
+
+Interpretation of the ratio:
+
+- `> 1`: Tau intensity is enriched distally, consistent with distal Tau accumulation or redistribution.
+- `≈ 1`: Tau intensity is relatively uniform between proximal and distal regions.
+- `< 1`: Tau intensity is stronger proximally/perinuclearly.
+
+Because the dataset is single-channel Tau fluorescence, the same image provides both morphology signal and Tau intensity. The cell and nucleus masks are critical for defining biologically meaningful proximal/distal compartments.
 
 ---
 
-## **Implementation Plan for `extract(img, *segmentation_masks)`**
+### 2. Input Analysis
 
-### **1. Understanding the Feature**
-- **Feature Name:** `distal_to_proximal_axon_tau_intensity_ratio`
-- **Measurement Goal:** This feature calculates the **ratio between the fluorescence intensity of Tau protein in the distal axonal regions and the proximal axonal regions**. 
-- **Biological Context:** Tau aggregation typically starts in distal regions of axons before progressing proximally near the soma. By extracting this ratio, we aim to capture early pathological redistribution (distal depletion or aggregation) of Tau in axons, which is a hallmark of neurodegenerative processes like Alzheimer’s disease.
-- **Mathematical Definition:**
-  - Distal region: Terminal portion of the axon, furthest from the soma.
-  - Proximal region: Axonal region nearest the soma.
-  - **Ratio = Mean Intensity (Distal Region) / Mean Intensity (Proximal Region)**
+#### Primary input
 
----
+`img`
 
-### **2. Input Analysis**
-#### **Inputs:**
-1. **Image (Required):**
-   - **Shape:** `(2048, 2048)` (2D grayscale MIP image).
-   - **Dtype:** `uint16`.
-   - **Meaning:** Represents fluorescence intensities of Tau protein across different compartments of neurons.
-2. **Segmentation Masks (Optional):**
-   - **Purpose:** To define relevant biological regions for intensity measurements.
-   - **Available Masks:**
-     - `seg["mask_filament"]`: Represents axonal segmentation (primary mask for feature extraction).
-     - `seg["mask_cell"]`: Defines the whole cell region (used to locate the soma).
-     - `seg["mask_nucleus"]`: Defines the nucleus (core region of the soma).
-   - **Value Format:** Binary (0 = background, 1 = region of interest).
+- 2D numpy array.
+- Shape typically `(1536, 1536)`.
+- Dtype `uint16`.
+- Single-channel Tau fluorescence MIP.
+- Quantitative intensity should be computed from this image directly.
 
-#### **Key Masks Used:**
-1. **`mask_cell`:** Defines the soma. Needed to identify the soma center and locate the proximal end of the axon.
-2. **`mask_filament`:** Focuses on Tau-positive axonal regions. The axon’s proximity (distal or proximal) will be evaluated relative to the soma.
+#### Segmentation masks
 
-#### **Requirements:**
-- Computation is for a single cell per image.
-- Masks may directly correspond to features of interest (e.g., axons through `mask_filament` and soma through `mask_cell/nucleus`).
-- Dimensions of masks and `img` must match.
+The function signature may be:
 
----
+```python
+def extract(img, *segmentation_masks):
+```
 
-### **3. Algorithm Design**
-The feature extraction will involve the following steps:
+The segmentation masks are expected to be provided as a dictionary, usually as the first element of `segmentation_masks`.
 
-#### **3.1 Preprocessing**
-- **Input validation:**
-  - Ensure `img` and all provided masks have the same dimensions.
-  - Ensure `img` has `uint16` data type (convert to `float32` for processing).
-  - If segmentation masks are missing (e.g., empty `segmentation_masks` or `mask_droplet` has no foreground objects), raise a warning or return `NaN`.
+The implementation should access masks by key only:
 
-- **Normalize the image:**
-  - Scale `img` pixel intensities to range `[0.0, 1.0]` for numerical stability:
-    - `img_normalized = img / np.max(img)`.
+```python
+seg = segmentation_masks[0] if segmentation_masks and isinstance(segmentation_masks[0], dict) else {}
+cell_mask = seg.get("mask_cell")
+nucleus_mask = seg.get("mask_nucleus")
+```
 
-#### **3.2 Soma Detection**
-1. **Find the Soma Center:**
-   - Use the nucleus mask (`mask_nucleus`) if available; otherwise, fall back to the cell mask (`mask_cell`).
-   - Compute the centroid of the binary mask as the soma center:
-     - `centroid = (cy, cx), where cx = mean(x-coords), cy = mean(y-coords)`.
-   - **Edge Case:** If `mask_nucleus` and `mask_cell` are empty, return `NaN`.
+Relevant masks:
 
-2. **Define Proximal/Distal Axonal Regions Based on Soma Center:**
-   - Use the axon mask (`mask_filament`) and compute the Euclidean distance of each axonal pixel from the soma center.
-   - Threshold distances:
-     - **Proximal Region:** Pixels in the `mask_filament` where distance ≤ 30% of the total axonal length.
-     - **Distal Region:** Pixels in the `mask_filament` where distance ≥ 70% of the total axonal length.
+| Mask | Use |
+|---|---|
+| `mask_cell` | Defines the whole cellular/neuron region of interest |
+| `mask_nucleus` | Defines the proximal origin / soma reference |
+| `mask_bundle`, `mask_filament`, `mask_droplet` | Not required for the core ratio, but may optionally help define Tau-positive axonal structures if cell mask is unavailable |
 
-#### **3.3 Intensity Calculation**
-1. **Extract Axonal Pixel Intensities from the Image:**
-   - Mask the input image `img` with the distal and proximal regions of the axon:
-     - `distal_intensities = img[distal_region_mask]`
-     - `proximal_intensities = img[proximal_region_mask]`.
+The preferred region for this feature is:
 
-2. **Compute Mean Intensities for Each Region:**
-   - Calculate the average intensity for the distal and proximal axon regions:
-     - `mean_distal = np.mean(distal_intensities)`
-     - `mean_proximal = np.mean(proximal_intensities)`.
+```text
+cytoplasmic / neuritic ROI = mask_cell AND NOT mask_nucleus
+```
 
-#### **3.4 Calculate the Ratio**
-- Compute the final metric as:
-  - `ratio = mean_distal / mean_proximal`.
-- **Edge Case Handling:**
-  - If `mean_proximal` is `0` or too close to zero, set `ratio = NaN` (avoid division by zero).
-  - If either region contains no pixels (e.g., due to erroneous/missing segmentation), set `ratio = NaN`.
-
-#### **3.5 Post-Processing**
-- **Result Aggregation:**
-  - Output the computed ratio as a single float value.
-- **Scaling or Transformations:**
-  - Ensure no additional scaling is applied to the output (already normalized during preprocessing).
+This is used as a practical approximation of axonal/cytoplasmic Tau-containing territory because no dedicated axon mask is available.
 
 ---
 
-### **4. Edge Cases**
-1. **Empty or Missing Masks:**
-   - If `mask_cell` or `mask_filament` is missing or has no foreground pixels, return `NaN` (not enough information to compute the ratio).
-   - If `img` contains no fluorescence signal (all zeros), return `NaN`.
+### 3. Algorithm Design
 
-2. **Small Axonal Regions:**
-   - If the proximal or distal region of the axon contains no pixels, return `NaN`.
+#### 3.1 Preprocessing
 
-3. **Division by Zero:**
-   - If `mean_proximal = 0`, return `NaN` since the ratio cannot be computed.
+1. **Import dependencies inside the function**
 
-4. **Unexpected Dimensions:**
-   - If `img` is not 2D or dimensions of `img` and masks do not match, raise a `ValueError` with an appropriate error message.
+   Required likely imports:
+
+   - `numpy as np`
+   - `scipy.ndimage as ndi`
+   - optionally `skimage.filters`, `skimage.morphology`, `skimage.measure` for fallback thresholding
+
+2. **Convert image to floating point**
+
+   Convert `img` to `float64` or `float32`.
+
+   ```text
+   img_float = img.astype(float)
+   ```
+
+   The ratio is dimensionless, so no global normalization is required.
+
+3. **Handle dimensionality**
+
+   Expected input is 2D. Still, robust handling should include:
+
+   - If image has singleton dimensions, squeeze them.
+   - If image is 3D but one dimension appears to be a channel dimension, select the single channel if possible.
+   - If image is a z-stack unexpectedly, compute a maximum-intensity projection.
+   - If image cannot be reduced to 2D, return `NaN`.
+
+4. **Prepare masks**
+
+   For each mask used:
+
+   - Squeeze singleton dimensions.
+   - Confirm shape matches the image.
+   - Convert to boolean using `mask > 0`.
+   - Ignore masks with mismatched shape after squeezing.
+
+   ```text
+   cell = mask_cell > 0
+   nucleus = mask_nucleus > 0
+   ```
+
+5. **Background correction**
+
+   Recommended but conservative:
+
+   - If a valid cell mask exists, estimate background from pixels outside the cell.
+   - Use a robust statistic such as the median or low percentile of non-cell pixels.
+   - Subtract background and clip at zero.
+
+   Conceptually:
+
+   ```text
+   background = median(img[outside_cell])
+   img_corrected = max(img_float - background, 0)
+   ```
+
+   If no valid outside-cell region exists, use a low percentile of the whole image, e.g. 1st percentile.
+
+   This reduces bias from uniform camera/background signal without changing the biological ratio strongly.
 
 ---
 
-### **5. Implementation Notes**
-- **Library Dependencies:**
-  - Use `numpy` for numerical operations (e.g., masking, mean calculations).
-  - Use `scipy.ndimage` for centroid calculation (if centroid functions are needed).
-  - Use `tifffile` for `.tif` image I/O, if needed (details not required here).
-- **Segmentation Mask Constraints:**
-  - Binary masks are assumed, as described in the dataset details.
-- **Performance Considerations:**
-  - Preprocess and validate masks before further computation to avoid unnecessary calculations on invalid inputs.
-- **Biological Assumptions:**
-  - The soma is the reference point for defining proximal and distal axonal regions.
-  - Axonal segmentation (`mask_filament`) accurately represents Tau-stained axons.
+#### 3.2 Define the Analysis ROI
+
+Preferred ROI:
+
+```text
+analysis_roi = cell_mask AND NOT nucleus_mask
+```
+
+This excludes nuclear signal and focuses on cytoplasmic/neuritic Tau.
+
+If `mask_cell` is unavailable or empty:
+
+1. Try to derive a fallback cell/Tau-positive ROI from the image using thresholding:
+   - Smooth image lightly.
+   - Apply Otsu or percentile threshold.
+   - Remove tiny objects.
+   - Fill small holes.
+
+2. If aggregate masks are available, optionally use their union as a restrictive fallback:
+
+```text
+fallback_roi = mask_bundle OR mask_filament OR mask_droplet
+```
+
+However, this should be a last resort because the feature is intended to compare Tau intensity across spatial regions, not only segmented aggregates.
+
+If no usable ROI can be constructed, return `NaN`.
 
 ---
 
-### **Pseudocode Summary**
-```plaintext
-1. Validate inputs (img and segmentation masks).
-2. Normalize `img` to [0.0, 1.0].
-3. Compute soma center from `mask_nucleus` or `mask_cell` (fallback if one is missing).
-4. Compute distances of axonal (`mask_filament`) pixels to soma center.
-   - Define proximal region (≤30% distance).
-   - Define distal region (≥70% distance).
-5. Extract and compute mean fluorescence intensities for distal and proximal regions.
-6. Calculate ratio = mean_distal / mean_proximal.
-7. Handle edge cases:
-   - Empty masks → NaN.
-   - Division by zero → NaN.
-   - Missing pixels in proximal/distal regions → NaN.
-8. Return the ratio as a single float value.
+#### 3.3 Define Proximal and Distal Regions
+
+The central problem is defining “proximal” and “distal” without a dedicated axon mask.
+
+Use the nucleus as the spatial origin.
+
+##### Case A: Valid nucleus mask available
+
+1. Compute the distance from every pixel to the nearest nuclear pixel:
+
+```text
+distance_to_nucleus = distance_transform_edt(~nucleus)
+```
+
+2. Consider only distances inside `analysis_roi`.
+
+3. Define proximal and distal compartments using distance quantiles.
+
+Recommended default:
+
+```text
+proximal region = analysis_roi pixels with distance <= 33rd percentile
+distal region   = analysis_roi pixels with distance >= 67th percentile
+```
+
+The middle third is ignored to improve separation between proximal and distal compartments.
+
+Advantages:
+
+- Robust to variable cell size.
+- Ensures both regions contain a reasonable number of pixels.
+- Avoids hard-coded pixel distances that may not generalize across samples.
+
+##### Case B: Nucleus missing or empty
+
+Use the centroid of the cell mask as a fallback soma/proximal reference.
+
+1. Compute cell centroid from `analysis_roi` or `cell`.
+2. Compute Euclidean distance from every ROI pixel to that centroid.
+3. Define proximal and distal using the same 33rd/67th percentile rule.
+
+This is less biologically precise but allows the feature to remain computable.
+
+---
+
+#### 3.4 Compute Tau Intensity Ratio
+
+For the two spatial regions:
+
+```text
+proximal_values = img_corrected[proximal_mask]
+distal_values   = img_corrected[distal_mask]
+```
+
+Compute area-normalized mean intensity:
+
+```text
+proximal_mean = mean(proximal_values)
+distal_mean = mean(distal_values)
+```
+
+Then compute:
+
+```text
+ratio = distal_mean / proximal_mean
+```
+
+Use a small epsilon or explicit invalid handling for near-zero denominators.
+
+Recommended behavior:
+
+- If proximal region is empty: return `NaN`.
+- If distal region is empty: return `NaN`.
+- If proximal mean is zero or extremely close to zero:
+  - If distal mean is also zero, return `0.0` or `NaN`; `NaN` is more explicit.
+  - If distal mean is positive, return `NaN` or use epsilon. For biological feature extraction, `NaN` is preferable because the ratio is not well-defined.
+
+Final output must be converted to a Python float:
+
+```text
+return float(ratio)
 ```
 
 ---
 
-### **Output**
-- A single float value representing the `distal_to_proximal_axon_tau_intensity_ratio`.
-- Return `NaN` for invalid inputs or edge cases.
+### 4. Edge Cases
 
-This structured plan ensures robust feature extraction while considering biological, mathematical, and dataset-specific constraints.
+#### Empty or missing `mask_cell`
+
+Handling:
+
+1. Try image-based threshold fallback.
+2. Try aggregate-mask union fallback.
+3. If no valid ROI, return `NaN`.
+
+#### Empty or missing `mask_nucleus`
+
+Handling:
+
+- Use the centroid of the cell/ROI as the proximal reference.
+- If centroid cannot be computed, return `NaN`.
+
+#### Nucleus overlaps entire cell
+
+If:
+
+```text
+analysis_roi = cell AND NOT nucleus
+```
+
+is empty or too small, return `NaN`.
+
+#### Very small ROI
+
+If the cytoplasmic/axonal ROI has too few pixels, e.g. less than 50–100 pixels, quantile-based proximal/distal partitioning is unreliable.
+
+Return `NaN`.
+
+#### Proximal or distal region too small
+
+If either region has too few pixels, return `NaN`.
+
+A reasonable minimum could be:
+
+```text
+min_pixels = 25 or 50
+```
+
+#### Mismatched mask/image shapes
+
+- Squeeze mask dimensions.
+- If still mismatched, ignore that mask.
+- Do not resize masks unless there is an explicit, known reason; resizing segmentation masks can introduce spatial errors.
+
+#### Multiple cells or nuclei
+
+This dataset appears to be single-neuron/single-cell oriented, but fields may contain multiple segmented objects.
+
+Robust strategy:
+
+- Treat the union of all cell pixels as the ROI.
+- Treat the union of all nuclei as the proximal reference.
+- Distance transform to the nearest nucleus naturally handles multiple nuclei.
+
+The returned feature is then an image-level area-weighted distal/proximal ratio.
+
+#### Binary versus instance masks
+
+Masks may be binary or labeled. For this feature, instance identity is not necessary.
+
+Use:
+
+```text
+mask > 0
+```
+
+for all masks.
+
+#### Image contains NaN or inf
+
+Before computation:
+
+- Replace non-finite values with zero or ignore them.
+- If most values are non-finite, return `NaN`.
+
+#### Saturated pixels
+
+Saturation is possible in `uint16` fluorescence images. The feature should still use the raw intensity values because the ratio compares regions within the same image. No clipping beyond background subtraction is needed.
+
+---
+
+### 5. Implementation Notes Specific to This Dataset
+
+1. **Use the raw `image.tif` data represented by `img`**
+
+   Do not use `slices/slice_0000.png` or other derived visualization files for quantitative computation.
+
+2. **Single-channel assumption**
+
+   The image is Tau fluorescence only. There is no separate axon, soma, or nuclear fluorescence channel. Therefore:
+
+   - `mask_nucleus` provides the spatial origin.
+   - `mask_cell` provides the cell/neurite territory.
+   - Tau intensity is read directly from `img`.
+
+3. **Approximation of axonal regions**
+
+   Because there is no explicit axon mask, distal/proximal axonal regions are approximated by distance within the non-nuclear cell mask.
+
+   Recommended conceptual definition:
+
+   ```text
+   proximal axonal/cytoplasmic compartment = nearest third of non-nuclear cell pixels to nucleus
+   distal axonal/cytoplasmic compartment = farthest third of non-nuclear cell pixels from nucleus
+   ```
+
+4. **Do not rely on positional ordering of masks**
+
+   The segmentation input should be treated as a dictionary.
+
+   Correct:
+
+   ```text
+   seg.get("mask_cell")
+   seg.get("mask_nucleus")
+   ```
+
+   Avoid:
+
+   ```text
+   segmentation_masks[0] as cell
+   segmentation_masks[1] as nucleus
+   ```
+
+5. **Return exactly one scalar float**
+
+   The final feature is a single ratio.
+
+   Example valid returns:
+
+   - `1.34`
+   - `0.82`
+   - `float("nan")` if undefined
+
+6. **Recommended final formula**
+
+```text
+distal_to_proximal_axon_tau_intensity_ratio =
+    mean(background_corrected_tau_intensity in distal non-nuclear cell ROI)
+    /
+    mean(background_corrected_tau_intensity in proximal non-nuclear cell ROI)
+```
+
+where:
+
+```text
+non-nuclear cell ROI = mask_cell > 0 AND mask_nucleus == 0
+
+proximal ROI = pixels in non-nuclear cell ROI with distance-to-nucleus
+               in the lowest third of ROI distances
+
+distal ROI = pixels in non-nuclear cell ROI with distance-to-nucleus
+             in the highest third of ROI distances
+```
+
+This implementation gives a biologically interpretable, robust image-level measure of distal Tau enrichment.

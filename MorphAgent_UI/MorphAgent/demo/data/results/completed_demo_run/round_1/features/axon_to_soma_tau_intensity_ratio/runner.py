@@ -99,12 +99,12 @@ try:
 
     # Load segmentation as key-value dict (key = filename stem, e.g. mask_cell, mask_nucleus)
     seg = dict()  # seg['mask_cell'], seg['mask_nucleus'], etc. Keys from filenames.
-    if len(sys.argv) >= 3 and tifffile is not None:
+    if len(sys.argv) >= 3:
         for i in range(2, len(sys.argv)):
             seg_path = Path(sys.argv[i]).resolve()
             if seg_path.exists():
                 key = seg_path.stem  # e.g. mask_cell from mask_cell.tif
-                seg[key] = tifffile.imread(str(seg_path))
+                seg[key] = load_image(seg_path)
                 print(f'Seg loaded {key!r} from: {seg_path.name}', file=sys.stderr)
             else:
                 print(f'Warning: Segmentation file not found: {seg_path}', file=sys.stderr)
@@ -112,10 +112,18 @@ try:
     if len(seg) == 0:
         image_dir = image_path.parent
         seg_dir = image_dir / 'segmentation'
-        if seg_dir.exists() and tifffile is not None:
-            for seg_file in sorted(seg_dir.glob('*.tif')):
+        if seg_dir.exists():
+            _skip = ('visualization', 'visualisation', 'overlay', 'preview', 'rgb', 'color', 'colour', 'summary')
+            for seg_file in sorted(seg_dir.iterdir()):
+                if not seg_file.is_file():
+                    continue
+                if seg_file.suffix.lower() not in {'.tif', '.tiff', '.png', '.jpg', '.jpeg', '.bmp', '.gif'}:
+                    continue
+                stem_l = seg_file.stem.lower()
+                if any(tok in stem_l for tok in _skip):
+                    continue
                 key = seg_file.stem
-                seg[key] = tifffile.imread(str(seg_file))
+                seg[key] = load_image(seg_file)
                 print(f'Auto-loaded seg {key!r} from: {seg_file.name}', file=sys.stderr)
     # Backward compat: list in sorted key order for extract(img, *segmentation_masks)
     segmentation_masks = [seg[k] for k in sorted(seg.keys())] if seg else []
@@ -151,16 +159,41 @@ try:
         'np': np,  # Only numpy is pre-imported as a minimal convenience
     }
 
-    # Function to auto-install missing packages
+    # Auto-install policy (inlined: sandbox env has no MorphAgent package).
+    _CORE_SCIENCE = {
+        'numpy', 'scipy', 'pandas', 'scikit-image', 'skimage', 'scikit-learn', 'sklearn',
+        'opencv-python', 'opencv-python-headless', 'cv2', 'pillow', 'pil', 'matplotlib',
+        'tifffile', 'networkx', 'mahotas', 'h5py', 'statsmodels', 'imageio', 'pywavelets',
+        'pyyaml', 'yaml', 'tqdm', 'natsort', 'imagecodecs', 'seaborn',
+    }
+    def _norm_pkg(name):
+        return (name or '').strip().lower().replace('_', '-')
+    def _is_core_pkg(name):
+        top = (name or '').split('.')[0]
+        return _norm_pkg(name) in {_norm_pkg(p) for p in _CORE_SCIENCE} or top.lower() in _CORE_SCIENCE
     def auto_install_package(package_name, conda_env=None):
-        """Try to install a missing package"""
+        """Try to install a missing non-core package into the code sandbox."""
+        import re
         import subprocess
         import sys
+        name = (package_name or '').strip()
+        if not name:
+            return False
+        if re.search(r'(==|!=|<=|>=|~=|===|<|>|=[0-9])', name):
+            print(f'[Auto-install] Blocked version pin: {name!r}', file=sys.stderr)
+            return False
+        if _is_core_pkg(name):
+            print(
+                f'[Auto-install] Blocked core package {name!r} — '
+                'use the frozen sandbox stack / current APIs (graycomatrix not greycomatrix)',
+                file=sys.stderr,
+            )
+            return False
         try:
             if conda_env:
-                cmd = ['conda', 'run', '-n', conda_env, 'pip', 'install', package_name]
+                cmd = ['conda', 'run', '-n', conda_env, 'pip', 'install', name]
             else:
-                cmd = [sys.executable, '-m', 'pip', 'install', package_name]
+                cmd = [sys.executable, '-m', 'pip', 'install', name]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 return True
@@ -168,10 +201,10 @@ try:
         except Exception:
             return False
 
-    # Get conda environment for auto-install
-    conda_env_for_install = 'morphagent'
+    # Get conda environment for auto-install (UI code sandbox, not the Qt UI env)
+    conda_env_for_install = 'morphagent_lite'
     if conda_env_for_install is None:
-        conda_env_for_install = os.environ.get('CONDA_ENV', 'morphagent')
+        conda_env_for_install = os.environ.get('CONDA_ENV', 'morphagent_lite')
 
     # Try to execute the code, with automatic package installation on ImportError
     max_import_retries = 2
@@ -182,36 +215,31 @@ try:
             break  # Success, exit retry loop
         except ImportError as e:
             import_error_str = str(e)
-            # Extract package name from ImportError message
-            # Examples: "No module named 'scipy.stats'" -> "scipy"
-            #          "cannot import name 'stats' from 'scipy'" -> "scipy"
             package_name = None
             if "No module named" in import_error_str:
-                # Extract module name (e.g., "scipy.stats" -> "scipy")
                 import re
                 match = re.search(r"No module named ['\"]([^'\"]+)['\"]", import_error_str)
                 if match:
-                    full_module = match.group(1)
-                    # Get top-level package (e.g., "scipy.stats" -> "scipy")
-                    package_name = full_module.split('.')[0]
+                    package_name = match.group(1).split('.')[0]
             elif "cannot import name" in import_error_str:
-                # Extract module name (e.g., "cannot import name 'stats' from 'scipy'" -> "scipy")
                 import re
                 match = re.search(r"from ['\"]([^'\"]+)['\"]", import_error_str)
                 if match:
                     package_name = match.group(1).split('.')[0]
 
             if package_name and retry < max_import_retries - 1:
-                # Try to install the package
                 print(f'[Auto-install] Attempting to install missing package: {package_name}', file=sys.stderr)
                 if auto_install_package(package_name, conda_env=conda_env_for_install):
                     print(f'[Auto-install] Successfully installed {package_name}, retrying execution...', file=sys.stderr)
-                    continue  # Retry execution
+                    continue
                 else:
-                    print(f'[Auto-install] Failed to install {package_name}', file=sys.stderr)
+                    print(f'[Auto-install] Refused or failed to install {package_name}', file=sys.stderr)
 
-            # If we can't install or this is the last retry, raise the error
-            exec_error = f'Import error in extract.py: {e}. Tried to auto-install but failed.'
+            exec_error = (
+                f'Import error in extract.py: {e}. '
+                'Sandbox policy: do not reinstall core science packages; '
+                'use current APIs (e.g. graycomatrix not greycomatrix).'
+            )
             exec_error_tb = traceback.format_exc()
             raise ValueError(f'{exec_error}\nTraceback:\n{exec_error_tb}')
         except SyntaxError as e:

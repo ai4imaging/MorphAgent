@@ -1,9 +1,14 @@
 {
-  "total_samples": 5,
+  "total_samples": 10,
   "successful": 0,
-  "skipped_user_seg": 5,
+  "skipped_user_seg": 10,
   "failed": 0,
   "results": {
+    "MU_1": "skipped_user_seg",
+    "MU_2": "skipped_user_seg",
+    "MU_3": "skipped_user_seg",
+    "MU_4": "skipped_user_seg",
+    "MU_5": "skipped_user_seg",
     "WT_1": "skipped_user_seg",
     "WT_2": "skipped_user_seg",
     "WT_3": "skipped_user_seg",

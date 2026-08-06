@@ -1,143 +1,461 @@
-# Implementation Plan for `axon_to_soma_tau_intensity_ratio`
+## Implementation Plan: `axon_to_soma_tau_intensity_ratio`
 
-The goal of this feature is to compute the ratio of the mean Tau fluorescence intensity in axonal regions to the mean intensity in the soma. This ratio quantifies the proper enrichment of Tau in axons versus the soma and serves as a metric for detecting Tau mislocalization, which is a hallmark of pathological changes.
+### 1. Understanding the Feature
 
----
+**Feature:** `axon_to_soma_tau_intensity_ratio`
 
-### **1. Understanding the Feature**
-**Biological Property Captured:**
-- Healthy neurons exhibit Tau primarily localized in axons (axonal enrichment), with minimal accumulation in the soma, creating a high axon-to-soma intensity ratio.
-- Pathological conditions often involve Tau mislocalization, where the axonal Tau enrichment decreases, and abnormal Tau accumulation appears in the soma. This results in a lower axon-to-soma intensity ratio.
-- This feature, therefore, measures the degree to which this mislocalization has occurred.
+This feature measures:
 
-**Key Insight:**
-- The feature requires us to focus on two regions: soma and axons. Using the fluorescence intensity values from these regions, we compute the mean intensity in each and calculate the axon-to-soma ratio.
+\[
+\text{axon\_to\_soma\_tau\_intensity\_ratio}
+=
+\frac{\text{mean Tau intensity in axonal regions}}
+{\text{mean Tau intensity in soma}}
+\]
 
----
+Biologically, Tau is normally enriched in axons. In pathological or mislocalized states, Tau may accumulate abnormally in the soma. Therefore:
 
-### **2. Input Analysis**
+- **High ratio**: Tau remains relatively enriched in axonal/fibrous regions compared with soma.
+- **Low ratio**: somatic Tau intensity is high relative to axonal Tau, suggesting Tau mislocalization or loss of normal axonal enrichment.
+- **Near 1**: similar Tau intensity in axonal and somatic compartments.
 
-#### **Inputs**
-1. **Primary Image (`img`)**:
-   - A 2D single-channel grayscale fluorescence image (shape: `(2048, 2048)` or `(1536, 1536)`).
-   - Intensity represents Tau protein fluorescence.
-   - dtype: `uint16`, value range: `0` to `9042`.
-
-2. **Segmentation Masks** (Optional):
-   - Segmentation masks help define specific regions of interest (ROI) in the image. Here, we will use two keys:
-     - **`seg["mask_cell"]`:** Defines the whole cell boundary (soma + dendrites + axons).
-     - **`seg["mask_filament"]`:** Defines thin filament-like structures, which include axonal regions.
-   - Masks are binary (value range = {0, 1}), with the same spatial dimensions as `img` (e.g., `(2048, 2048)`).
-   - If a segmentation mask is empty or unavailable (e.g., all zeros), fallback logic must be implemented.
+Because this dataset is single-channel Tau fluorescence, the raw image intensity directly represents Tau signal. The segmentation masks are needed to approximate the axonal and somatic regions.
 
 ---
 
-#### **Relevance of Each Input**
-1. **Image (`img`)**:
-   - Primary source for fluorescence intensity values of Tau protein.
-   - Will be used to compute mean intensities for defined regions of interest (soma, axons).
+### 2. Input Analysis
 
-2. **Segmentation Masks (`seg`)**:
-   - **`mask_cell`**: Extracts the soma region (the cytoplasmic area excluding axons and dendrites). Used to calculate mean Tau intensity in the soma.
-   - **`mask_filament`**: Extracts the axonal regions for axonal Tau intensity measurement.
+#### Primary image: `img`
 
----
+- Expected shape: `(1536, 1536)` or similar 2D shape.
+- Expected dtype: `uint16`.
+- Single-channel Tau fluorescence image.
+- Use this image for quantitative intensity extraction.
+- Convert to floating point internally before computation.
 
-### **3. Algorithm Design**
+#### Segmentation masks
 
-To compute the `axon_to_soma_tau_intensity_ratio`, follow these steps:
+Segmentation is expected to be passed as a dictionary, likely as the first item in `*segmentation_masks`.
 
-#### **3.1 Preprocessing**
-1. **Validate Inputs**:
-   - Ensure `img` is a 2D array (not 3D or multi-channel) of the expected shape and `uint16` dtype.
-   - Check if required keys (`mask_cell`, `mask_filament`) exist in segmentation dictionaries. If not available, return `NaN` or a pre-defined error value (e.g., `-1`).
+Use masks by key only:
 
-2. **Normalize Image Intensities**:
-   - Convert image intensities to a 0-1 range for stability in calculations:
-     ```math
-     img_norm = (img - img.min()) / (img.max() - img.min())
-     ```
+```text
+seg["mask_cell"]
+seg["mask_nucleus"]
+seg["mask_bundle"]
+seg["mask_filament"]
+seg["mask_droplet"]
+```
 
-#### **3.2 Mask-Based Region Extraction**
-3. **Extract Regions of Interest**:
-   - Identify the axonal regions by masking `img` with `mask_filament`.
-   - Identify the soma region by masking `img` with the difference between `mask_cell` and `mask_filament`:
-     ```math
-     soma_mask = mask_cell - mask_filament
-     ```
+Relevant masks for this feature:
 
-   This ensures that overlapping regions are not double-counted.
+1. **`mask_cell`**
+   - Approximate whole-cell / cell-body region.
+   - Used to define the somatic compartment.
 
-4. **Filter Out Invalid Masks**:
-   - If `mask_cell` or `mask_filament` contains all zeros, return `NaN` or `-1` to indicate no valid segmentation.
+2. **`mask_nucleus`**
+   - Nuclear region.
+   - Excluded from soma because the biological feature is intended to compare axonal Tau to somatic/cytoplasmic Tau, not nuclear Tau.
 
-#### **3.3 Compute Mean Intensities**
-5. **Mean Tau Intensity in Axons**:
-   - Compute the mean intensity of the axonal regions:
-     ```math
-     mean_axon_intensity = mean(img_norm[mask_filament > 0])
-     ```
+3. **`mask_bundle`**
+   - Thick Tau bundle regions.
+   - Used as a strong proxy for axonal Tau-rich structures.
 
-6. **Mean Tau Intensity in Soma**:
-   - Compute the mean intensity of the soma regions:
-     ```math
-     mean_soma_intensity = mean(img_norm[soma_mask > 0])
-     ```
+4. **`mask_filament`**
+   - Thin Tau filament regions.
+   - Also used as a proxy for axonal regions.
 
-#### **3.4 Calculate Intensity Ratio**
-7. **Axon-to-Soma Ratio**:
-   - Compute the intensity ratio as:
-     ```math
-     axon_to_soma_ratio = mean_axon_intensity / mean_soma_intensity
-     ```
-   - This ratio quantifies the relative enrichment of Tau in axons compared to the soma.
-   - Return `NaN` if `mean_soma_intensity == 0` to avoid division by zero.
+5. **`mask_droplet`**
+   - Droplet-like Tau condensates.
+   - Not used to define axons.
+   - Should generally remain part of the soma if located in the cell body, because somatic Tau aggregates are biologically relevant to mislocalization.
 
----
+#### Region definitions
 
-### **4. Edge Cases**
+Because there is no explicit axon mask, define:
 
-1. **Empty Masks**:
-   - If `mask_cell` or `mask_filament` contains only zeros (e.g., no segmentation for soma or axons is found), return `NaN` or `-1`.
+- **Axonal region proxy**:
+  - Preferentially use the union of `mask_bundle` and `mask_filament`.
+  - These masks represent Tau-positive fibrous structures and are the best available proxy for axonal Tau enrichment.
 
-2. **Invalid Image Input**:
-   - If `img` is not a 2D single-channel grayscale image, raise a `ValueError` indicating incorrect input format.
+- **Soma region proxy**:
+  - Use `mask_cell` excluding `mask_nucleus`.
+  - Also exclude the axonal proxy mask from the soma to avoid overlap between numerator and denominator.
 
-3. **Zero Soma Intensity**:
-   - If `mean_soma_intensity == 0`, return `NaN` as the ratio would be undefined (division by zero).
+Formally:
 
-4. **Invalid Region Overlap**:
-   - If there is excessive overlap between `mask_filament` and `mask_cell` such that there is no dedicated soma region left, return a warning or `NaN`.
+```text
+axon_mask = mask_bundle OR mask_filament
+soma_mask = mask_cell AND NOT mask_nucleus AND NOT axon_mask
+```
+
+If bundle/filament masks are unavailable or empty, fall back to a spatial soma/axon approximation using the nucleus and cell masks.
 
 ---
 
-### **5. Implementation Notes**
+### 3. Algorithm Design
 
-1. **Dataset Format Handling**:
-   - Use the `tifffile` library for loading TIFF files if required.
-   - Ensure segmentation masks are loaded correctly using the `seg` dictionary keys (`seg["mask_cell"]`, `seg["mask_filament"]`).
+#### Step 1: Normalize input image dimensionality
 
-2. **Numerical Stability**:
-   - Normalize the image intensity before processing to handle variations in intensity ranges between samples.
+Although the dataset is described as 2D single-channel, implement defensively.
 
-3. **Single-Output Restriction**:
-   - The function should return a single `float` value (the axon-to-soma intensity ratio).
+Planned behavior:
 
-4. **Computation Bounds**:
-   - Use carefully designed conditions to ensure computational logic avoids errors (e.g., dividing by zero, region-less masks).
+1. Convert `img` to a NumPy array.
+2. Remove singleton dimensions using squeeze-like logic.
+3. If image is 2D, use directly.
+4. If image is 3D:
+   - If it appears to be a color or channel-last image, reduce to a single grayscale plane conservatively.
+   - If it appears to be a z-stack, use maximum-intensity projection along the z-axis.
+5. Convert the final 2D image to `float64` or `float32`.
+
+The feature should be computed from the raw TIFF-derived image, not from PNG slice views.
 
 ---
 
-### **Summary of Steps**
+#### Step 2: Parse segmentation input
 
-1. Validate inputs and check for required segmentation masks.
-2. Normalize the input image `img` to a 0-1 range.
-3. Extract axonal and soma regions using `mask_filament` and `mask_cell`.
-4. Compute mean intensity in axonal and soma regions.
-5. Calculate the axonal-to-soma intensity ratio as `mean_axon_intensity / mean_soma_intensity`.
-6. Handle edge cases such as missing masks, empty regions, or zero soma intensity.
-7. Return the computed ratio as a single float.
+The implementation should expect segmentation masks as a dictionary.
 
-### **Output**
-- A single `float` value representing the axon-to-soma Tau intensity ratio.
-- Return `NaN` or `-1` for error cases such as missing/empty masks or invalid inputs.
+Preferred access pattern:
+
+```text
+seg = segmentation_masks[0] if it is a dict else {}
+cell = seg.get("mask_cell")
+nucleus = seg.get("mask_nucleus")
+bundle = seg.get("mask_bundle")
+filament = seg.get("mask_filament")
+droplet = seg.get("mask_droplet")
+```
+
+Do not rely on positional order of masks.
+
+---
+
+#### Step 3: Convert masks to clean boolean masks
+
+For each available mask:
+
+1. Convert to NumPy array.
+2. Squeeze singleton dimensions.
+3. Verify shape matches the processed image shape.
+4. Convert to boolean using:
+
+```text
+mask_bool = mask > 0
+```
+
+This handles both binary masks and instance-label masks.
+
+If a mask is missing, empty, or shape-incompatible, treat it as unavailable.
+
+---
+
+#### Step 4: Define axonal region
+
+Primary axon definition:
+
+```text
+axon_mask = mask_bundle OR mask_filament
+```
+
+Then refine:
+
+```text
+axon_mask = axon_mask AND NOT mask_nucleus
+```
+
+If `mask_cell` is available, restrict axon to the cell mask only if this does not remove essentially all axon pixels:
+
+```text
+candidate = axon_mask AND mask_cell
+```
+
+Use `candidate` if it contains enough pixels. Otherwise keep the unrestricted bundle/filament union, because some segmentation pipelines may define the cell body more narrowly than the full axonal arbor.
+
+If both `mask_bundle` and `mask_filament` are empty or unavailable, use fallback logic:
+
+- If `mask_cell` and `mask_nucleus` are available:
+  - Define soma as a perinuclear/cell-body region.
+  - Define axon as the distal cytoplasm outside that soma proxy.
+- If this is also not possible, the feature is undefined and should return `NaN`.
+
+---
+
+#### Step 5: Define soma region
+
+Primary soma definition:
+
+```text
+soma_mask = mask_cell AND NOT mask_nucleus
+```
+
+Then remove axonal pixels from soma to avoid numerator/denominator overlap:
+
+```text
+soma_mask = soma_mask AND NOT axon_mask
+```
+
+Do **not** remove droplet regions from the soma, because somatic Tau condensates are biologically relevant to Tau mislocalization.
+
+If this soma mask is too small or empty, use fallback soma estimation.
+
+---
+
+#### Step 6: Fallback soma/axon approximation when axon masks are unavailable
+
+If no usable `mask_bundle` or `mask_filament` exists, estimate soma and axon spatially.
+
+Required masks for fallback:
+
+- `mask_cell`
+- `mask_nucleus`
+
+Fallback approach:
+
+1. Define cytoplasm:
+
+```text
+cytoplasm = mask_cell AND NOT mask_nucleus
+```
+
+2. Compute distance from each cytoplasmic pixel to the nucleus.
+
+3. Define soma as the perinuclear cytoplasmic region:
+
+```text
+soma_mask = cytoplasm pixels close to nucleus
+```
+
+A robust rule:
+
+```text
+soma radius = lower quartile or similar adaptive percentile of cytoplasmic distance-to-nucleus values
+```
+
+For example, soma could be the closest 25–35% of cytoplasmic pixels to the nucleus.
+
+4. Define axon-like region as distal cytoplasm:
+
+```text
+axon_mask = cytoplasm AND NOT soma_mask
+```
+
+This fallback is less biologically precise than using bundle/filament masks, but provides a reasonable compartmental proxy when explicit axonal structure masks are absent.
+
+---
+
+#### Step 7: Optional background correction
+
+Because fluorescence images can contain camera/background offset, perform robust background subtraction before computing means.
+
+Recommended strategy:
+
+1. If `mask_cell` is available:
+   - Estimate background from pixels outside the cell mask.
+   - Use a robust low percentile or median of outside-cell pixels.
+2. If outside-cell pixels are unavailable:
+   - Use a low percentile of the whole image, such as the 1st percentile.
+
+Then:
+
+```text
+img_corrected = img_float - background
+img_corrected = clip values below 0 to 0
+```
+
+This preserves intensity ratios while reducing background bias.
+
+If implementing minimal behavior, raw intensities can also be used, but background-corrected intensities are preferable for fluorescence quantification.
+
+---
+
+#### Step 8: Compute mean intensities
+
+Compute:
+
+```text
+axon_mean = mean(img_corrected[axon_mask])
+soma_mean = mean(img_corrected[soma_mask])
+```
+
+Only finite pixels should be included.
+
+If masks contain no valid pixels, the feature is undefined.
+
+---
+
+#### Step 9: Compute ratio
+
+Compute:
+
+```text
+ratio = axon_mean / soma_mean
+```
+
+Use a small epsilon only for numerical safety, but do not hide biologically invalid cases.
+
+Recommended behavior:
+
+- If `soma_mean` is finite and greater than zero:
+
+```text
+ratio = axon_mean / soma_mean
+```
+
+- If `soma_mean` is zero or extremely close to zero:
+  - Return `NaN`, because the ratio is unstable or undefined.
+
+Return the result as a single Python `float`.
+
+---
+
+### 4. Edge Cases
+
+#### Missing segmentation dictionary
+
+If no segmentation dictionary is provided, the function cannot reliably distinguish soma and axon.
+
+Recommended behavior:
+
+```text
+return NaN
+```
+
+#### Missing `mask_cell`
+
+Without a cell/soma mask, the denominator region cannot be defined reliably.
+
+Fallback is only possible if another reasonable soma proxy exists, but in this dataset there is no explicit soma mask beyond `mask_cell`.
+
+Recommended behavior:
+
+```text
+return NaN
+```
+
+#### Missing or empty `mask_nucleus`
+
+If `mask_cell` is available but `mask_nucleus` is missing:
+
+- Define soma as `mask_cell`.
+- Exclude axon mask if available:
+
+```text
+soma_mask = mask_cell AND NOT axon_mask
+```
+
+This is less precise because nuclear pixels may be included, but it is still usable.
+
+#### Empty `mask_filament`
+
+This is expected in the provided sample statistics.
+
+Use `mask_bundle` alone as the axonal proxy.
+
+#### Empty `mask_bundle` and `mask_filament`
+
+Use the nucleus/cell distance-based fallback if possible.
+
+If fallback is not possible, return `NaN`.
+
+#### Axon mask overlaps soma
+
+Remove axon pixels from soma:
+
+```text
+soma_mask = soma_mask AND NOT axon_mask
+```
+
+This prevents the same pixels from contributing to both numerator and denominator.
+
+#### Very small masks
+
+If either `axon_mask` or `soma_mask` has too few pixels, for example fewer than a small threshold such as 10–25 pixels, the mean intensity will be unstable.
+
+Recommended behavior:
+
+```text
+return NaN
+```
+
+#### Mismatched mask shape
+
+If a mask shape does not match the processed image shape:
+
+- Try simple squeezing if dimensions differ only by singleton axes.
+- Do not rescale masks automatically unless explicitly required.
+- If still incompatible, ignore that mask.
+
+#### Multiple cells or multiple nuclei
+
+If masks contain multiple connected components:
+
+- Treat the whole image as one field of view.
+- Compute global mean axonal intensity over all axon pixels.
+- Compute global mean somatic intensity over all soma pixels.
+- Return the global ratio.
+
+This is appropriate for a field-level feature.
+
+#### Saturated pixels
+
+Saturated pixels should remain included because they represent high Tau signal. No clipping above the native maximum is required.
+
+#### NaN or infinite image values
+
+Ignore non-finite pixels when computing means. If no finite pixels remain in either region, return `NaN`.
+
+---
+
+### 5. Implementation Notes Specific to This Dataset
+
+1. **Use the raw image array**
+   - The input `img` corresponds to `image.tif`.
+   - Do not use files from `slices/`.
+
+2. **Single-channel Tau fluorescence**
+   - No channel selection is normally needed.
+   - The image intensity directly represents Tau fluorescence.
+
+3. **Use segmentation by dictionary key**
+   - Access masks as `seg.get("mask_cell")`, etc.
+   - Never depend on mask order.
+
+4. **Best available biological proxy**
+   - Since no explicit axon segmentation is provided, use Tau bundle and filament masks as axonal-region proxies.
+   - Use the cell mask minus nucleus as the soma proxy.
+
+5. **Do not use genotype or group labels**
+   - The feature should be computed independently of WT/MU labels.
+
+6. **Return exactly one float**
+   - Valid measurement: finite ratio.
+   - Undefined measurement: `float("nan")`.
+
+7. **Recommended final definition**
+
+Primary feature definition:
+
+```text
+axon_mask = (mask_bundle OR mask_filament) AND NOT mask_nucleus
+
+soma_mask = mask_cell AND NOT mask_nucleus AND NOT axon_mask
+
+axon_to_soma_tau_intensity_ratio =
+    mean(background_corrected_tau_intensity over axon_mask)
+    /
+    mean(background_corrected_tau_intensity over soma_mask)
+```
+
+Fallback definition when axonal masks are unavailable:
+
+```text
+cytoplasm = mask_cell AND NOT mask_nucleus
+
+soma_mask = perinuclear cytoplasm close to nucleus
+
+axon_mask = distal cytoplasm outside soma_mask
+
+ratio = mean(axon intensity) / mean(soma intensity)
+```

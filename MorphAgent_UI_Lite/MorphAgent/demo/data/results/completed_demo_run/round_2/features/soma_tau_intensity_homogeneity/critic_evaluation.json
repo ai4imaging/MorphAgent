@@ -1,7 +1,0 @@
-{
-  "result_value": 0.542449414730072,
-  "passed": true,
-  "reason": "The extraction result measures the coefficient of variation for Tau intensity within the soma region, which aligns with the feature description and image content.",
-  "feedback": "The extraction result of 0.542449414730072 is a reasonable value for the variability in Tau intensity, indicating some heterogeneity within the somatic region. The methodology correctly handles input validation, exclusion of non-relevant areas, and calculates the coefficient of variation. The image shows varying intensity regions, supporting the result value.",
-  "full_response": "```json\n{\n    \"passed\": true,\n    \"reason\": \"The extraction result measures the coefficient of variation for Tau intensity within the soma region, which aligns with the feature description and image content.\",\n    \"feedback\": \"The extraction result of 0.542449414730072 is a reasonable value for the variability in Tau intensity, indicating some heterogeneity within the somatic region. The methodology correctly handles input validation, exclusion of non-relevant areas, and calculates the coefficient of variation. The image shows varying intensity regions, supporting the result value.\"\n}\n```"
-}

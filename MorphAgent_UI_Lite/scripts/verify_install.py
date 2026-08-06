@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import csv
 import importlib
+import math
 import sys
 from pathlib import Path
 
@@ -64,6 +66,30 @@ def main() -> int:
             errors.append(f"missing precomputed knowledge: {precomputed / name}")
     if not COMPLETED.is_dir():
         errors.append(f"missing completed_demo_run: {COMPLETED}")
+    elif (COMPLETED / "features.csv").is_file():
+        sys.path.insert(0, str(HANDOFF / "MorphAgent"))
+        from morphagent_ui.models import load_feature_cards
+
+        cards = load_feature_cards(COMPLETED)
+        if len(cards) != 5:
+            errors.append(f"expected 5 completed-run feature cards, found {len(cards)}")
+        if any(card.status != "retained" for card in cards):
+            errors.append("completed-run feature cards must all be retained")
+        with (COMPLETED / "features.csv").open(encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        feature_names = [name for name in (rows[0].keys() if rows else ()) if name != "sample_id"]
+        if len(rows) != 10:
+            errors.append(f"expected 10 completed-run samples, found {len(rows)}")
+        for name in feature_names:
+            values = [float(row[name]) for row in rows if row.get(name)]
+            if len(values) != len(rows):
+                errors.append(f"completed-run feature {name} has missing values")
+            elif not all(math.isfinite(value) for value in values):
+                errors.append(f"completed-run feature {name} has non-finite values")
+            elif len(set(values)) <= 1:
+                errors.append(f"completed-run feature {name} has no sample-to-sample variation")
+            elif not any(value != 0 for value in values):
+                errors.append(f"completed-run feature {name} is all zero")
 
     if errors:
         print("[FAIL] MorphAgent UI Lite verification failed:")

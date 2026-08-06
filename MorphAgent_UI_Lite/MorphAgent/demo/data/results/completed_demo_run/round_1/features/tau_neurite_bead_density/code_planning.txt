@@ -1,115 +1,818 @@
-# Implementation Plan for `extract(img, *segmentation_masks)`
+## Implementation Plan for `tau_neurite_bead_density`
+
+### 1. Understanding the Feature
+
+**Feature name:** `tau_neurite_bead_density`  
+**Feature category:** morphology  
+**Return type:** single `float`
+
+This feature measures the **density of bead-like Tau inclusions along neurites**, where neurites are approximated by Tau-positive axonal/dendritic structures such as filaments and bundles.
+
+Biologically, bead-like Tau inclusions appear as **localized bright punctate intensity peaks** distributed along otherwise elongated Tau-positive neurite structures. A higher value indicates that Tau signal is more fragmented, punctate, or aggregated along axons/dendrites, which may reflect pathological Tau aggregation or neurite degeneration.
+
+The feature should quantify:
+
+```text
+number of Tau bead-like intensity peaks aligned with neurite skeleton
+--------------------------------------------------------------------
+total neurite skeleton length
+```
+
+A practical output should be a scalar density, for example:
+
+```text
+beads per pixel of neurite skeleton
+```
+
+or, more interpretable:
+
+```text
+beads per 100 pixels of neurite skeleton
+```
+
+The implementation should return a single float, preferably:
+
+```text
+tau_neurite_bead_density = aligned_peak_count / skeleton_length_pixels
+```
+
+Optionally scaled by 100:
+
+```text
+tau_neurite_bead_density = 100 * aligned_peak_count / skeleton_length_pixels
+```
+
+The scaling choice should be fixed and documented. For this dataset, using **beads per 100 skeleton pixels** is recommended because raw per-pixel densities can be very small.
 
 ---
 
-### **1. Understanding the Feature**
-#### Feature Name: tau_neurite_bead_density
-This feature measures the density of bead-like Tau inclusions along the neurite skeleton (axons and dendrites). Capturing the density of intensity peaks aligned with the neurites provides a quantitative measure of Tau fragmentation and aggregation along these cellular structures. The presence of localized peaks or beads correlates with pathological Tau mislocalization, a hallmark of disease progression in tauopathies.
+### 2. Input Analysis
 
-#### Biological/Morphological Property of Interest:
-- **Tau fragmentation and aggregation:** Measuring the number of localized intensity peaks (beaded forms of Tau) aligned with axonal and dendritic structures provides insight into the morphological changes and pathology occurring during disease progression.
+#### Primary input
 
----
+```python
+img
+```
 
-### **2. Input Analysis**
-#### Inputs:
-1. **Image (`img`)**:
-   - Format: Single-channel grayscale 2D image (`uint16`), representing Tau fluorescence intensity.
-   - Resolution: Either `1536x1536` or `2048x2048` pixels.
+- 2D single-channel fluorescence image.
+- Expected shape: `(1536, 1536)`.
+- Expected dtype: `uint16`.
+- Contains Tau-associated fluorescence.
+- Structures visible in this image may include diffuse Tau, filaments, bundles, puncta, droplets, and cellular morphology.
 
-2. **Segmentation Masks (`*segmentation_masks`):
-   - Masks provided as binary images (`uint8`) with unique labels (0 for background, 1 for object regions).
-   - Relevant Masks:
-     - `mask_filament` — Highlights axons and dendrites where Tau beads are to be measured.
+The image is the source for detecting **localized intensity peaks**.
 
-#### Utilization:
-- **Primary Image (`img`)**:
-  - Extract Tau intensity values for feature computation.
-  - Identify localized peaks or "beads" related to pathological aggregation.
+#### Segmentation masks
 
-- **Segmentation Masks (`mask_filament`)**:
-  - Focus analysis on the neurite skeleton regions.
-  - Skeletonize neurite structures to narrow the search to their medial lines.
+Segmentation masks are optional but should be used if available. The segmentation object is expected to be passed as a dictionary, where keys are filename stems:
 
----
+```python
+seg["mask_cell"]
+seg["mask_nucleus"]
+seg["mask_bundle"]
+seg["mask_filament"]
+seg["mask_droplet"]
+```
 
-### **3. Algorithm Design**
-#### Step-by-Step Approach to Compute the Feature:
-1. **Preprocessing**:
-   - Normalize the intensity range of the input image (`img`):
-     - Convert from `uint16` to float and normalize between 0 and 1 for stable computation.
-   - Apply a Gaussian filter for noise reduction while preserving localized peak structures (typical Tau bead size ≈ 200–500 nm).
+Relevant masks for this feature:
 
-   If `mask_filament` is provided:
-   - Use the mask to isolate neurite regions (foreground pixels).
-   - Skeletonize the neurite mask to extract its medial axis, effectively converting regions to 1-pixel-wide lines.
+1. **`mask_filament`**
+   - Best direct mask for thin neurite-like Tau filaments.
+   - In the provided statistics, this mask may sometimes be empty.
 
-   If no masks are provided:
-   - Perform ridge detection or filament enhancement algorithms (e.g., Hessian-based detection) directly on the image to approximate neurite locations.
+2. **`mask_bundle`**
+   - Useful for thick Tau-positive neurite/bundle structures.
+   - Should be included as part of the neurite structure mask.
 
----
+3. **`mask_cell`**
+   - Defines the valid cellular region.
+   - Useful to exclude background peaks.
 
-2. **Localized Peak Detection**:
-   - Analyze the normalized image intensity along the neurite skeleton:
-     - Use a 1D sliding window or peak detection algorithm (e.g., `scipy.signal.find_peaks`) along each skeleton line to identify localized intensity peaks.
-     - Threshold peaks based on intensity prominence to exclude background noise or diffuse signal.
-     - Record peak positions (x, y coordinates) and magnitudes.
+4. **`mask_nucleus`**
+   - Should be excluded from neurite analysis because nuclear Tau signal is not neuritic.
 
----
+5. **`mask_droplet`**
+   - Represents droplet-like puncta.
+   - Should not define the neurite skeleton directly.
+   - However, droplet-like regions overlapping or near the neurite skeleton may contribute to bead-like peaks if they are intensity maxima.
 
-3. **Density Calculation**:
-   - Count the total number of peaks detected along the skeletonized neurite structures.
-   - Calculate the density as:
-     \[
-     \text{Density} = \frac{\text{Number of Peaks}}{\text{Skeleton Length}}
-     \]
-     - Skeleton length is derived from the summation of all non-zero pixels within the skeletonized mask.
+#### Recommended neurite region
 
----
+The neurite mask should be constructed as:
 
-4. **Post-Processing**:
-   - Scale the computed density to adjust for variations in image resolution (normalize by pixel dimensions if necessary).
-   - If no peaks or skeleton regions are detected, return a density of `0.0`.
+```text
+neurite_mask = mask_filament OR mask_bundle
+```
+
+Then restrict to cytoplasm if cell and nucleus masks are available:
+
+```text
+cytoplasm = mask_cell AND NOT mask_nucleus
+neurite_mask = neurite_mask AND cytoplasm
+```
+
+If both `mask_filament` and `mask_bundle` are unavailable or empty, a fallback image-derived neurite mask should be estimated from the Tau image inside the cell/cytoplasm.
 
 ---
 
-### **4. Edge Cases**
-#### Empty Masks:
-- If `mask_filament` is empty (maximum value = 0):
-  - Return `0.0` as no neurite structures are available for analysis.
+### 3. Algorithm Design
 
-#### Unexpected Image Dimensions:
-- Check that the input image shape matches the expected format (`1536x1536` or `2048x2048`). Reshape or pad if necessary.
+## 3.1 High-level computation
 
-#### Highly Diffuse Signal:
-- If intensity peaks fail to exceed the prominence threshold (due to diffuse fluorescence), explicitly return `0.0`.
+The feature should be computed as:
 
-#### Multiple Masks:
-- Support flexible segmentation mask inputs. Evaluate only relevant masks (neurite-related compartments like `mask_filament`).
+```text
+1. Build a neurite mask.
+2. Skeletonize the neurite mask.
+3. Detect localized bright intensity peaks in the Tau image.
+4. Keep only peaks that lie on or near the neurite skeleton.
+5. Count the aligned peaks.
+6. Normalize by neurite skeleton length.
+7. Return a single float density.
+```
 
----
+Recommended final formula:
 
-### **5. Implementation Notes**
-#### Dataset Format:
-- Use `tifffile` for loading `mask_filament` or other TIFF formats.
-- For peak detection and skeletonization, leverage popular libraries such as `scipy`, `skimage`, and `numpy`.
+```text
+tau_neurite_bead_density = 100.0 * aligned_peak_count / skeleton_length_pixels
+```
 
-#### Segmentation Mask Usage:
-- When a mask is provided (`mask_filament`), prioritize areas it delineates. Analysis outside the mask should be excluded.
-- Skeletonize masks via morphological thinning (`skimage.morphology.skeletonize`) to ensure proper medial axis extraction.
-
-#### Feature Scaling:
-- Since neuron lengths may vary across samples, normalize density metrics relative to skeleton length.
-
-#### Example Workflow:
-1. Load and normalize image intensity (convert to range [0, 1]).
-2. Isolate neurite areas using segmentation masks (if provided).
-3. Skeletonize neurite regions to simplify structures.
-4. Detect peaks along skeleton lines, filter based on prominence, and count beads.
-5. Divide peak count by skeleton length to yield density.
-6. Return density as the final output (single float).
+This returns **beads per 100 skeleton pixels**.
 
 ---
 
-### Final Output
-The `extract(img, *segmentation_masks)` function returns the **density** of Tau neurite beads, expressed as a single float value. The implementation plan ensures compatibility with input formats, handles edge cases robustly, and leverages biological and morphological insights for meaningful feature extraction.
+## 3.2 Preprocessing
+
+### 3.2.1 Validate and standardize image
+
+The function should first convert the input image to a usable 2D floating-point array.
+
+Expected image shape is 2D, but the implementation should robustly handle unexpected dimensions:
+
+- If `img` is already 2D: use directly.
+- If `img` is 3D with a singleton channel dimension, squeeze it.
+- If `img` is 3D and appears to be channel-last or channel-first, reduce to a single grayscale plane conservatively, for example by taking the maximum or first channel.  
+  For this dataset, this should rarely be needed because images are single-channel 2D MIPs.
+- Convert to `float32` or `float64`.
+
+Recommended:
+
+```text
+img_float = img.astype(np.float32)
+```
+
+### 3.2.2 Remove invalid values
+
+Handle NaN or infinite values defensively:
+
+```text
+replace NaN, +inf, -inf with finite values
+```
+
+For example:
+
+```text
+np.nan_to_num(img_float, nan=0.0, posinf=max_finite, neginf=0.0)
+```
+
+### 3.2.3 Background normalization
+
+Because the raw image is uint16 with variable intensity range, peak detection should use robust intensity scaling.
+
+Recommended preprocessing:
+
+1. Estimate low and high percentiles, preferably within the relevant cellular region if available:
+
+```text
+p_low = 1st percentile
+p_high = 99th or 99.5th percentile
+```
+
+2. Normalize:
+
+```text
+img_norm = clip((img - p_low) / (p_high - p_low), 0, 1)
+```
+
+If `p_high <= p_low`, return 0.0 or use a fallback range.
+
+This normalization makes peak thresholds more stable across samples.
+
+### 3.2.4 Denoising / smoothing
+
+To identify bead-like local maxima while reducing pixel-level noise:
+
+- Apply a light Gaussian smoothing to the normalized image.
+
+Recommended parameter:
+
+```text
+sigma = 1.0 pixel
+```
+
+This preserves small puncta while suppressing isolated noisy pixels.
+
+```text
+img_smooth = gaussian_filter(img_norm, sigma=1.0)
+```
+
+---
+
+## 3.3 Neurite mask construction
+
+### 3.3.1 Parse segmentation input
+
+Although the target signature is:
+
+```python
+def extract(img, *segmentation_masks):
+```
+
+the implementation should expect that the first element of `segmentation_masks` may be a dictionary:
+
+```python
+seg = segmentation_masks[0] if available and isinstance(..., dict) else {}
+```
+
+Masks should be accessed by key only:
+
+```python
+seg.get("mask_cell")
+seg.get("mask_nucleus")
+seg.get("mask_bundle")
+seg.get("mask_filament")
+seg.get("mask_droplet")
+```
+
+Do not assume positional order.
+
+### 3.3.2 Convert masks to boolean
+
+For each available mask:
+
+```text
+mask_bool = mask > 0
+```
+
+If mask shape differs from the image shape, the safest plan is:
+
+- If shape can be squeezed to match, squeeze.
+- If still mismatched, ignore that mask rather than resizing, because resizing binary masks could introduce artifacts.
+- Return 0.0 only if no valid neurite mask can be derived.
+
+### 3.3.3 Cell and cytoplasm masks
+
+If `mask_cell` exists and is non-empty:
+
+```text
+cell_mask = mask_cell > 0
+```
+
+Otherwise:
+
+```text
+cell_mask = full image True
+```
+
+If `mask_nucleus` exists and is non-empty:
+
+```text
+cytoplasm_mask = cell_mask AND NOT nucleus_mask
+```
+
+Otherwise:
+
+```text
+cytoplasm_mask = cell_mask
+```
+
+The cytoplasm mask should be used to avoid counting nuclear peaks as neurite beads.
+
+### 3.3.4 Primary neurite mask
+
+If bundle and/or filament masks are available:
+
+```text
+neurite_mask = (mask_bundle > 0) OR (mask_filament > 0)
+neurite_mask = neurite_mask AND cytoplasm_mask
+```
+
+Because the provided sample statistics suggest `mask_filament` may be empty while `mask_bundle` may be non-empty, the implementation must not depend only on `mask_filament`.
+
+### 3.3.5 Optional cleanup
+
+Apply small morphological cleanup:
+
+- Remove tiny components unlikely to be neurites.
+- Fill small holes if needed.
+- Optionally perform a small binary closing to connect minor gaps.
+
+Recommended:
+
+```text
+remove objects smaller than 10 to 20 pixels
+binary closing with disk radius 1
+```
+
+However, do not over-smooth, because bead alignment depends on local neurite geometry.
+
+### 3.3.6 Fallback neurite mask if segmentation is empty
+
+If the combined filament/bundle mask is empty, derive a neurite-like mask from the image.
+
+Recommended fallback:
+
+1. Restrict to cytoplasm/cell region.
+2. Smooth image lightly.
+3. Threshold high Tau signal using a robust method:
+   - Otsu threshold inside cytoplasm, or
+   - percentile threshold, e.g. 75th or 80th percentile inside cytoplasm.
+4. Keep elongated or connected Tau-positive structures.
+5. Remove small isolated spots that are likely beads rather than neurite shafts.
+
+Example fallback logic:
+
+```text
+candidate = img_smooth > max(otsu_threshold, percentile_70_or_75)
+candidate = candidate AND cytoplasm_mask
+candidate = remove_small_objects(candidate, min_size=30)
+```
+
+This is less reliable than segmentation-based neurite masks, but it allows the feature to be computed when masks are missing or empty.
+
+---
+
+## 3.4 Skeletonization
+
+The neurite mask should be reduced to a one-pixel-wide skeleton.
+
+Recommended operation:
+
+```text
+skeleton = skimage.morphology.skeletonize(neurite_mask)
+```
+
+Then compute:
+
+```text
+skeleton_length_pixels = number of True pixels in skeleton
+```
+
+Because skeleton pixel count approximates length in pixel units.
+
+If `skeleton_length_pixels == 0`, return `0.0`.
+
+For thick bundles, skeletonization gives a centerline and avoids inflating density due to bundle width.
+
+---
+
+## 3.5 Peak detection
+
+The goal is to count localized bead-like bright intensity maxima, not all bright pixels.
+
+### 3.5.1 Define valid peak search region
+
+Peak candidates should be searched within the cytoplasm or cell region, but final alignment should require proximity to the skeleton.
+
+Recommended peak search mask:
+
+```text
+peak_search_mask = cytoplasm_mask
+```
+
+Optionally restrict to an expanded neurite mask to reduce false positives:
+
+```text
+expanded_neurite_mask = dilation(skeleton, radius=3 to 5 pixels)
+peak_search_mask = cytoplasm_mask AND expanded_neurite_mask
+```
+
+Using a small dilation around skeleton is recommended because bead centers may not lie exactly on the one-pixel skeleton, especially in thick bundles.
+
+### 3.5.2 Local maxima detection
+
+Use a local maxima detector on the smoothed normalized image.
+
+Recommended approach:
+
+```text
+skimage.feature.peak_local_max
+```
+
+Conceptual parameters:
+
+- `min_distance`: 3 to 5 pixels  
+  Prevents counting multiple adjacent pixels within the same bead.
+- `threshold_abs`: robust intensity threshold.
+- `exclude_border`: False or small border exclusion.
+
+Recommended threshold strategy:
+
+```text
+threshold_abs = max(
+    0.2,
+    median_intensity_in_cytoplasm + 2.0 * robust_sigma
+)
+```
+
+Because the image is normalized to `[0, 1]`, a practical default is:
+
+```text
+threshold_abs = max(0.25, cytoplasm_median + 2.5 * MAD_sigma)
+```
+
+Where:
+
+```text
+MAD_sigma = 1.4826 * median(abs(values - median))
+```
+
+Alternative simpler option:
+
+```text
+threshold_abs = 90th percentile of img_smooth within cytoplasm
+```
+
+A percentile threshold is often robust for fluorescence data.
+
+Recommended final strategy:
+
+```text
+threshold_abs = max(
+    percentile(img_smooth[cytoplasm_mask], 90),
+    median + 2 * MAD_sigma
+)
+```
+
+This avoids counting dim background fluctuations.
+
+### 3.5.3 Bead size scale
+
+Bead-like inclusions are expected to be small localized puncta. The local maxima detection should target peaks at a small spatial scale.
+
+Recommended parameters:
+
+```text
+Gaussian sigma: 1.0
+peak min_distance: 3 pixels
+skeleton alignment radius: 3 pixels
+```
+
+If beads are larger in this dataset, a radius of 4 or 5 pixels may be more appropriate. A good default is:
+
+```text
+alignment_radius = 4 pixels
+```
+
+---
+
+## 3.6 Skeleton alignment of peaks
+
+A peak should count as a neurite bead if it is sufficiently close to the neurite skeleton.
+
+Recommended method:
+
+1. Compute distance transform of the inverse skeleton:
+
+```text
+distance_to_skeleton = distance_transform_edt(~skeleton)
+```
+
+2. For each detected peak coordinate `(row, col)`, compute:
+
+```text
+distance_to_skeleton[row, col]
+```
+
+3. Count peaks satisfying:
+
+```text
+distance_to_skeleton <= alignment_radius
+```
+
+Recommended:
+
+```text
+alignment_radius = 4 pixels
+```
+
+This handles the fact that bead centers may sit slightly offset from the exact skeleton centerline.
+
+Optional stricter condition:
+
+```text
+peak must also lie within neurite_mask dilated by radius 1 to 3
+```
+
+But distance to skeleton is usually sufficient.
+
+---
+
+## 3.7 Optional exclusion of large droplets
+
+The feature should capture bead-like Tau inclusions along neurites. If `mask_droplet` is available, there are two possible interpretations:
+
+1. Include droplet-like peaks if they align with skeleton, because they are bead-like Tau inclusions.
+2. Exclude very large droplets if they are not neuritic.
+
+Recommended plan:
+
+- Do **not automatically exclude all `mask_droplet` pixels**, because droplets along neurites may be biologically relevant beads.
+- However, if using connected components of detected peaks or local regions, avoid counting very large bright regions as multiple beads.
+- `peak_local_max` with `min_distance` will naturally limit multiple counts within large regions, but very large droplets may still contribute one peak if near the skeleton.
+
+This is acceptable for a bead-density feature.
+
+---
+
+## 3.8 Final density calculation
+
+Compute:
+
+```text
+aligned_peak_count = number of detected peaks within alignment_radius of skeleton
+skeleton_length_pixels = skeleton.sum()
+```
+
+Return:
+
+```text
+density = 100.0 * aligned_peak_count / skeleton_length_pixels
+```
+
+If no skeleton length exists:
+
+```text
+return 0.0
+```
+
+The result is:
+
+```text
+bead-like Tau peaks per 100 neurite skeleton pixels
+```
+
+This normalization makes the feature comparable across cells with different neurite extent.
+
+---
+
+### 4. Edge Cases
+
+#### 4.1 Empty image
+
+If the image is empty, all zeros, or has no intensity variation:
+
+```text
+return 0.0
+```
+
+Examples:
+
+- `img.size == 0`
+- all values identical
+- percentile normalization denominator is zero
+
+#### 4.2 Missing segmentation dictionary
+
+If no segmentation masks are provided:
+
+- Try to estimate a fallback neurite mask from the image.
+- If fallback fails, return `0.0`.
+
+#### 4.3 Empty `mask_filament`
+
+The provided statistics indicate `mask_filament` can be empty. The implementation should still work by using:
+
+```text
+mask_bundle
+```
+
+as the neurite mask.
+
+#### 4.4 Empty `mask_bundle` and `mask_filament`
+
+If both are empty:
+
+1. Try image-based fallback neurite extraction inside cytoplasm.
+2. If the fallback mask has too few pixels or no skeleton, return `0.0`.
+
+#### 4.5 Missing cell mask
+
+If `mask_cell` is missing or empty:
+
+```text
+cell_mask = full image
+```
+
+This allows computation but may increase background false positives. Peak thresholding and skeleton alignment still reduce false positives.
+
+#### 4.6 Missing nucleus mask
+
+If `mask_nucleus` is missing or empty:
+
+```text
+cytoplasm_mask = cell_mask
+```
+
+No nuclear exclusion is applied.
+
+#### 4.7 Shape mismatch
+
+If a mask shape does not match the image shape:
+
+- Try `np.squeeze`.
+- If it still does not match, ignore that mask.
+- Do not blindly resize masks.
+
+If all relevant masks are invalid, use the fallback image-derived neurite mask.
+
+#### 4.8 Multiple cells or disconnected neurite structures
+
+The image may contain a neuron or neuronal field. The algorithm does not need to identify individual cells. It should compute a field-level density:
+
+```text
+total aligned peaks across all neurite skeletons
+/
+total skeleton length across all neurite skeletons
+```
+
+This is appropriate for both single-cell and multi-cell fields.
+
+#### 4.9 Very small skeleton length
+
+If the skeleton length is extremely small, density can become unstable.
+
+Recommended guard:
+
+```text
+if skeleton_length_pixels < 10:
+    return 0.0
+```
+
+or use a similar minimum length threshold.
+
+#### 4.10 Saturated bright regions
+
+If the image contains saturated Tau aggregates, local maxima detection may produce ambiguous results.
+
+Mitigations:
+
+- Smooth image before peak detection.
+- Use `min_distance` to prevent over-counting.
+- Normalize by robust percentiles instead of global max.
+
+#### 4.11 High background noise
+
+Noise may produce false peaks.
+
+Mitigations:
+
+- Use Gaussian smoothing.
+- Use robust threshold based on cytoplasmic median/MAD or high percentile.
+- Require skeleton proximity.
+
+---
+
+### 5. Implementation Notes
+
+#### 5.1 Function signature
+
+The target implementation should follow:
+
+```python
+def extract(img, *segmentation_masks):
+    ...
+```
+
+Internally, the function should support the expected segmentation dictionary:
+
+```python
+seg = {}
+if len(segmentation_masks) > 0 and isinstance(segmentation_masks[0], dict):
+    seg = segmentation_masks[0]
+```
+
+If the runtime instead passes masks positionally, the implementation may not be able to safely infer their meaning unless the order is explicitly known. Because the interface states that masks are passed as a dictionary, dictionary access should be the primary path.
+
+#### 5.2 Imports inside the function
+
+All imports must be inside the function. Likely required imports:
+
+```text
+numpy
+scipy.ndimage
+skimage.morphology
+skimage.filters
+skimage.feature
+```
+
+Potential functions:
+
+- `numpy`
+- `scipy.ndimage.gaussian_filter`
+- `scipy.ndimage.distance_transform_edt`
+- `skimage.morphology.skeletonize`
+- `skimage.morphology.remove_small_objects`
+- `skimage.morphology.binary_closing`
+- `skimage.morphology.disk`
+- `skimage.morphology.binary_dilation`
+- `skimage.filters.threshold_otsu`
+- `skimage.feature.peak_local_max`
+
+#### 5.3 Recommended parameter defaults
+
+Suggested fixed parameters:
+
+```text
+gaussian_sigma = 1.0
+min_neurite_object_size = 20 pixels
+fallback_min_object_size = 30 pixels
+peak_min_distance = 3 pixels
+alignment_radius = 4 pixels
+minimum_skeleton_length = 10 pixels
+density_scale = 100.0
+```
+
+#### 5.4 Robust thresholding details
+
+Recommended peak threshold:
+
+```text
+values = img_smooth[cytoplasm_mask]
+
+median = median(values)
+mad_sigma = 1.4826 * median(abs(values - median))
+p90 = percentile(values, 90)
+
+threshold_abs = max(p90, median + 2.0 * mad_sigma)
+```
+
+If `mad_sigma == 0`, use percentile only.
+
+If the threshold is too high and no peaks are detected, return `0.0`; do not lower the threshold adaptively in a way that could introduce unstable sample-specific behavior.
+
+#### 5.5 Fallback neurite thresholding details
+
+For the fallback mask:
+
+```text
+values = img_smooth[cytoplasm_mask]
+otsu = threshold_otsu(values)
+p75 = percentile(values, 75)
+threshold = max(otsu, p75)
+fallback_neurite_mask = img_smooth > threshold
+fallback_neurite_mask &= cytoplasm_mask
+fallback_neurite_mask = remove_small_objects(fallback_neurite_mask, min_size=30)
+```
+
+If Otsu fails due to constant values, use percentile threshold only.
+
+#### 5.6 Single float output
+
+The function must return exactly one scalar float:
+
+```python
+return float(density)
+```
+
+No dictionary, tuple, or auxiliary diagnostics should be returned.
+
+#### 5.7 Biological interpretation of output
+
+A higher value means:
+
+```text
+more bead-like Tau intensity peaks per unit neurite skeleton length
+```
+
+This suggests increased Tau fragmentation, punctate aggregation, or bead-like neuritic inclusions.
+
+A lower value means:
+
+```text
+fewer localized Tau bead peaks relative to neurite length
+```
+
+This may indicate smoother, more continuous Tau labeling along neurites or less punctate aggregation.
+
+#### 5.8 Expected behavior on this dataset
+
+Given the segmentation statistics:
+
+- `mask_bundle` is likely available and non-empty.
+- `mask_filament` may be empty.
+- `mask_droplet` may be empty.
+- `mask_cell` and `mask_nucleus` are available.
+
+Therefore, the most likely computation path is:
+
+```text
+cytoplasm = mask_cell AND NOT mask_nucleus
+neurite_mask = mask_bundle AND cytoplasm
+skeleton = skeletonize(neurite_mask)
+detect local Tau peaks in smoothed image
+count peaks within 4 pixels of skeleton
+return 100 * count / skeleton_length
+```
+
+This is appropriate for measuring bead-like Tau inclusions along thick Tau-positive neurite/bundle structures when explicit filament masks are unavailable.
