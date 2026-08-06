@@ -14,6 +14,16 @@ def read(path: Path) -> str:
 
 
 class DockerRuntimeContractTests(unittest.TestCase):
+    def test_runtime_paths_follow_docker_package_name(self) -> None:
+        dockerfile = read(DOCKER_DIR / "Dockerfile")
+        installer = read(DOCKER_DIR / "install-environments.sh")
+        entrypoint = read(DOCKER_DIR / "entrypoint.sh")
+
+        runtime_files = dockerfile + "\n" + installer + "\n" + entrypoint
+        self.assertIn("/opt/MorphAgent_UI_Docker", runtime_files)
+        legacy_runtime_path = "/opt/" + "MorphAgent_" + "UI/"
+        self.assertNotIn(legacy_runtime_path, runtime_files)
+
     def test_compose_is_local_only_and_persists_state_and_workspace(self) -> None:
         compose = read(DOCKER_DIR / "docker-compose.yml")
 

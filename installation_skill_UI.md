@@ -1,19 +1,19 @@
-# MorphAgent UI — Agent Operating Guide (installation_skill_UI)
+# MorphAgent UI Docker — Agent Operating Guide
 
 > Audience: an autonomous coding agent (Codex / Claude Code / Cursor / similar)
-> that must **install and launch the MorphAgent desktop UI** on a new machine.
+> that must **install and launch the containerized MorphAgent UI** on a new machine.
 > Follow the steps in order. Each step has a concrete verification you MUST run
 > before moving on. Do not skip verifications. Prefer failing loudly and fixing,
 > over guessing.
 >
 > Related guide: [`installation_skill.md`](installation_skill.md) covers the
 > **CLI / `main.py` pipeline** (Cellpose-SAM unified env). This file covers the
-> **Qt desktop UI** under `MorphAgent_UI/`. Use this file when the user asks to
-> install / start the GUI, demo app, or “MorphAgent UI”.
+> **Docker UI package** under `MorphAgent_UI_Docker/`. For the lightweight
+> desktop UI, use `MorphAgent_UI_Lite/README_LITE.md`.
 
-## 0. What the UI is (mental model)
+## 0. What the Docker package is
 
-`MorphAgent_UI/` is a handoff package that wraps the same MorphAgent pipeline
+`MorphAgent_UI_Docker/` is a Docker handoff package that wraps the same MorphAgent pipeline
 (`main.py`) behind a Qt app: **Home → Configure → Run → Features → Evidence**.
 
 Layout (paths relative to the **git repo root**):
@@ -22,7 +22,7 @@ Layout (paths relative to the **git repo root**):
 MorphAgent/                         # git clone root
 ├── installation_skill.md           # CLI agent guide
 ├── installation_skill_UI.md        # THIS file
-└── MorphAgent_UI/                  # UI handoff root — all scripts run FROM HERE
+└── MorphAgent_UI_Docker/                  # UI handoff root — all scripts run FROM HERE
     ├── scripts/
     │   ├── setup.sh / setup_windows.bat|.ps1
     │   ├── start_ui.sh / start_ui_windows.bat|.ps1
@@ -37,10 +37,10 @@ MorphAgent/                         # git clone root
 
 **Critical invariants:**
 
-1. **Working directory for install/launch scripts is always `MorphAgent_UI/`.**
-   Relative paths like `scripts/setup.sh` mean `MorphAgent_UI/scripts/setup.sh`.
+1. **Working directory for install/launch scripts is always `MorphAgent_UI_Docker/`.**
+   Relative paths like `scripts/setup.sh` mean `MorphAgent_UI_Docker/scripts/setup.sh`.
 2. **No local LLM/VLM weights.** All model calls go through an OpenAI-compatible
-   HTTP API (configured in the UI or via `MorphAgent_UI/MorphAgent/.env`).
+   HTTP API (configured in the UI or via `MorphAgent_UI_Docker/MorphAgent/.env`).
 3. **Two conda envs for the UI path (plus optional Allen):**
    - `morphagent` — Qt desktop UI + agent (`main.py` orchestration, LangChain).
    - `morphagent_sandbox` — **frozen** scientific stack for agent-generated
@@ -70,38 +70,38 @@ auto-search common install paths when PATH is empty.
 
 ## 2. Enter the UI handoff root
 
-From the **git repo root** (the directory that contains both `MorphAgent_UI/`
+From the **git repo root** (the directory that contains both `MorphAgent_UI_Docker/`
 and this file):
 
 ```bash
-cd MorphAgent_UI
-pwd   # must end with .../MorphAgent_UI
+cd MorphAgent_UI_Docker
+pwd   # must end with .../MorphAgent_UI_Docker
 ls scripts/setup.sh scripts/start_ui.sh MorphAgent/launch_ui.py
 ```
 
 On Windows PowerShell:
 
 ```powershell
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 Get-Location
 dir scripts\setup_windows.bat, scripts\start_ui_windows.bat, MorphAgent\launch_ui.py
 ```
 
 Expected: all listed files exist. If `MorphAgent/launch_ui.py` is missing, you
 are in the wrong directory (do not confuse git-root `MorphAgent` naming with the
-nested `MorphAgent_UI/MorphAgent/` app tree — there is **no** top-level app
+nested `MorphAgent_UI_Docker/MorphAgent/` app tree — there is **no** top-level app
 folder named only `MorphAgent/` for the UI; the runnable tree is nested).
 
 > Note: the git repo root is often also named `MorphAgent` after clone. The UI
-> app lives at `MorphAgent/MorphAgent_UI/MorphAgent/`. Always `cd` into
-> `MorphAgent_UI` before running scripts.
+> app lives at `MorphAgent/MorphAgent_UI_Docker/MorphAgent/`. Always `cd` into
+> `MorphAgent_UI_Docker` before running scripts.
 
 ## 3. Install environments (MUST)
 
 ### 3a. macOS / Linux
 
 ```bash
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 bash scripts/setup.sh
 ```
 
@@ -109,7 +109,7 @@ What this does:
 
 - Creates / updates conda env **`morphagent`** (Python 3.10) with conda-forge
   **PyQt5 / qtpy**, then pip-installs `dependencies/requirements-demo-ui.txt`
-  and editable `MorphAgent_UI/MorphAgent` (UI + agent).
+  and editable `MorphAgent_UI_Docker/MorphAgent` (UI + agent).
 - Creates / updates conda env **`morphagent_sandbox`** with the frozen
   scientific stack from `dependencies/requirements-sandbox.txt` (feature
   `extract()` only — no Qt / LangChain).
@@ -120,13 +120,13 @@ What this does:
 
 ### 3b. Windows (preferred: double-click / `.bat`)
 
-From Explorer, open `MorphAgent_UI\scripts\` and double-click:
+From Explorer, open `MorphAgent_UI_Docker\scripts\` and double-click:
 
 1. **`setup_windows.bat`** — one-click install (ExecutionPolicy Bypass, conda
    auto-discovery, UTF-8 for pip, **conda `pyqt=5` only** — pip PyQt5 is
    filtered out on purpose).
 
-Or from Anaconda/Miniforge Prompt / PowerShell, still inside `MorphAgent_UI\`:
+Or from Anaconda/Miniforge Prompt / PowerShell, still inside `MorphAgent_UI_Docker\`:
 
 ```powershell
 .\scripts\setup_windows.bat
@@ -138,7 +138,7 @@ blocks unsigned scripts. Always go through the `.bat`.
 ### 3.1 Verify install (MUST pass)
 
 ```bash
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 conda run --no-capture-output -n morphagent python scripts/verify_install.py --ui-smoke
 ```
 
@@ -168,16 +168,16 @@ PY
 ### 4a. macOS / Linux
 
 ```bash
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 bash scripts/start_ui.sh
 ```
 
 ### 4b. Windows
 
-Double-click `MorphAgent_UI\scripts\start_ui_windows.bat`, or:
+Double-click `MorphAgent_UI_Docker\scripts\start_ui_windows.bat`, or:
 
 ```powershell
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 .\scripts\start_ui_windows.bat
 ```
 
@@ -205,7 +205,7 @@ Windows `.bat`) on a machine with a desktop session.
 Recommended order:
 
 1. **Load a previous run** (Home) → open  
-   `MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run`  
+   `MorphAgent_UI_Docker/MorphAgent/demo/data/results/completed_demo_run`  
    → browse **Features** and **Evidence**. **No API key required.**
 2. **Configure** → **Load demo dataset** (10 Tau samples `WT_1`–`WT_5` /
    `MU_1`–`MU_5`, metadata already wired for validation).
@@ -214,7 +214,7 @@ Recommended order:
    - Click **Use free restricted API** (token-limited; scale locks to
      **1 round × 5 candidates · target 5**).
    - Credentials are applied on **Run MorphAgent** and written to
-     `MorphAgent_UI/MorphAgent/.env` (never commit this file).
+     `MorphAgent_UI_Docker/MorphAgent/.env` (never commit this file).
 4. Click **Run MorphAgent**. Demo scale defaults to a small pilot; free-API mode
    stays locked at 1×5.
 
@@ -267,20 +267,20 @@ Do **not** let fix agents reinstall numpy/scikit-image into `morphagent` or
 - **PyQt5 / Qt import errors on Windows** → pip PyQt5 conflicts with conda Qt.
   Re-run `setup_windows.bat` (it strips pip PyQt5 and reaffirms conda `pyqt=5`).
 - **`verify_install.py` fails on demo data** → ensure you are in
-  `MorphAgent_UI/` and `MorphAgent/demo/data/dataset` has 10 sample folders.
+  `MorphAgent_UI_Docker/` and `MorphAgent/demo/data/dataset` has 10 sample folders.
 - **UI opens but Run fails with 401** → fix Base URL / API key / model on
   Configure, or use **Use free restricted API** for a limited smoke run.
 - **Allen env missing** → demo with bundled masks still works; for custom data
   without masks, re-run setup without `MORPHAGENT_INSTALL_ALLEN=0`, or accept
   skipped segmentation.
 - **Wrong directory** → if `scripts/setup.sh` is not found, you are not in
-  `MorphAgent_UI/`.
+  `MorphAgent_UI_Docker/`.
 
 ## 9. From-scratch checklist (copy/paste)
 
 ```bash
 # 0. repo root → UI handoff
-cd MorphAgent_UI
+cd MorphAgent_UI_Docker
 
 # 1. install (macOS/Linux)
 bash scripts/setup.sh

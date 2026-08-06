@@ -2,7 +2,7 @@
 # Start the virtual desktop and the unchanged MorphAgent PyQt application.
 set -euo pipefail
 
-HANDOFF_ROOT="${HANDOFF_ROOT:-/opt/MorphAgent_UI}"
+HANDOFF_ROOT="${HANDOFF_ROOT:-/opt/MorphAgent_UI_Docker}"
 APP_ROOT="${HANDOFF_ROOT}/MorphAgent"
 UI_ENV="${MORPHAGENT_ENV_NAME:-morphagent}"
 DATA_ROOT="${MORPHAGENT_DATA_ROOT:-/data}"

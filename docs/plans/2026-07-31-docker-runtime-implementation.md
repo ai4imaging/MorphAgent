@@ -13,7 +13,7 @@
 ### Task 1: Add failing Docker contract tests
 
 **Files:**
-- Create: `MorphAgent_UI/MorphAgent/tests/test_docker_runtime.py`
+- Create: `MorphAgent_UI_Docker/MorphAgent/tests/test_docker_runtime.py`
 
 **Steps:**
 1. Test loopback-only noVNC publishing, persistent `/data` and `/workspace`
@@ -29,10 +29,10 @@
 ### Task 2: Replace the image build and runtime
 
 **Files:**
-- Replace: `MorphAgent_UI/docker/Dockerfile`
-- Create: `MorphAgent_UI/docker/install-environments.sh`
-- Replace: `MorphAgent_UI/docker/entrypoint.sh`
-- Create: `MorphAgent_UI/docker/healthcheck.sh`
+- Replace: `MorphAgent_UI_Docker/docker/Dockerfile`
+- Create: `MorphAgent_UI_Docker/docker/install-environments.sh`
+- Replace: `MorphAgent_UI_Docker/docker/entrypoint.sh`
+- Create: `MorphAgent_UI_Docker/docker/healthcheck.sh`
 
 **Steps:**
 1. Delete the upstream Docker runtime files covered by replacements.
@@ -45,14 +45,14 @@
 ### Task 3: Replace Compose and remove duplicate packages
 
 **Files:**
-- Replace: `MorphAgent_UI/docker/docker-compose.yml`
-- Delete: `MorphAgent_UI/docker/docker-compose.package.yml`
-- Delete: `MorphAgent_UI/docker/linux/MorphAgent-UI.sh`
-- Delete: `MorphAgent_UI/docker/mac/MorphAgent-UI.command`
-- Delete: `MorphAgent_UI/docker/win/MorphAgent-UI.bat`
-- Delete: `MorphAgent_UI/scripts/build_docker_packages.sh`
-- Modify: `MorphAgent_UI/.dockerignore`
-- Modify: `MorphAgent_UI/.gitignore`
+- Replace: `MorphAgent_UI_Docker/docker/docker-compose.yml`
+- Delete: `MorphAgent_UI_Docker/docker/docker-compose.package.yml`
+- Delete: `MorphAgent_UI_Docker/docker/linux/MorphAgent-UI.sh`
+- Delete: `MorphAgent_UI_Docker/docker/mac/MorphAgent-UI.command`
+- Delete: `MorphAgent_UI_Docker/docker/win/MorphAgent-UI.bat`
+- Delete: `MorphAgent_UI_Docker/scripts/build_docker_packages.sh`
+- Modify: `MorphAgent_UI_Docker/.dockerignore`
+- Modify: `MorphAgent_UI_Docker/.gitignore`
 
 **Steps:**
 1. Add loopback-only port publishing and fixed amd64 platform.
@@ -65,8 +65,8 @@
 ### Task 4: Document the one supported workflow
 
 **Files:**
-- Create: `MorphAgent_UI/docker/README.md`
-- Modify: `MorphAgent_UI/README_UI.md`
+- Create: `MorphAgent_UI_Docker/docker/README.md`
+- Modify: `MorphAgent_UI_Docker/README_UI.md`
 
 **Steps:**
 1. Document prerequisites, first build, normal start, logs, stop, reset, ports,

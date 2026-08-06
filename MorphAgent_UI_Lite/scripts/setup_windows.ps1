@@ -45,7 +45,7 @@ try {
     Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) CONDA_SOLVER=$($env:CONDA_SOLVER)"
     Write-Host "[..] Lite scope: Tau demo + Code/VLM; knowledge via precomputed txt"
     Write-Host "[..] Skips PDF parse / PubMed / auto deep-research / Allen"
-    Write-Host "[..] Live PDF/literature/Allen: use MorphAgent_UI\"
+    Write-Host "[..] Live PDF/literature/Allen: use MorphAgent_UI_Docker\"
 
     $envList = & $script:CondaExe env list 2>$null | Out-String
     $exists = $envList -match "(?m)^\s*$([regex]::Escape($EnvName))\s"

@@ -552,7 +552,7 @@ class CodeExecutor:
                     raise RuntimeError(
                         f"Unable to find Python interpreter in conda environment '{self.conda_env}'. "
                         f"Please ensure the environment exists and is accessible. "
-                        f"On Windows, re-run MorphAgent_UI\\scripts\\setup_windows.bat "
+                        f"On Windows, re-run MorphAgent_UI_Docker\\scripts\\setup_windows.bat "
                         f"(it creates morphagent_sandbox with python.exe under "
                         f"%USERPROFILE%\\Miniconda3\\envs\\{self.conda_env}\\python.exe)."
                     )

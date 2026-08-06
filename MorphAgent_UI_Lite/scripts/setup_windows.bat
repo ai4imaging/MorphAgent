@@ -22,7 +22,7 @@ echo  Scope: Tau demo + Code/VLM
 echo  Knowledge: precomputed txt (skip PDF/PubMed/Allen)
 echo  Working directory: %CD%
 echo  Creates single conda env: morphagent_lite
-echo  Live PDF/literature/Allen: use MorphAgent_UI\
+echo  Live PDF/literature/Allen: use MorphAgent_UI_Docker\
 echo ============================================================
 echo.
 

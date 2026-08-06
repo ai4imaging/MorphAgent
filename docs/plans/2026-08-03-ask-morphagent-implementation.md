@@ -12,9 +12,9 @@
 
 **Files:**
 - Create: `scripts/build_reviewer_knowledge.py`
-- Create: `MorphAgent_UI/MorphAgent/morphagent_ui/reviewer_knowledge/knowledge.json`
+- Create: `MorphAgent_UI_Docker/MorphAgent/morphagent_ui/reviewer_knowledge/knowledge.json`
 - Create: `MorphAgent_UI_Lite/MorphAgent/morphagent_ui/reviewer_knowledge/knowledge.json`
-- Create: `MorphAgent_UI/MorphAgent/tests/test_reviewer_chat.py`
+- Create: `MorphAgent_UI_Docker/MorphAgent/tests/test_reviewer_chat.py`
 - Create: `MorphAgent_UI_Lite/MorphAgent/tests/test_reviewer_chat.py`
 
 1. Write failing tests that load a small temporary bundle, preserve source labels, reject malformed entries, and rank a manuscript/code chunk for matching questions.
@@ -26,7 +26,7 @@
 ### Task 2: Implement evidence-grounded prompt and API client
 
 **Files:**
-- Create: `MorphAgent_UI/MorphAgent/morphagent_ui/reviewer_chat.py`
+- Create: `MorphAgent_UI_Docker/MorphAgent/morphagent_ui/reviewer_chat.py`
 - Create: `MorphAgent_UI_Lite/MorphAgent/morphagent_ui/reviewer_chat.py`
 - Modify: both `tests/test_reviewer_chat.py`
 
@@ -38,7 +38,7 @@
 ### Task 3: Add API setup and chat widgets
 
 **Files:**
-- Create: `MorphAgent_UI/MorphAgent/morphagent_ui/widgets/ask.py`
+- Create: `MorphAgent_UI_Docker/MorphAgent/morphagent_ui/widgets/ask.py`
 - Create: `MorphAgent_UI_Lite/MorphAgent/morphagent_ui/widgets/ask.py`
 - Modify: both `morphagent_ui/widgets/__init__.py`
 - Modify: both `morphagent_ui/theme.py`
@@ -65,7 +65,7 @@
 ### Task 5: Documentation, security, and regression verification
 
 **Files:**
-- Modify: `MorphAgent_UI/README_UI.md`
+- Modify: `MorphAgent_UI_Docker/README_UI.md`
 - Modify: both `MorphAgent/README.md`
 - Modify: relevant dependency manifests only if a truly new runtime dependency is required.
 

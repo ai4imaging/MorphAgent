@@ -1,5 +1,5 @@
 # MorphAgent UI: reproducible Linux desktop exposed only through local noVNC.
-# Build context must be MorphAgent_UI/:
+# Build context must be MorphAgent_UI_Docker/:
 #   docker build --platform linux/amd64 -f docker/Dockerfile .
 FROM continuumio/miniconda3:24.9.2-0
 
@@ -72,13 +72,13 @@ RUN apt-get update \
     && python -m pip install --no-cache-dir "websockify==${WEBSOCKIFY_VERSION}" \
     && ln -sfn /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
-WORKDIR /opt/MorphAgent_UI
+WORKDIR /opt/MorphAgent_UI_Docker
 
 # Dependency manifests are copied first so application-only changes reuse the
 # expensive environment layer.
-COPY dependencies/ /opt/MorphAgent_UI/dependencies/
-COPY MorphAgent/envs/ /opt/MorphAgent_UI/MorphAgent/envs/
-COPY MorphAgent/segmentation_allen/ /opt/MorphAgent_UI/MorphAgent/segmentation_allen/
+COPY dependencies/ /opt/MorphAgent_UI_Docker/dependencies/
+COPY MorphAgent/envs/ /opt/MorphAgent_UI_Docker/MorphAgent/envs/
+COPY MorphAgent/segmentation_allen/ /opt/MorphAgent_UI_Docker/MorphAgent/segmentation_allen/
 COPY docker/install-environments.sh /usr/local/bin/install-morphagent-environments
 
 RUN chmod 0755 /usr/local/bin/install-morphagent-environments
@@ -93,8 +93,8 @@ RUN INSTALL_COMPONENT="allen" INSTALL_ALLEN="${INSTALL_ALLEN}" \
     /usr/local/bin/install-morphagent-environments
 
 # Copy the complete application only after the reusable dependency layer.
-COPY MorphAgent/ /opt/MorphAgent_UI/MorphAgent/
-COPY scripts/verify_install.py /opt/MorphAgent_UI/scripts/verify_install.py
+COPY MorphAgent/ /opt/MorphAgent_UI_Docker/MorphAgent/
+COPY scripts/verify_install.py /opt/MorphAgent_UI_Docker/scripts/verify_install.py
 COPY docker/entrypoint.sh /usr/local/bin/morphagent-entrypoint
 COPY docker/healthcheck.sh /usr/local/bin/morphagent-healthcheck
 
@@ -102,13 +102,13 @@ RUN chmod 0755 \
         /usr/local/bin/morphagent-entrypoint \
         /usr/local/bin/morphagent-healthcheck \
     && conda run --no-capture-output -n morphagent \
-        python -m pip install --no-cache-dir --no-deps /opt/MorphAgent_UI/MorphAgent \
+        python -m pip install --no-cache-dir --no-deps /opt/MorphAgent_UI_Docker/MorphAgent \
     && mkdir -p /opt/morphagent-seed \
     && cp -a \
-        /opt/MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run \
+        /opt/MorphAgent_UI_Docker/MorphAgent/demo/data/results/completed_demo_run \
         /opt/morphagent-seed/completed_demo_run \
     && QT_QPA_PLATFORM=offscreen conda run --no-capture-output -n morphagent \
-        python /opt/MorphAgent_UI/scripts/verify_install.py --ui-smoke \
+        python /opt/MorphAgent_UI_Docker/scripts/verify_install.py --ui-smoke \
     && conda clean -afy \
     && find /opt/conda -type d -name '__pycache__' -prune -exec rm -rf '{}' +
 

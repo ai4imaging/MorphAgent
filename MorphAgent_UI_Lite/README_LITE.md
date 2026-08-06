@@ -2,7 +2,7 @@
 
 **Tau demo trial.** Single-environment handoff: install lightly, open the Qt UI, Load demo, and run one Code/VLM round with prepared knowledge summaries.
 
-| | **Lite** | Full `MorphAgent_UI` |
+| | **Lite** | Full `MorphAgent_UI_Docker` |
 |--|----------|----------------------|
 | Scope | Tau demo + Code/VLM API | Full research workflow |
 | Env | **`morphagent_lite` only** | `morphagent` + sandbox (+ optional Allen) |
@@ -43,7 +43,7 @@ Prepared demo files:
 - `MorphAgent/demo/precomputed/deep_research_summary.txt`
 - `MorphAgent/demo/precomputed/rag_knowledge_summary.txt`
 
-For live literature fetch, PDF ingestion, or Allen segmentation, use [`MorphAgent_UI`](../MorphAgent_UI/).
+For live literature fetch, PDF ingestion, or Allen segmentation, use [`MorphAgent_UI_Docker`](../MorphAgent_UI_Docker/).
 
 ## Prerequisites
 
@@ -83,7 +83,7 @@ MORPHAGENT_RECREATE_ENVS=1 bash scripts/setup.sh
 
 - Samples with `dataset/<sample>/segmentation/*` masks → reused.
 - Samples without masks → skipped (`skipped_no_backend`); Code/VLM still run without `seg`.
-- For automatic Allen segmentation, use the full [`MorphAgent_UI`](../MorphAgent_UI/) package.
+- For automatic Allen segmentation, use the full [`MorphAgent_UI_Docker`](../MorphAgent_UI_Docker/) package.
 
 ## What setup does
 

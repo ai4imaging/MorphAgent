@@ -22,7 +22,7 @@ echo " Scope: Tau demo + Code/VLM; knowledge via precomputed txt"
 echo "        (skips PDF parse / PubMed / auto deep-research / Allen)"
 echo " Root: ${HANDOFF_ROOT}"
 echo " Env:  ${ENV_NAME} (python+pip via conda; science stack via pip)"
-echo " Live PDF/literature/Allen: use MorphAgent_UI/"
+echo " Live PDF/literature/Allen: use MorphAgent_UI_Docker/"
 echo "============================================================"
 
 if ! command -v conda >/dev/null 2>&1; then

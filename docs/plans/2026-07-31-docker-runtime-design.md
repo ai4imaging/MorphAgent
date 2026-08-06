@@ -33,8 +33,8 @@ published.
 
 ## Persistence and security
 
-Compose bind-mounts `MorphAgent_UI/docker-data` to `/data` and
-`MorphAgent_UI/workspace` to `/workspace`. `/data/config/.env` is symlinked to
+Compose bind-mounts `MorphAgent_UI_Docker/docker-data` to `/data` and
+`MorphAgent_UI_Docker/workspace` to `/workspace`. `/data/config/.env` is symlinked to
 the repository `.env`, so API settings saved in the UI survive container
 replacement without entering the image or Git. Demo results are also moved to
 persistent state and seeded with `completed_demo_run` on first launch. Custom

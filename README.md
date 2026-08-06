@@ -2,138 +2,47 @@
 
 Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao Niu, Yaorong Guo, Jinzhuo Wang, Liangyi Chen, He Sun
 
----
-
-## Abstract
-
-Microscopy-based cell profiling typically relies on predefined morphological features that may not capture the structures present across imaging modalities. We developed MorphAgent, an agentic AI framework that autonomously designs, implements and validates biologically grounded morphological features. Drawing on biological knowledge bases, MorphAgent generates candidate morphology features, quantifies them using agent-generated code or vision-language model scoring, and iteratively refines and validates them through statistical and visual evaluation. On 3,552 wide-field BBBC021 profiles, MorphAgent features improved perturbation-retrieval mean average precision by 48% over CellProfiler and 20% over DeepProfiler while using substantially fewer dimensions. In confocal mitochondrial imaging, MorphAgent identified a 25-feature vocabulary from only 110 hematopoietic stem cells with paired imaging and transcriptomic data. When applied without reselection to an independent dataset of 162 cells, these features enabled classifiers trained within the new dataset to achieve an age-state AUC of 0.905. In Tau-labeled samples, MorphAgent enabled cell profiling to use the structural information uniquely resolved by super-resolution microscopy, increasing the wild-type-versus-mutant classification AUC from 0.864 in wide-field images to 0.947. In image–transcriptome-paired data, MorphAgent further organized morphology–gene associations into a three-level hierarchy, linking super-resolution structural phenotypes across spatial scales to their underlying transcriptional programs. MorphAgent establishes agentic feature design as a general framework for converting advances in microscopy into compact, biologically grounded and predictive representations of cellular state.
 
 ---
 
 ## UI Demo
 
-Prefer not to drive everything from the command line? This repo ships a lightweight desktop Qt UI under [`MorphAgent_UI_Lite/`](MorphAgent_UI_Lite/) for a quick Tau demo: **Home → Configure → Run → Features → Evidence**. For the full research UI (Allen segmentation, live PDF / literature), use [`MorphAgent_UI/`](MorphAgent_UI/).
+MorphAgent provides two simple UI entry points:
 
-Watch the ~4m40s demo video first to see the workflow end-to-end:
+- [`MorphAgent_UI_Lite/`](MorphAgent_UI_Lite/) — lightweight desktop UI in one Conda environment.
+- [`MorphAgent_UI_Docker/`](MorphAgent_UI_Docker/) — complete browser-accessible Docker package.
+
+Demo video:
 
 https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
 
-> English narration with burned-in subtitles; a matching `.srt` file is included alongside it: [`MorphAgent_UI/demo_video/MorphAgent_demo_english.srt`](MorphAgent_UI/demo_video/MorphAgent_demo_english.srt).
-
-### Try it
-
-There are **two ways** to run the MorphAgent UI — pick one:
-
-1. **Manual install (software package)** — clone this repo, create the single conda env `morphagent_lite`, launch the desktop Qt app (**recommended for Lite**).
-2. **Docker** — one-click start of the **full** [`MorphAgent_UI`](MorphAgent_UI/) image; UI opens in the browser (no local conda).
-
-#### 1. Manual install (software package) — MorphAgent UI Lite
-
-**Prerequisite:** install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda so `conda` is available on your PATH.
-
-All setup and launch scripts live under **`MorphAgent_UI_Lite/scripts/`**. After cloning, you must `cd` into `MorphAgent_UI_Lite` before running them.
-
-##### 1. Clone the repo and enter `MorphAgent_UI_Lite`
+### Desktop — MorphAgent UI Lite
 
 ```bash
 git clone https://github.com/ai4imaging/MorphAgent.git
 cd MorphAgent/MorphAgent_UI_Lite
-```
-
-Stay in this directory for the platform-specific steps below. Relative paths such as `scripts/setup.sh` refer to files inside `MorphAgent_UI_Lite/scripts/`.
-
-##### 2a. macOS / Linux
-
-From `MorphAgent_UI_Lite/`:
-
-```bash
-# One-click env setup (creates single conda env `morphagent_lite`)
 bash scripts/setup.sh
-
-# Launch the desktop Qt app
 bash scripts/start_ui.sh
 ```
 
-- `scripts/setup.sh` creates `morphagent_lite` with **python+pip only** via conda, then pip-installs the slim demo stack + PyQt5 (no Allen / sandbox; avoids classic+conda-forge mega-solves).
-- `scripts/start_ui.sh` starts `MorphAgent/launch_ui.py` via that conda env.
-- First-time setup needs a network connection (pip downloads). Re-run `scripts/setup.sh` if packages fail to install.
-- Recreate the env with `MORPHAGENT_RECREATE_ENVS=1 bash scripts/setup.sh`.
+On Windows, open `MorphAgent_UI_Lite\scripts\` and run `setup_windows.bat`, then `start_ui_windows.bat`.
 
-##### 2b. Windows
+Lite includes the bundled Tau demo, feature extraction, historical code reuse, Ask MorphAgent, and support for multidimensional PNG, TIFF/OME-TIFF, GIF, WebP, and MRC-family images.
 
-**Easiest:** after finishing step 1, open `MorphAgent_UI_Lite\scripts\` in Explorer and double-click these files (they bypass ExecutionPolicy and auto-find conda when PATH is empty):
+Detailed instructions: [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
 
-1. `setup_windows.bat` — one-click env setup (`morphagent_lite` only)
-2. `start_ui_windows.bat` — launch the desktop Qt app
-
-Or from **Anaconda Prompt** / PowerShell, still inside `MorphAgent_UI_Lite\`:
-
-```powershell
-# One-click env setup
-.\scripts\setup_windows.bat
-
-# Launch the desktop Qt app
-.\scripts\start_ui_windows.bat
-```
-
-- Prefer the `.bat` wrappers over “Run with PowerShell” on the `.ps1` files — Windows blocks unsigned scripts by default; the `.bat` files call PowerShell with `-ExecutionPolicy Bypass`.
-- The `.bat` / `.ps1` pair also auto-discovers common Miniconda / Anaconda installs when `conda` is not on PATH.
-- You still need [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda installed once beforehand.
-
-#### 2. Docker — full MorphAgent UI
-
-One Linux container works on macOS, Windows, and Linux. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS / Windows) or Docker Engine (Linux). The MorphAgent Qt UI opens in the browser (noVNC). This path uses the full [`MorphAgent_UI`](MorphAgent_UI/) package (not Lite).
-
-After cloning, build and start the tracked Compose runtime from
-`MorphAgent_UI/`:
+### Docker — MorphAgent UI Docker
 
 ```bash
-cd MorphAgent/MorphAgent_UI
+cd MorphAgent/MorphAgent_UI_Docker
 mkdir -p docker-data workspace
 docker compose -f docker/docker-compose.yml build
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-Then open
-[http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale](http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale).
-The first build installs all three Conda environments inside the image; later
-starts only need `docker compose -f docker/docker-compose.yml up -d`.
+Open [http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale](http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale).
 
-If Docker Hub is unreachable, download the verified prebuilt image from
-[Google Drive](https://drive.google.com/file/d/1KGMJLRoipqaFYV5B3TbIMFh6zN-94CW3/view?usp=drive_link),
-place it at `MorphAgent_UI/docker/offline/morphagent-ui-linux-amd64.tar.gz`,
-then load and start without building:
-
-```bash
-cd MorphAgent_UI
-docker load -i docker/offline/morphagent-ui-linux-amd64.tar.gz
-mkdir -p docker-data workspace
-docker compose -f docker/docker-compose.yml up -d --no-build
-```
-
-The SHA-256 checksum and full offline instructions are in
-[`MorphAgent_UI/docker/offline/README.md`](MorphAgent_UI/docker/offline/README.md).
-
-For a quick review without an API key, choose **Home → Load a previous run →**
-`completed_demo_run`. Stop with
-`docker compose -f docker/docker-compose.yml down`.
-
-Windows PowerShell commands, persistent data paths, verification, and
-troubleshooting are documented in
-[`MorphAgent_UI/docker/README.md`](MorphAgent_UI/docker/README.md).
-
-#### After the UI opens
-
-Highlights:
-
-- **Demo dataset** — click **Load demo dataset** to run the Tau demo on **10** sample images (`WT_1`–`WT_5` / `MU_1`–`MU_5`) without preparing your own data first;
-- **Load a previous run** — instantly browse a completed run’s **Features** and **Evidence** pages, no API key required;
-- **In-app API configuration** — fill in Base URL / API key / model on the Configure page (or use **Use free restricted API** for a token-limited test endpoint locked to 1 round × 5 features). Credentials are applied automatically when you click **Run MorphAgent** (no separate Save step) and written to `MorphAgent/.env`.
-- **Lite scope** — single env `morphagent_lite`; reuses existing masks (no Allen auto-seg); knowledge toggles use prepared summaries under `demo/precomputed/` when enabled.
-
-For your own images, select the parent folder that contains `dataset/<sample>/*.tif`. The required layout is documented in [Input Data Format (Important)](#input-data-format-important) below.
-
-Lite install notes: [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md). Full UI: [`MorphAgent_UI/README_UI.md`](MorphAgent_UI/README_UI.md).
+Docker instructions and offline-image details are in [`MorphAgent_UI_Docker/docker/README.md`](MorphAgent_UI_Docker/docker/README.md).
 
 ---
 
@@ -145,10 +54,10 @@ If you are an autonomous agent asked to **install or run MorphAgent**, read the 
 |------|----------------|-------------------|
 | CLI pipeline (`main.py`, Cellpose-SAM env) | [`installation_skill.md`](installation_skill.md) | **git repo root** |
 | Desktop Qt UI Lite (Tau demo + Configure / Run) | [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md) | **`MorphAgent_UI_Lite/`** |
-| Full desktop Qt UI | [`installation_skill_UI.md`](installation_skill_UI.md) | **`MorphAgent_UI/`** |
+| Docker UI package | [`installation_skill_UI.md`](installation_skill_UI.md) | **`MorphAgent_UI_Docker/`** |
 
 - Prefer the Lite README when the user mentions the GUI demo, `MorphAgent_UI_Lite`, or a quick Tau trial.
-- Prefer the full UI skill when the user needs Allen, live PDF/literature, or `MorphAgent_UI`.
+- Prefer the Docker UI skill when the user needs the complete containerized stack.
 - Prefer the CLI skill when the user wants a headless / scripted `python main.py …` run.
 - Do **not** invent alternate install paths; the skill / README files above are the source of truth for agents.
 - Humans: the [UI Demo](#ui-demo) section above is the short path; agents should still follow the files in the table.
@@ -203,7 +112,7 @@ MorphAgent/
 ├── validation/              # Deterministic feature validation and registry
 ├── segmentation_allen/      # Allen aicssegmentation backend (vendored + CLI entry point)
 ├── MorphAgent_UI_Lite/      # Lite desktop UI (Tau demo; single env morphagent_lite)
-├── MorphAgent_UI/           # Full desktop UI handoff (Allen + Docker + broader stack)
+├── MorphAgent_UI_Docker/    # Docker UI package (Allen + broader stack)
 ├── envs/                    # Environment yaml files (see "Environment & Installation")
 ├── .env.example             # Configuration template (copy to .env)
 └── README.md
@@ -249,7 +158,7 @@ export SEGMENTATION_CONDA_ENV=morphagent_allen
 export SEGMENTATION_BACKEND=allen
 ```
 
-> For the desktop UI install path, prefer the [UI Demo](#ui-demo) scripts under `MorphAgent_UI_Lite/` (or full `MorphAgent_UI/`). See `envs/README.md` for CLI environment details.
+> For the desktop UI install path, prefer the [UI Demo](#ui-demo) scripts under `MorphAgent_UI_Lite/` (or full `MorphAgent_UI_Docker/`). See `envs/README.md` for CLI environment details.
 
 ---
 
@@ -541,7 +450,7 @@ Markdown/text/XML sources are read directly.
 ## FAQ
 
 - **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo / Docker image reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU; UI default when masks are missing), or disable segmentation.
-- **Docker vs manual install?** Manual install (recommended for a quick trial) creates `morphagent_lite` under `MorphAgent_UI_Lite/scripts/`. Docker is the one-click browser path for the full `MorphAgent_UI` image (noVNC). You only need one of them.
+- **Docker vs manual install?** Manual install (recommended for a quick trial) creates `morphagent_lite` under `MorphAgent_UI_Lite/scripts/`. Docker is the one-click browser path for the full `MorphAgent_UI_Docker` image (noVNC). You only need one of them.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
 - **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.

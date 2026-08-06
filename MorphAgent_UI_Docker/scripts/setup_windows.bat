@@ -2,14 +2,14 @@
 setlocal EnableExtensions
 REM MorphAgent UI installer for Windows (double-click this file).
 REM IMPORTANT: every exit path ends at :HOLD with "pause" so the window never flash-closes.
-REM Full log is kept under MorphAgent_UI\logs\.
+REM Full log is kept under MorphAgent_UI_Docker\logs\.
 
 set "EXITCODE=0"
 set "HANDOFF="
 
 cd /d "%~dp0\.."
 if errorlevel 1 (
-  echo [ERROR] Could not cd to MorphAgent_UI folder from "%~dp0"
+  echo [ERROR] Could not cd to MorphAgent_UI_Docker folder from "%~dp0"
   set "EXITCODE=1"
   goto :HOLD
 )
@@ -22,12 +22,12 @@ chcp 65001 >nul 2>&1
 echo ============================================================
 echo  MorphAgent UI setup (Windows)
 echo  Working directory: %CD%
-echo  Scripts live under: MorphAgent_UI\scripts\
+echo  Scripts live under: MorphAgent_UI_Docker\scripts\
 echo  Will create:
 echo    - morphagent          (Qt UI + agent)
 echo    - morphagent_sandbox  (frozen extract() science stack)
 echo    - morphagent_allen    (optional Allen segmentation)
-echo  Logs will be saved under: MorphAgent_UI\logs\
+echo  Logs will be saved under: MorphAgent_UI_Docker\logs\
 echo ============================================================
 echo.
 
@@ -74,7 +74,7 @@ if defined HANDOFF if exist "%HANDOFF%\logs\setup_last_status.txt" (
   type "%CD%\logs\setup_last_status.txt"
   echo  ----------------------------------
 ) else (
-  echo  (status file not found yet: MorphAgent_UI\logs\setup_last_status.txt)
+  echo  (status file not found yet: MorphAgent_UI_Docker\logs\setup_last_status.txt)
   echo  If setup crashed early, scroll up for the error text in this window.
 )
 echo ============================================================

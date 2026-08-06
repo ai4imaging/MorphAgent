@@ -7,7 +7,7 @@ SANDBOX_ENV="${MORPHAGENT_SANDBOX_ENV_NAME:-morphagent_sandbox}"
 ALLEN_ENV="${MORPHAGENT_ALLEN_ENV_NAME:-morphagent_allen}"
 INSTALL_ALLEN="${INSTALL_ALLEN:-1}"
 INSTALL_COMPONENT="${INSTALL_COMPONENT:-all}"
-ROOT="/opt/MorphAgent_UI"
+ROOT="/opt/MorphAgent_UI_Docker"
 
 case "${INSTALL_ALLEN}" in
   0|1) ;;

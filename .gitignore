@@ -13,20 +13,20 @@ dist/
 
 # ---- MorphAgent runtime outputs / caches ----
 # Not "results/" itself: that would also hide the intentionally bundled
-# MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ demo output.
+# MorphAgent_UI_Docker/MorphAgent/demo/data/results/completed_demo_run/ demo output.
 run_*/
 *.log
-!MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ui_console.log
+!MorphAgent_UI_Docker/MorphAgent/demo/data/results/completed_demo_run/ui_console.log
 .rag_cache/
 .morphagent_repro_cache/
 
 # ---- User data (do NOT commit datasets) ----
 # Anchored to repo root only, so bundled UI demo data
-# (MorphAgent_UI/MorphAgent/demo/data/) is still tracked.
+# (MorphAgent_UI_Docker/MorphAgent/demo/data/) is still tracked.
 /data/
 /datasets/
 /demo/
-MorphAgent_UI/MorphAgent/demo/data_test/
+MorphAgent_UI_Docker/MorphAgent/demo/data_test/
 
 # ---- Segmentation / model artifacts ----
 *.tif.out/

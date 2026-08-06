@@ -1,12 +1,12 @@
-# MorphAgent UI Handoff Notes
+# MorphAgent UI Docker Package
 
-This directory is a reviewable handoff package for the MorphAgent graphical interface. It includes the current UI source, backend pipeline, dependency manifests, install/launch/self-check scripts, Tau neuron demo data provided by the instructor, one completed run result, and the final English demo video.
+This directory contains the complete Docker distribution for the MorphAgent graphical interface, including its source, runtime manifests, setup checks, Tau demo data, completed example result, and English demo video.
 
 ## 0. Docker (recommended for reproducible installation)
 
 Docker is the same workflow on Windows, macOS, and Linux. The host needs Docker
 Desktop/Engine and a browser, but does not need Conda, Python, Qt, or an X
-server. From `MorphAgent_UI/`:
+server. From `MorphAgent_UI_Docker/`:
 
 ```bash
 mkdir -p docker-data workspace

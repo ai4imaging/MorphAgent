@@ -10,7 +10,7 @@ Download `morphagent-ui-linux-amd64.tar.gz` from
 then place it in this directory:
 
 ```text
-MorphAgent_UI/docker/offline/morphagent-ui-linux-amd64.tar.gz
+MorphAgent_UI_Docker/docker/offline/morphagent-ui-linux-amd64.tar.gz
 ```
 
 Google Drive may show a large-file virus-scan warning. Choose **Download
@@ -28,7 +28,7 @@ installation and offscreen Qt UI verification during the build.
 
 ## Verify, load, and start
 
-From `MorphAgent_UI/` on macOS or Linux:
+From `MorphAgent_UI_Docker/` on macOS or Linux:
 
 ```bash
 (cd docker/offline && shasum -a 256 -c morphagent-ui-linux-amd64.tar.gz.sha256)

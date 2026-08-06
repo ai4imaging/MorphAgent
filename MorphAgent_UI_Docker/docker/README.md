@@ -37,7 +37,7 @@ prebuilt `linux/amd64` image from
 [Google Drive](https://drive.google.com/file/d/1KGMJLRoipqaFYV5B3TbIMFh6zN-94CW3/view?usp=drive_link)
 instead of building locally. Place the archive at
 `docker/offline/morphagent-ui-linux-amd64.tar.gz`, then run from
-`MorphAgent_UI/`:
+`MorphAgent_UI_Docker/`:
 
 ```bash
 (cd docker/offline && shasum -a 256 -c morphagent-ui-linux-amd64.tar.gz.sha256)
@@ -51,7 +51,7 @@ Windows commands, and complete download instructions.
 
 ## First build and start
 
-Run from `MorphAgent_UI/`:
+Run from `MorphAgent_UI_Docker/`:
 
 ### macOS or Linux
 
@@ -128,7 +128,7 @@ docker compose -f docker/docker-compose.yml down
 | `docker-data/` | `/data` | API `.env`, UI preferences, logs, and demo results |
 | `workspace/` | `/workspace` | Custom datasets and their generated results |
 
-Put custom data below `MorphAgent_UI/workspace/`, then select `/workspace` (or
+Put custom data below `MorphAgent_UI_Docker/workspace/`, then select `/workspace` (or
 one of its child folders) from the Configure page. The selected folder must
 contain the normal `dataset/<sample>/image.tif` structure. Generated results
 remain in the same mounted workspace and therefore survive container updates.
@@ -177,7 +177,7 @@ repository verifier inside the container:
 ```bash
 docker compose -f docker/docker-compose.yml exec morphagent-ui \
   conda run --no-capture-output -n morphagent \
-  python /opt/MorphAgent_UI/scripts/verify_install.py --ui-smoke
+  python /opt/MorphAgent_UI_Docker/scripts/verify_install.py --ui-smoke
 ```
 
 Useful local logs are written to `docker-data/logs/` (`ui.log`, `novnc.log`,

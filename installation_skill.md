@@ -5,8 +5,10 @@
 > step has a concrete verification you MUST run before moving on. Do not skip
 > verifications. Prefer failing loudly and fixing, over guessing.
 >
-> Related: for the **desktop Qt UI** under `MorphAgent_UI/`, use
-> [`installation_skill_UI.md`](installation_skill_UI.md) instead of this file.
+> Related: for the lightweight desktop UI, use
+> [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
+> For the containerized UI package under `MorphAgent_UI_Docker/`, use
+> [`installation_skill_UI.md`](installation_skill_UI.md).
 
 ## 0. What MorphAgent is (mental model)
 

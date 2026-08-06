@@ -905,7 +905,7 @@ class MorphAgentConfig:
     code_temperature: float = float(os.getenv("CODE_TEMPERATURE", "0.0"))  # Temperature for code generation (default 0.0 for reproducibility)
     enable_critic_agent: bool = bool(os.getenv("ENABLE_CRITIC_AGENT", "True").lower() == "true")  # Whether to enable the VLM critic agent to evaluate code (enabled by default)
     # Conda env used to EXECUTE agent-generated feature code (the "sandbox").
-    # UI handoff: isolated from the Qt/agent env `morphagent` (see MorphAgent_UI setup).
+    # UI handoff: isolated from the Qt/agent env `morphagent` (see MorphAgent_UI_Docker setup).
     conda_env: str = os.getenv("CONDA_ENV", "morphagent_sandbox")
     conda_base_paths: List[Path] = field(default_factory=lambda: [
         p for p in [
