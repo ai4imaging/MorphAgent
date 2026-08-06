@@ -1,115 +1,110 @@
 # MorphAgent UI Lite
 
-**Tau demo trial.** Single-environment handoff: install lightly, open the Qt UI, Load demo, and run one Code/VLM round with prepared knowledge summaries.
+MorphAgent UI Lite provides the desktop interface, bundled Tau demo, feature extraction pipeline, historical code reuse, and result exploration in one Conda environment.
 
-| | **Lite** | Full `MorphAgent_UI` |
-|--|----------|----------------------|
-| Scope | Tau demo + Code/VLM API | Full research workflow |
-| Env | **`morphagent_lite` only** | `morphagent` + sandbox (+ optional Allen) |
-| Knowledge | Prepared txt, or configured-LLM synthesis from the biological question | Live PDF / PubMed / deep-research generation |
-| Segmentation | Reuse masks if present; **never auto-seg** | Allen when masks missing |
-| Install | `conda create` (Python) then slim pip | Conda + broader science stack |
-
-UI flow: **Home → Configure → Run → Features → Evidence**.
-
-## Supported
+## Included
 
 - Qt desktop UI
-- Bundled Tau demo dataset
-- Code / VLM API runs
-- Expert notes via prepared txt
-- Deep Research / Literature toggles: prepared txt first; otherwise two configured-LLM calls synthesize summaries from the biological question + dataset description
-- Reuse existing masks (`SEGMENTATION_BACKEND=none`)
+- Bundled 10-sample Tau demo
+- Code-based feature extraction
+- Online multimodal feature scoring
+- Historical merged-code reuse without model calls
+- Ask MorphAgent result questions
+- Prepared expert, research, and literature summaries
+- Existing segmentation-mask reuse
+- PNG, JPEG, TIFF/OME-TIFF, GIF, WebP, MRC, MAP, and REC input support
 
-## Intentionally skipped (no popup)
-
-Lite does **not** run heavy knowledge pipelines. When Deep Research or Literature / RAG is enabled:
-
-1. use a supplied/prepared summary txt when present;
-2. otherwise ask the configured LLM to synthesize the corresponding summary from the biological question and dataset description;
-3. cache it under `<project>/.knowledge_precomputed/` and inject it into feature-planning prompts;
-4. if the model call fails, log the error and continue without that source rather than aborting the run.
-
-The literature synthesis is explicitly instructed not to claim live retrieval or invent citations.
-
-- PDF parsing (`pymupdf`)
-- Auto PubMed / literature download
-- Separate deep-research provider/model
-- Automatic Allen / Cellpose segmentation
-
-Prepared demo files:
-
-- `MorphAgent/demo/precomputed/expert_knowledge_summary.txt`
-- `MorphAgent/demo/precomputed/deep_research_summary.txt`
-- `MorphAgent/demo/precomputed/rag_knowledge_summary.txt`
-
-For live literature fetch, PDF ingestion, or Allen segmentation, use [`MorphAgent_UI`](../MorphAgent_UI/).
-
-## Prerequisites
-
-- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) / Anaconda (`conda` on PATH)
-- Network for the first pip install
+Automatic segmentation and live literature downloading are not included. Missing optional knowledge or masks do not block a normal Lite run.
 
 ## Install
 
+Prerequisites:
+
+- Miniconda or Anaconda
+- Network access during the first installation
+
 ### macOS / Linux
 
+From this directory:
+
 ```bash
-cd MorphAgent_UI_Lite
 bash scripts/setup.sh
 bash scripts/start_ui.sh
 ```
 
 ### Windows
 
-1. Open `MorphAgent_UI_Lite\scripts\` in Explorer.
-2. Double-click **`setup_windows.bat`**.
-3. Double-click **`start_ui_windows.bat`**.
+Open `scripts\` and double-click:
 
-Or from Anaconda Prompt / PowerShell inside `MorphAgent_UI_Lite\`:
+1. `setup_windows.bat`
+2. `start_ui_windows.bat`
+
+Or run:
 
 ```powershell
 .\scripts\setup_windows.bat
 .\scripts\start_ui_windows.bat
 ```
 
-Recreate the env:
+Setup creates the single `morphagent_lite` environment and installs the application from `MorphAgent/`.
 
-```bash
-MORPHAGENT_RECREATE_ENVS=1 bash scripts/setup.sh
+## Run the demo
+
+1. Open the UI.
+2. Click **Load demo dataset**.
+3. Configure an OpenAI-compatible text and multimodal API.
+4. Choose the number of rounds and features.
+5. Click **Run MorphAgent**.
+6. Review retained features and evidence when the run finishes.
+
+A completed demo run can be opened without an API key.
+
+## Use your own images
+
+Choose the directory containing the sample folders:
+
+```text
+dataset/
+├── sample_1/
+│   ├── image.tif
+│   └── segmentation/
+│       └── mask_cell.tif
+└── sample_2/
+    └── image.png
 ```
 
-## Segmentation behavior
+Non-2D images are expanded into grayscale slices. Generated slice metadata is recorded in `slice_manifest.json`.
 
-- Samples with `dataset/<sample>/segmentation/*` masks → reused.
-- Samples without masks → skipped (`skipped_no_backend`); Code/VLM still run without `seg`.
-- For automatic Allen segmentation, use the full [`MorphAgent_UI`](../MorphAgent_UI/) package.
+Existing masks are reused. If no mask is present, Lite continues without automatic segmentation unless a historical reuse job explicitly requires that mask.
 
-## What setup does
+## Reuse historical features
 
-1. Best-effort Anaconda ToS accept (so plugins / libmamba can stay enabled)
-2. `conda create -n morphagent_lite python=3.10 pip` from **defaults** only (tiny solve)
-3. `pip install -r dependencies/requirements-lite.txt` (numpy / scipy / PyQt5 / … — **not** via conda)
-4. `pip install -e MorphAgent`
-5. Writes Lite defaults into `MorphAgent/.env` (`CONDA_ENV=morphagent_lite`, `SEGMENTATION_BACKEND=none`)
+From Home, open **Reuse history features** and select:
 
-If the tiny `conda create` fails (ToS / old solver), setup retries once with classic solver — still **only** `python` + `pip`. It never runs a conda-forge mega-solve of PyQt/numpy/scipy (that path has crashed old `conda.exe` with `0xc0000005`).
+1. A completed MorphAgent results directory.
+2. A new dataset.
+3. An output directory.
 
-If pip PyQt fails, setup retries `pip install PyQt5` (not `conda install` from conda-forge).
+Lite applies each round's merged code to the new samples without LLM or VLM calls. Required segmentation masks are checked before execution.
 
-## Windows / conda troubleshooting
+## Prepared knowledge
 
-| Symptom | What Lite does |
-|---------|----------------|
-| Old conda (e.g. 23.7) forced classic solver on a huge conda-forge list | Lite does **not** conda-install the science stack; only python+pip |
-| `CONDA_NO_PLUGINS` + `CONDA_SOLVER=classic` always on | Removed as default; classic is fallback for create only |
-| SSL / `CondaSSLError` while fetching indexes | Create uses defaults; science packages come from pip (`--retries 5`) |
-| `conda.exe` exit `0xc0000005` during solve | Avoided by not solving PyQt+numpy+… through conda |
+The demo summaries are stored under:
 
-Recommended: Miniconda **≥ 23.9** (libmamba default). If create still fails, upgrade conda or retry on a stable network.
+```text
+MorphAgent/demo/precomputed/
+```
+
+When enabled, Lite uses prepared summaries first. If one is unavailable, it can synthesize a short summary with the configured LLM and cache it under `.knowledge_precomputed/`. A failed optional knowledge call is skipped instead of stopping the run.
 
 ## Verify
 
 ```bash
 conda run -n morphagent_lite python scripts/verify_install.py
+```
+
+To recreate the environment:
+
+```bash
+MORPHAGENT_RECREATE_ENVS=1 bash scripts/setup.sh
 ```

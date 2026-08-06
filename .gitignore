@@ -1,8 +1,8 @@
-# ---- Secrets ----
+# Secrets
 .env
 *.key
 
-# ---- Python ----
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -11,34 +11,29 @@ build/
 dist/
 .ipynb_checkpoints/
 
-# ---- MorphAgent runtime outputs / caches ----
-# Not "results/" itself: that would also hide the intentionally bundled
-# MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ demo output.
+# Runtime outputs and caches
 run_*/
+reuse_ui_*/
 *.log
-!MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ui_console.log
+!MorphAgent_UI_Lite/MorphAgent/demo/data/results/completed_demo_run/ui_console.log
 .rag_cache/
 .morphagent_repro_cache/
+.knowledge_precomputed/
 
-# ---- User data (do NOT commit datasets) ----
-# Anchored to repo root only, so bundled UI demo data
-# (MorphAgent_UI/MorphAgent/demo/data/) is still tracked.
+# User datasets
 /data/
 /datasets/
 /demo/
-MorphAgent_UI/MorphAgent/demo/data_test/
+MorphAgent_UI_Lite/MorphAgent/demo/data_test/
 
-# ---- Segmentation / model artifacts ----
+# Generated scientific outputs
 *.tif.out/
 allen_seg_output/
-allen_mito_output/
 segmentation_results/
 test_output/
 
-# ---- OS / editor ----
+# OS and editors
 .DS_Store
 .vscode/
 .idea/
-
-# ---- Local isolated development worktrees ----
 .worktrees/

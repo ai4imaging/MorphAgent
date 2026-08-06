@@ -1,6 +1,0 @@
-# Focused standalone UI. Install after the core MorphAgent environment is ready.
-qtpy>=2.4
-PyQt5>=5.15
-
-# Optional image-canvas integration:
-# pip install -e ".[napari]"
