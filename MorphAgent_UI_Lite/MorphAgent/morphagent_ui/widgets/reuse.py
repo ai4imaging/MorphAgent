@@ -221,6 +221,9 @@ class ReusePage(QWidget):
         features = summary.get("code_feature_count", 0)
         skipped = summary.get("skipped_rounds", 0)
         text = f"{rounds} reusable code round(s) · {features} code feature(s)"
+        required_masks = summary.get("required_masks", [])
+        if required_masks:
+            text += f" · required masks: {', '.join(required_masks)}"
         if skipped:
             text += f" · {skipped} round(s) skipped"
         if rounds:
@@ -248,7 +251,7 @@ class ReusePage(QWidget):
         if summary.mask_count:
             parts.append(f"{summary.mask_count} masks")
         else:
-            parts.append("no masks detected (features may return NaN)")
+            parts.append("no masks detected (reuse is blocked when history code requires masks)")
         self.dataset_summary.setText("Ready · " + " · ".join(parts))
         role = "warning" if summary.mask_count == 0 or summary.empty_samples else "success"
         set_dynamic_property(self.dataset_summary, "role", role)
@@ -280,9 +283,18 @@ class ReusePage(QWidget):
             if not data_root:
                 blockers.append("Choose a dataset folder.")
         if blockers:
+            missing_masks = any(
+                "segmentation mask" in item.lower()
+                or "segmentation-dependent" in item.lower()
+                for item in blockers
+            )
             QMessageBox.warning(
                 self,
-                "Reuse setup needs attention",
+                (
+                    "Required segmentation masks are missing"
+                    if missing_masks
+                    else "Reuse setup needs attention"
+                ),
                 "\n".join(f"• {item}" for item in blockers),
             )
             self._update_blockers()

@@ -877,7 +877,8 @@ class MorphAgentConfig:
     
     # Image Processing Settings
     image_extensions: Set[str] = field(default_factory=lambda: {
-        ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"
+        ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp",
+        ".mrc", ".map", ".rec",
     })  # Supported image extensions
     
     # Illumination Correction Settings (Singh et al., J. Microscopy 2014)

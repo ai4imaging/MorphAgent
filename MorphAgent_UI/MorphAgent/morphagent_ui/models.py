@@ -20,7 +20,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+IMAGE_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp",
+    ".mrc", ".map", ".rec",
+}
 VLM_NATIVE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 MASK_DIR_MARKERS = ("segmentation", "segment", "mask")
 

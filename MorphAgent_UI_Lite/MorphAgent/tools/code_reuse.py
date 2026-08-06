@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import math
 import re
@@ -18,7 +19,10 @@ from tools.code_executor import CodeExecutor, ExtractionResult
 
 
 ProgressCallback = Callable[[str], None]
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+IMAGE_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp",
+    ".mrc", ".map", ".rec",
+}
 
 
 @dataclass(frozen=True)
@@ -311,19 +315,192 @@ def discover_reuse_rounds(source_results: str | Path) -> tuple[list[ReuseRoundSp
     return rounds, skipped
 
 
+def extract_required_mask_stems(merged_code: str) -> tuple[str, ...]:
+    """Extract literal segmentation-dict keys used by historical merged code."""
+
+    required: set[str] = set()
+    try:
+        tree = ast.parse(merged_code)
+    except SyntaxError:
+        tree = None
+
+    if tree is not None:
+        aliases = {"seg"}
+
+        def is_alias_expression(node: ast.AST) -> bool:
+            if isinstance(node, ast.Name):
+                return node.id in aliases
+            if isinstance(node, ast.IfExp):
+                return is_alias_expression(node.body) or is_alias_expression(node.orelse)
+            if isinstance(node, ast.BoolOp):
+                return any(is_alias_expression(value) for value in node.values)
+            return False
+
+        changed = True
+        while changed:
+            changed = False
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                value = node.value
+                if value is None or not is_alias_expression(value):
+                    continue
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if isinstance(target, ast.Name) and target.id not in aliases:
+                        aliases.add(target.id)
+                        changed = True
+
+        selector_parameters: dict[str, set[int]] = {}
+        for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+            parameters = [argument.arg for argument in function.args.args]
+            for node in ast.walk(function):
+                key_node: ast.AST | None = None
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in aliases
+                    and node.args
+                ):
+                    key_node = node.args[0]
+                elif (
+                    isinstance(node, ast.Subscript)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in aliases
+                ):
+                    key_node = node.slice
+                if isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
+                    required.add(key_node.value)
+                elif isinstance(key_node, ast.Name) and key_node.id in parameters:
+                    selector_parameters.setdefault(function.name, set()).add(
+                        parameters.index(key_node.id)
+                    )
+
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in selector_parameters
+            ):
+                for index in selector_parameters[node.func.id]:
+                    if index < len(node.args):
+                        argument = node.args[index]
+                        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                            required.add(argument.value)
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and re.fullmatch(r"mask[_-][A-Za-z0-9_.-]+", node.value)
+            ):
+                required.add(node.value)
+    else:
+        patterns = (
+            r"\b(?:seg|seg_dict)\s*\.get\(\s*['\"]([^'\"]+)['\"]",
+            r"\b(?:seg|seg_dict)\s*\[\s*['\"]([^'\"]+)['\"]\s*\]",
+            r"['\"](mask[_-][A-Za-z0-9_.-]+)['\"]",
+        )
+        for pattern in patterns:
+            required.update(re.findall(pattern, merged_code))
+
+    return tuple(sorted(item for item in required if item.strip()))
+
+
+def required_masks_for_round(round_spec: ReuseRoundSpec) -> tuple[str, ...]:
+    """Return exact mask filename stems required by one reusable round."""
+
+    required: set[str] = set()
+    for feature in round_spec.feature_defs:
+        for field_name in ("required_masks", "required_mask_stems"):
+            raw = feature.get(field_name)
+            if isinstance(raw, str) and raw.strip():
+                required.add(raw.strip())
+            elif isinstance(raw, (list, tuple, set)):
+                required.update(str(item).strip() for item in raw if str(item).strip())
+    try:
+        merged_code = round_spec.merged_code_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        merged_code = ""
+    required.update(extract_required_mask_stems(merged_code))
+    return tuple(sorted(required))
+
+
+def _short_sample_list(sample_ids: list[str], limit: int = 12) -> str:
+    visible = sample_ids[:limit]
+    text = ", ".join(visible)
+    if len(sample_ids) > limit:
+        text += f", and {len(sample_ids) - limit} more"
+    return text
+
+
+def _diagnose_reuse_masks(
+    rounds: list[ReuseRoundSpec],
+    dataset_root: Path,
+    sample_ids: list[str],
+) -> list[str]:
+    blockers: list[str] = []
+    for round_spec in rounds:
+        required = required_masks_for_round(round_spec)
+        segmentation_features = [
+            str(feature.get("name") or "").strip()
+            for feature in round_spec.feature_defs
+            if feature.get("needs_segmentation")
+        ]
+        if not required:
+            if segmentation_features:
+                blockers.append(
+                    f"Round {round_spec.round_number} contains segmentation-dependent code "
+                    "but its required mask filenames could not be determined safely. "
+                    "Reuse cannot start until the historical merged code uses explicit seg keys."
+                )
+            continue
+
+        missing_groups: dict[tuple[str, ...], list[str]] = {}
+        for sample_id in sample_ids:
+            available = {
+                path.stem
+                for path in find_segmentation_paths(dataset_root / sample_id)
+            }
+            missing = tuple(mask for mask in required if mask not in available)
+            if missing:
+                missing_groups.setdefault(missing, []).append(sample_id)
+        if not missing_groups:
+            continue
+
+        details = "; ".join(
+            f"{', '.join(masks)} missing in {_short_sample_list(samples)}"
+            for masks, samples in sorted(missing_groups.items())
+        )
+        blockers.append(
+            f"Round {round_spec.round_number} requires segmentation mask file stems: "
+            f"{', '.join(required)}. {details}. Add matching mask files under each "
+            "sample's segmentation/ folder (for example mask_cell.tif)."
+        )
+    return blockers
+
+
 def summarize_source_results(source_results: str | Path) -> dict[str, Any]:
     rounds, skipped = discover_reuse_rounds(source_results)
+    masks_by_round = {
+        item.round_number: required_masks_for_round(item)
+        for item in rounds
+    }
     return {
         "source_results": str(Path(source_results).expanduser().resolve()),
         "reusable_rounds": len(rounds),
         "skipped_rounds": len(skipped),
         "code_feature_count": sum(len(item.feature_names) for item in rounds),
+        "required_masks": sorted(
+            {mask for masks in masks_by_round.values() for mask in masks}
+        ),
         "rounds": [
             {
                 "round": item.round_number,
                 "code_features": list(item.feature_names),
                 "merged_code": str(item.merged_code_path),
                 "skipped_vlm": list(item.skipped_vlm_names),
+                "required_masks": list(masks_by_round[item.round_number]),
             }
             for item in rounds
         ],
@@ -338,6 +515,9 @@ def diagnose_reuse_inputs(
     """Return human-readable blockers for reuse preflight."""
 
     blockers: list[str] = []
+    rounds: list[ReuseRoundSpec] = []
+    samples: list[str] = []
+    dataset: Path | None = None
     if source_results is None or not str(source_results).strip():
         blockers.append("Choose a completed MorphAgent results folder.")
     else:
@@ -369,10 +549,13 @@ def diagnose_reuse_inputs(
                     for sample in samples
                     if not find_primary_image_paths(dataset / sample)
                 ]
-                if empty and len(empty) == len(samples):
+                if empty:
                     blockers.append(
-                        "Sample folders were found, but none contain primary images for the code route."
+                        "Primary images are missing for sample(s): "
+                        f"{_short_sample_list(empty)}."
                     )
+    if rounds and dataset is not None and samples:
+        blockers.extend(_diagnose_reuse_masks(rounds, dataset, samples))
     if (
         source_results
         and data_root

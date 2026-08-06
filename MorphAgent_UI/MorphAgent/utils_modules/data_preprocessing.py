@@ -418,6 +418,371 @@ def normalize_image_percentile(img: np.ndarray, lower_percentile: float = 1.0, u
     return img_normalized
 
 
+def generate_slices_from_2d_image(
+    image_path: Path,
+    output_dir: Path,
+    naming_info: Optional[Dict[str, Any]] = None,
+) -> List[Path]:
+    """Split a PNG/JPEG image into one grayscale slice per image channel."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with Image.open(image_path) as source:
+            if source.mode == "P":
+                source = source.convert("RGBA" if "transparency" in source.info else "RGB")
+            bands = list(source.getbands())
+            image = np.asarray(source)
+    except Exception as exc:
+        print(f"  [WARN]  Warning: failed to process 2D image {image_path}: {exc}")
+        return []
+
+    if image.ndim == 3 and bands and bands[-1] == "A":
+        alpha = image[..., -1]
+        opaque_value = (
+            np.iinfo(alpha.dtype).max
+            if np.issubdtype(alpha.dtype, np.integer)
+            else 1.0
+        )
+        if np.all(alpha == opaque_value):
+            image = image[..., :-1]
+            bands = bands[:-1]
+
+    if image.ndim == 2:
+        channels = [image]
+        bands = bands[:1] or ["L"]
+    elif image.ndim == 3 and image.shape[-1] >= 1:
+        channels = [image[..., index] for index in range(image.shape[-1])]
+        if len(bands) != len(channels):
+            bands = [f"Channel {index}" for index in range(len(channels))]
+    else:
+        print(f"  [WARN]  Warning: unsupported 2D image shape {image.shape}: {image_path}")
+        return []
+
+    channel_mapping = (
+        naming_info.get("channel_mapping", {})
+        if isinstance(naming_info, dict)
+        else {}
+    )
+    generated_paths: List[Path] = []
+    mapping: Dict[int, Dict[str, str]] = {}
+    for index, channel in enumerate(channels):
+        configured = channel_mapping.get(index, {}) if isinstance(channel_mapping, dict) else {}
+        band_name = str(bands[index]) if index < len(bands) else f"Channel {index}"
+        marker = str(configured.get("marker") or band_name or f"Channel {index}")
+        marker_clean = re.sub(r"[^A-Za-z0-9_]+", "_", marker).strip("_") or f"channel_{index}"
+        filename = (
+            "slice_0000.png"
+            if len(channels) == 1
+            else f"slice_{index:04d}_{marker_clean}.png"
+        )
+        output_path = output_dir / filename
+        normalized = normalize_image_percentile(np.asarray(channel))
+        Image.fromarray(normalized, mode="L").save(output_path)
+        generated_paths.append(output_path)
+        mapping[index] = {
+            "marker": marker,
+            "color": str(configured.get("color") or band_name).lower(),
+        }
+
+    if len(channels) > 1:
+        mapping_data = {
+            "data_dimension": "2d_multichannel",
+            "num_channels": len(channels),
+            "channel_mapping": mapping,
+            "slice_files": {
+                index: path.name
+                for index, path in enumerate(generated_paths)
+            },
+        }
+        with (output_dir / "channel_mapping.json").open("w", encoding="utf-8") as handle:
+            json.dump(mapping_data, handle, indent=2, ensure_ascii=False)
+    return generated_paths
+
+
+def _infer_array_axes(
+    shape: Tuple[int, ...],
+    data_dimension: Optional[str] = None,
+) -> str:
+    """Infer conservative axis labels when a file format has no axis metadata."""
+
+    if len(shape) == 2:
+        return "YX"
+    if len(shape) == 3:
+        if shape[-1] <= 4 and shape[-1] < min(shape[0], shape[1]):
+            return "YXC"
+        if data_dimension == "2d_multichannel":
+            return "CYX"
+        if data_dimension == "3d":
+            return "ZYX"
+        if shape[0] <= 4 and shape[0] < min(shape[1], shape[2]):
+            return "CYX"
+        return "ZYX"
+
+    leading = len(shape) - 2
+    unknown_axes = iter("ABDEFGHIJKLMNOPQRSUVW")
+    labels = [next(unknown_axes, "Q") for _index in range(leading)]
+    small = [
+        index
+        for index, size in enumerate(shape[:-2])
+        if size <= 4
+    ]
+    if small:
+        labels[small[-1]] = "C"
+    remaining = [index for index, label in enumerate(labels) if label != "C"]
+    if remaining:
+        labels[remaining[-1]] = "Z"
+    if len(remaining) > 1:
+        labels[remaining[-2]] = "T"
+    return "".join(labels) + "YX"
+
+
+def generate_slices_from_nd_array(
+    image: np.ndarray,
+    output_dir: Path,
+    *,
+    axes: Optional[str] = None,
+    naming_info: Optional[Dict[str, Any]] = None,
+    source_name: str = "",
+) -> List[Path]:
+    """Expand every non-spatial dimension of an image array into 2D PNG slices."""
+
+    array = np.asarray(image)
+    if array.ndim < 2:
+        print(f"  [WARN]  Warning: image has fewer than 2 dimensions: {source_name}")
+        return []
+    data_dimension = (
+        str(naming_info.get("data_dimension") or "unknown")
+        if isinstance(naming_info, dict)
+        else "unknown"
+    )
+    axis_labels = str(axes or "").upper()
+    if (
+        len(axis_labels) != array.ndim
+        or any(label not in set("TCZYXS") for label in axis_labels)
+    ):
+        axis_labels = _infer_array_axes(tuple(array.shape), data_dimension)
+    axis_labels = axis_labels.replace("S", "C")
+
+    keep_indices = [
+        index
+        for index, size in enumerate(array.shape)
+        if size != 1 or axis_labels[index] in {"Y", "X"}
+    ]
+    if len(keep_indices) != array.ndim:
+        array = np.squeeze(array, axis=tuple(
+            index for index in range(array.ndim) if index not in keep_indices
+        ))
+        axis_labels = "".join(axis_labels[index] for index in keep_indices)
+    if array.ndim < 2:
+        return []
+
+    if "Y" in axis_labels and "X" in axis_labels:
+        y_axis = axis_labels.index("Y")
+        x_axis = axis_labels.index("X")
+    else:
+        y_axis, x_axis = array.ndim - 2, array.ndim - 1
+        labels = list(axis_labels)
+        labels[y_axis], labels[x_axis] = "Y", "X"
+        axis_labels = "".join(labels)
+    leading_axes = [
+        index for index in range(array.ndim) if index not in {y_axis, x_axis}
+    ]
+    permutation = leading_axes + [y_axis, x_axis]
+    array = np.transpose(array, permutation)
+    ordered_axes = "".join(axis_labels[index] for index in permutation)
+    non_spatial_axes = ordered_axes[:-2]
+    non_spatial_shape = array.shape[:-2]
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    channel_mapping = (
+        naming_info.get("channel_mapping", {})
+        if isinstance(naming_info, dict)
+        else {}
+    )
+    generated: List[Path] = []
+    frames: List[Dict[str, Any]] = []
+    indices = list(np.ndindex(non_spatial_shape)) if non_spatial_shape else [()]
+    for serial, index_tuple in enumerate(indices):
+        plane = array[index_tuple] if index_tuple else array
+        if plane.ndim != 2:
+            print(
+                f"  [WARN]  Warning: could not reduce frame to 2D "
+                f"({plane.shape}): {source_name}"
+            )
+            continue
+        coordinates = {
+            axis: int(value)
+            for axis, value in zip(non_spatial_axes, index_tuple)
+        }
+        channel_index = coordinates.get("C")
+        configured = (
+            channel_mapping.get(channel_index, {})
+            if channel_index is not None and isinstance(channel_mapping, dict)
+            else {}
+        )
+        marker = str(
+            configured.get("marker")
+            or (f"Channel {channel_index}" if channel_index is not None else "")
+        )
+        marker_clean = re.sub(r"[^A-Za-z0-9_]+", "_", marker).strip("_")
+        if not coordinates:
+            filename = "slice_0000.png"
+        elif set(coordinates) == {"C"}:
+            filename = f"slice_{channel_index:04d}_{marker_clean or f'channel_{channel_index}'}.png"
+        else:
+            coordinate_text = "_".join(
+                f"{axis.lower()}{value:04d}"
+                for axis, value in coordinates.items()
+            )
+            if marker_clean:
+                coordinate_text += f"_{marker_clean}"
+            filename = f"slice_{coordinate_text}.png"
+        output_path = output_dir / filename
+        Image.fromarray(normalize_image_percentile(plane), mode="L").save(output_path)
+        generated.append(output_path)
+        frames.append(
+            {
+                "file": output_path.name,
+                "indices": coordinates,
+                "serial": serial,
+            }
+        )
+
+    manifest = {
+        "source_file": source_name,
+        "source_shape": list(np.asarray(image).shape),
+        "axes": ordered_axes,
+        "frame_count": len(generated),
+        "frames": frames,
+    }
+    with (output_dir / "slice_manifest.json").open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, ensure_ascii=False)
+    if "C" in non_spatial_axes:
+        channel_count = non_spatial_shape[non_spatial_axes.index("C")]
+        mapping = {
+            index: channel_mapping.get(
+                index,
+                {"marker": f"Channel {index}", "color": "unknown"},
+            )
+            for index in range(channel_count)
+        }
+        with (output_dir / "channel_mapping.json").open("w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "data_dimension": (
+                        "2d_multichannel"
+                        if set(non_spatial_axes) == {"C"}
+                        else "multidimensional"
+                    ),
+                    "num_channels": channel_count,
+                    "channel_mapping": mapping,
+                    "slice_files": (
+                        {
+                            index: next(
+                                frame["file"]
+                                for frame in frames
+                                if frame["indices"].get("C") == index
+                            )
+                            for index in range(channel_count)
+                        }
+                        if set(non_spatial_axes) == {"C"}
+                        else {
+                            index: [
+                                frame["file"]
+                                for frame in frames
+                                if frame["indices"].get("C") == index
+                            ]
+                            for index in range(channel_count)
+                        }
+                    ),
+                },
+                handle,
+                indent=2,
+                ensure_ascii=False,
+            )
+    return generated
+
+
+def generate_slices_from_image_file(
+    image_path: Path,
+    output_dir: Path,
+    naming_info: Optional[Dict[str, Any]] = None,
+) -> List[Path]:
+    """Read a supported raster, TIFF/OME-TIFF, or MRC volume and create slices."""
+
+    suffix = image_path.suffix.lower()
+    data_dimension = (
+        str(naming_info.get("data_dimension") or "unknown")
+        if isinstance(naming_info, dict)
+        else "unknown"
+    )
+    try:
+        if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
+            with Image.open(image_path) as source:
+                frame_count = int(getattr(source, "n_frames", 1) or 1)
+                if frame_count > 1:
+                    frames = []
+                    use_alpha = "A" in source.getbands() or "transparency" in source.info
+                    for frame_index in range(frame_count):
+                        source.seek(frame_index)
+                        frame = source.convert("RGBA" if use_alpha else "RGB")
+                        frames.append(np.asarray(frame))
+                    stack = np.stack(frames, axis=0)
+                    if use_alpha and np.all(stack[..., -1] == 255):
+                        stack = stack[..., :-1]
+                    return generate_slices_from_nd_array(
+                        stack,
+                        output_dir,
+                        axes="TYXC",
+                        naming_info=naming_info,
+                        source_name=image_path.name,
+                    )
+            return generate_slices_from_2d_image(image_path, output_dir, naming_info)
+        if suffix in {".tif", ".tiff"}:
+            with tifffile.TiffFile(str(image_path)) as tif:
+                series = tif.series[0]
+                image = series.asarray()
+                axes = getattr(series, "axes", None)
+                page_count = len(tif.pages)
+            if (
+                image.ndim == 3
+                and page_count == image.shape[0]
+                and page_count > 1
+                and str(axes or "").upper() in {"QYX", "SYX", "IYX"}
+            ):
+                axes = "ZYX"
+            return generate_slices_from_nd_array(
+                image,
+                output_dir,
+                axes=axes,
+                naming_info=naming_info,
+                source_name=image_path.name,
+            )
+        if suffix in {".mrc", ".map", ".rec"}:
+            try:
+                import mrcfile
+            except ImportError as exc:
+                raise ImportError(
+                    "MRC input requires the 'mrcfile' package. "
+                    "Install project requirements and retry."
+                ) from exc
+            with mrcfile.open(str(image_path), permissive=True) as handle:
+                image = np.asarray(handle.data).copy()
+            axes = "YX" if image.ndim == 2 else "ZYX" if image.ndim == 3 else None
+            return generate_slices_from_nd_array(
+                image,
+                output_dir,
+                axes=axes,
+                naming_info=naming_info,
+                source_name=image_path.name,
+            )
+    except Exception as exc:
+        print(f"  [WARN]  Warning: failed to read {image_path}: {exc}")
+        return []
+    print(f"  [WARN]  Warning: unsupported image format: {image_path}")
+    return []
+
+
 def generate_slices_from_3d_tiff(
     tiff_path: Path,
     output_dir: Path,
@@ -691,7 +1056,6 @@ def ensure_slices_directory(
                     (width == 3 and height == 512) or 
                     (width == 512 and height == 3)):
                     # Old slice files have the wrong format; delete and regenerate
-                    import shutil
                     shutil.rmtree(slices_dir)
                     slices_dir.mkdir(parents=True, exist_ok=True)
                 else:
@@ -718,7 +1082,6 @@ def ensure_slices_directory(
                     return True, existing_files
             except Exception as e:
                 # If the check fails, delete and regenerate
-                import shutil
                 if slices_dir.exists():
                     shutil.rmtree(slices_dir)
                 slices_dir.mkdir(parents=True, exist_ok=True)
@@ -750,8 +1113,13 @@ def ensure_slices_directory(
     all_generated_paths = []
     
     for primary_file in tqdm(primary_files, desc=f"    Processing files", leave=False, ncols=60):
-        if primary_file.suffix.lower() in ['.tif', '.tiff']:
-            # TIFF file; generate slices (pass the data_dimension parameter)
+        suffix = primary_file.suffix.lower()
+        if (
+            suffix in {".tif", ".tiff"}
+            and settings.enable_illumination_correction
+            and icf_cache
+        ):
+            # Keep the legacy TIFF path when illumination correction is explicitly enabled.
             generated = generate_slices_from_3d_tiff(
                 primary_file,
                 slices_dir,
@@ -761,12 +1129,13 @@ def ensure_slices_directory(
                 icf_cache=icf_cache
             )
             all_generated_paths.extend(generated)
-        elif primary_file.suffix.lower() in ['.png', '.jpg', '.jpeg']:
-            # Already PNG/JPG; copy directly to the slices directory
-            output_path = slices_dir / primary_file.name
-            slices_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(primary_file, output_path)
-            all_generated_paths.append(output_path)
+        else:
+            generated = generate_slices_from_image_file(
+                primary_file,
+                slices_dir,
+                naming_info,
+            )
+            all_generated_paths.extend(generated)
     
     if not all_generated_paths:
         print(f"    [WARN]  Warning: failed to generate any slice files")

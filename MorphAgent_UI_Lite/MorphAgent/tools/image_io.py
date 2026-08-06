@@ -25,7 +25,7 @@ def is_segmentation_mask_filename(name: str) -> bool:
 
 
 def load_image_array(path: Path | str) -> Any:
-    """Load an image/mask array from TIFF, PNG, JPEG, BMP, GIF, etc.
+    """Load an image/mask array from TIFF, MRC, PNG, JPEG, BMP, GIF, etc.
 
     Tries tifffile for ``.tif/.tiff`` first (with PIL fallback), then PIL / imageio
     for other formats. Raises ``ValueError`` if nothing can load the file.
@@ -46,6 +46,15 @@ def load_image_array(path: Path | str) -> Any:
             return np.asarray(tifffile.imread(str(path)))
         except Exception as exc:  # noqa: BLE001 — try broader loaders next
             errors.append(f"tifffile: {exc}")
+
+    if suffix in {".mrc", ".map", ".rec"}:
+        try:
+            import mrcfile
+
+            with mrcfile.open(str(path), permissive=True) as handle:
+                return np.asarray(handle.data).copy()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"mrcfile: {exc}")
 
     try:
         from PIL import Image

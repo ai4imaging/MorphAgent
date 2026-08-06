@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor, QPixmap
@@ -855,6 +856,30 @@ class WidgetSmokeTests(unittest.TestCase):
         page.prepare()
         self.app.processEvents()
         self.assertFalse(page.blocker_label.isHidden())
+        widget.close()
+
+    def test_reuse_missing_masks_shows_dialog_without_starting_worker(self) -> None:
+        widget = MorphAgentWidget()
+        page = widget.reuse_page
+        blocker = (
+            "Round 1 requires segmentation mask file stems: mask_cell, mask_nucleus. "
+            "mask_nucleus missing in sample_a."
+        )
+        with (
+            mock.patch(
+                "morphagent_ui.widgets.reuse.diagnose_reuse_inputs",
+                return_value=[blocker],
+            ),
+            mock.patch("morphagent_ui.widgets.reuse.QMessageBox.warning") as warning,
+            mock.patch.object(page.controller, "start") as start,
+        ):
+            page._start_reuse()
+
+        start.assert_not_called()
+        warning.assert_called_once()
+        self.assertEqual(warning.call_args.args[1], "Required segmentation masks are missing")
+        self.assertIn("mask_nucleus", warning.call_args.args[2])
+        self.assertFalse(page._active)
         widget.close()
 
     def test_reuse_results_load_into_features_page(self) -> None:

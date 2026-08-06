@@ -21,6 +21,7 @@ REQUIRED_MODULES = (
     "skimage",
     "sklearn",
     "tifffile",
+    "mrcfile",
     "PIL",
     "cv2",
     "imageio",

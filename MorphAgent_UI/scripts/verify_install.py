@@ -38,6 +38,7 @@ def import_required_modules() -> None:
         "scipy",
         "skimage",
         "tifffile",
+        "mrcfile",
         "cv2",
         "mahotas",
     )

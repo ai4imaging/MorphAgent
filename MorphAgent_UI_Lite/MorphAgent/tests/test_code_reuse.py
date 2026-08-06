@@ -12,6 +12,7 @@ from tools.code_executor import ExtractionResult
 from tools.code_reuse import (
     diagnose_reuse_inputs,
     discover_reuse_rounds,
+    extract_required_mask_stems,
     run_code_reuse,
     summarize_source_results,
 )
@@ -165,6 +166,23 @@ def _write_dataset(root: Path) -> Path:
 
 
 class CodeReuseDiscoveryTests(unittest.TestCase):
+    def test_extracts_direct_aliased_and_helper_mask_keys(self) -> None:
+        code = '''
+def extract_all(img, seg):
+    seg_dict = seg if isinstance(seg, dict) else {}
+    def get_mask(key):
+        return seg.get(key)
+    return {
+        "a": seg["mask_cell"],
+        "b": seg_dict.get("mask_nucleus"),
+        "c": get_mask("mask_filament"),
+    }
+'''
+        self.assertEqual(
+            extract_required_mask_stems(code),
+            ("mask_cell", "mask_filament", "mask_nucleus"),
+        )
+
     def test_discover_rounds_keeps_all_code_and_skips_vlm(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = _write_source_results(Path(raw))
@@ -185,6 +203,49 @@ class CodeReuseDiscoveryTests(unittest.TestCase):
             self.assertTrue(any("dataset" in item.lower() for item in blockers))
             source = _write_source_results(root)
             data = _write_dataset(root)
+            self.assertEqual(diagnose_reuse_inputs(source, data), [])
+
+            (data / "dataset" / "sample_b" / "image.tif").unlink()
+            blockers = diagnose_reuse_inputs(source, data)
+            self.assertTrue(
+                any("sample_b" in item and "primary images" in item.lower() for item in blockers)
+            )
+
+    def test_diagnose_requires_every_mask_for_every_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = _write_source_results(root)
+            merged = source / "round_1" / "merged_features" / "extract_all.py"
+            merged.write_text(
+                '''
+def extract_all(img, seg):
+    return {
+        "kept_feature": float(seg.get("mask_cell") is not None),
+        "dropped_feature": float(seg.get("mask_nucleus") is not None),
+    }
+''',
+                encoding="utf-8",
+            )
+            data = _write_dataset(root)
+            blockers = diagnose_reuse_inputs(source, data)
+            self.assertEqual(len(blockers), 1)
+            self.assertIn("Round 1", blockers[0])
+            self.assertIn("mask_cell, mask_nucleus", blockers[0])
+            self.assertIn("sample_a, sample_b", blockers[0])
+            self.assertEqual(
+                summarize_source_results(source)["required_masks"],
+                ["mask_cell", "mask_nucleus"],
+            )
+
+            output = root / "must_not_start"
+            with self.assertRaisesRegex(ValueError, "mask_nucleus"):
+                run_code_reuse(source, data, output_dir=output)
+            self.assertFalse(output.exists())
+
+            for sample_id in ("sample_a", "sample_b"):
+                (data / "dataset" / sample_id / "segmentation" / "mask_nucleus.tif").write_bytes(
+                    b"II*\x00"
+                )
             self.assertEqual(diagnose_reuse_inputs(source, data), [])
 
 
