@@ -227,6 +227,35 @@ def _is_max_tokens_limit_error(exc: Exception) -> bool:
     return False
 
 
+_TEMPERATURE_UNSUPPORTED_ENDPOINTS: set[tuple[str, str]] = set()
+
+
+def _llm_endpoint_key(params: Dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(params.get("base_url") or "").rstrip("/").lower(),
+        str(params.get("model") or "").strip().lower(),
+    )
+
+
+def _is_temperature_unsupported_error(exc: Exception) -> bool:
+    """Return True only when a provider explicitly rejects temperature."""
+
+    message = str(exc).lower()
+    if "temperature" not in message:
+        return False
+    markers = (
+        "deprecated",
+        "not supported",
+        "unsupported",
+        "does not support",
+        "not allowed",
+        "cannot be used",
+        "unknown parameter",
+        "unrecognized parameter",
+    )
+    return any(marker in message for marker in markers)
+
+
 def _is_context_length_error(exc: Exception) -> bool:
     """Determine whether the exception likely means the prompt is too long / the request body is too large (can be mitigated by compressing the prompt).
 
@@ -469,6 +498,7 @@ class RetryableChatLLM:
         self._llm_params = dict(llm_params or {})
         self._v1_fallback_tried = False
         self._max_tokens_clamp_tried = False
+        self._temperature_fallback_tried = False
 
     def _total_message_chars(self, messages: Any) -> int:
         if not isinstance(messages, (list, tuple)):
@@ -571,6 +601,24 @@ class RetryableChatLLM:
         self._rebuild_llm()
         return True
 
+    def _maybe_drop_temperature(self, exc: Exception) -> bool:
+        """Retry once without temperature when the selected model rejects it."""
+
+        if self._temperature_fallback_tried:
+            return False
+        if "temperature" not in self._llm_params:
+            return False
+        if not _is_temperature_unsupported_error(exc):
+            return False
+        self._temperature_fallback_tried = True
+        self._llm_params.pop("temperature")
+        _TEMPERATURE_UNSUPPORTED_ENDPOINTS.add(_llm_endpoint_key(self._llm_params))
+        print(
+            "  [INFO] Adjusted sampling settings for model compatibility."
+        )
+        self._rebuild_llm()
+        return True
+
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         """Uniformly handle retries for LLM timeout/524/connection errors; proactively compress over-long prompts before the call, and compress-then-retry when the prompt is too long (400/413)."""
         args = self._maybe_proactive_compact(args)
@@ -579,6 +627,12 @@ class RetryableChatLLM:
                 return self._llm.invoke(*args, **kwargs)
             except Exception as exc:
                 if self._maybe_retry_with_v1_base_url(exc):
+                    try:
+                        return self._llm.invoke(*args, **kwargs)
+                    except Exception as retry_exc:
+                        exc = retry_exc
+
+                if self._maybe_drop_temperature(exc):
                     try:
                         return self._llm.invoke(*args, **kwargs)
                     except Exception as retry_exc:
@@ -733,6 +787,8 @@ def make_chat_llm(**kwargs: Any):
     if settings.llm_default_headers:
         params["default_headers"] = settings.llm_default_headers
     params.update(kwargs)
+    if _llm_endpoint_key(params) in _TEMPERATURE_UNSUPPORTED_ENDPOINTS:
+        params.pop("temperature", None)
     llm = ChatOpenAI(**params)
     return RetryableChatLLM(
         llm=llm,

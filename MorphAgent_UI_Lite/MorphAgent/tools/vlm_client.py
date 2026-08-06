@@ -1072,6 +1072,7 @@ class OnlineVLMClient(VLMClient):
         self._temp_dirs = []
         self._client = None
         self._v1_fallback_tried = False
+        self._omit_temperature = False
 
     def _load_model(self):
         """Online mode does not need to load a local model; lazily create the OpenAI client."""
@@ -1101,6 +1102,17 @@ class OnlineVLMClient(VLMClient):
         except Exception:
             pass
         self._load_model()
+        return True
+
+    def _maybe_omit_temperature(self, exc: Exception, log_fn) -> bool:
+        """Use provider-default sampling when this model rejects temperature."""
+
+        from config import _is_temperature_unsupported_error
+
+        if self._omit_temperature or not _is_temperature_unsupported_error(exc):
+            return False
+        self._omit_temperature = True
+        log_fn("[VLM-Online] Adjusted sampling settings for model compatibility.")
         return True
 
     def _images_to_content(self, image_paths: List[str]) -> List[Dict[str, Any]]:
@@ -1172,9 +1184,10 @@ class OnlineVLMClient(VLMClient):
                 "model": self.model,
                 "messages": messages,
                 "max_tokens": settings.vlm_online_max_tokens,
-                "temperature": get_vlm_temperature(),
                 "timeout": request_timeout,
             }
+            if not self._omit_temperature:
+                req_kwargs["temperature"] = get_vlm_temperature()
             if _settings.reproduce_mode:
                 req_kwargs["seed"] = _settings.reproduce_seed
             resp = self._client.chat.completions.create(**req_kwargs)
@@ -1205,8 +1218,20 @@ class OnlineVLMClient(VLMClient):
                 executor.shutdown(wait=False)
             except Exception as exc:
                 last_exc = exc
-                _log(f"[VLM-Online] Request failed (attempt {attempt}/{max_attempts}): {type(exc).__name__}: {exc}")
                 executor.shutdown(wait=False)
+                if self._maybe_omit_temperature(exc, _log):
+                    # Compatibility retry is immediate and does not expose the rejected request.
+                    try:
+                        return _do_request()
+                    except Exception as retry_exc:
+                        last_exc = retry_exc
+                        _log(
+                            f"[VLM-Online] Request failed after compatibility adjustment "
+                            f"(attempt {attempt}/{max_attempts}): {type(retry_exc).__name__}: {retry_exc}"
+                        )
+                        exc = retry_exc
+                else:
+                    _log(f"[VLM-Online] Request failed (attempt {attempt}/{max_attempts}): {type(exc).__name__}: {exc}")
                 if self._maybe_switch_to_v1_base_url(exc, _log):
                     # Immediate retry with corrected base_url (does not consume an extra backoff cycle).
                     try:

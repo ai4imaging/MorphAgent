@@ -52,6 +52,83 @@ class MaxTokensClampTests(unittest.TestCase):
         self.assertEqual(wrapper._llm_params["max_tokens"], 16383)
         self.assertEqual(boom.calls, 2)
 
+    def test_temperature_rejection_retries_without_parameter(self) -> None:
+        from config import (
+            RetryableChatLLM,
+            _TEMPERATURE_UNSUPPORTED_ENDPOINTS,
+            _is_temperature_unsupported_error,
+            _llm_endpoint_key,
+        )
+
+        error = Exception(
+            "Error code: 400 - {'message': '`temperature` is deprecated for this model.'}"
+        )
+        self.assertTrue(_is_temperature_unsupported_error(error))
+        self.assertFalse(_is_temperature_unsupported_error(Exception("context length exceeded")))
+
+        class _Boom:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def invoke(self, *args, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise error
+                return "ok"
+
+        class _StubLLM(RetryableChatLLM):
+            def _rebuild_llm(self, base_url=None) -> None:  # noqa: ANN001
+                return
+
+        params = {
+            "base_url": "https://api.anthropic.com/v1",
+            "model": "claude-sonnet-5",
+            "api_key": "test",
+            "temperature": 0,
+        }
+        key = _llm_endpoint_key(params)
+        _TEMPERATURE_UNSUPPORTED_ENDPOINTS.discard(key)
+        boom = _Boom()
+        wrapper = _StubLLM(
+            llm=boom,
+            provider_name="default",
+            timeout_seconds=1,
+            max_attempts=1,
+            base_retry_delay_seconds=1,
+            max_retry_delay_seconds=1,
+            llm_params=params,
+        )
+        try:
+            self.assertEqual(wrapper.invoke("hi"), "ok")
+            self.assertNotIn("temperature", wrapper._llm_params)
+            self.assertIn(key, _TEMPERATURE_UNSUPPORTED_ENDPOINTS)
+            self.assertEqual(boom.calls, 2)
+        finally:
+            _TEMPERATURE_UNSUPPORTED_ENDPOINTS.discard(key)
+
+    def test_cached_temperature_rejection_omits_parameter_on_new_client(self) -> None:
+        import sys
+        from types import ModuleType
+        from unittest.mock import Mock, patch
+
+        import config
+
+        params = {
+            "base_url": config.settings.llm_base_url,
+            "model": config.settings.llm_model,
+        }
+        key = config._llm_endpoint_key(params)
+        config._TEMPERATURE_UNSUPPORTED_ENDPOINTS.add(key)
+        chat_openai = Mock()
+        langchain_openai = ModuleType("langchain_openai")
+        langchain_openai.ChatOpenAI = chat_openai
+        try:
+            with patch.dict(sys.modules, {"langchain_openai": langchain_openai}):
+                config.make_chat_llm(temperature=0)
+            self.assertNotIn("temperature", chat_openai.call_args.kwargs)
+        finally:
+            config._TEMPERATURE_UNSUPPORTED_ENDPOINTS.discard(key)
+
 
 class FindCondaPythonWindowsLayoutTests(unittest.TestCase):
     def test_prefers_env_root_python_exe_on_win32(self) -> None:
