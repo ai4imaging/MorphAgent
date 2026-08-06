@@ -1,0 +1,111 @@
+1
+00:00:00,904 --> 00:00:05,774
+This video provides an overview of the MorphAgent front-end interface.
+
+2
+00:00:08,662 --> 00:00:13,640
+Once the backend has started, the interface will open automatically.
+
+3
+00:00:13,640 --> 00:00:20,205
+From the Home page, you can start a new run or load results from a previous run for visualization.
+
+4
+00:00:24,848 --> 00:00:29,862
+For this demonstration, I’ll start a new run and walk through the complete workflow.
+
+5
+00:00:31,298 --> 00:00:34,200
+This will take us to the Configure page.
+
+6
+00:00:34,200 --> 00:00:37,051
+First, you need to select your dataset.
+
+7
+00:00:39,648 --> 00:00:46,837
+Second, you need to enter the biological question you would like to ask.
+
+8
+00:00:47,865 --> 00:00:53,811
+For this demonstration, I’ll use the bundled demo dataset and prompt.
+
+9
+00:00:55,759 --> 00:01:02,675
+Third, you need to configure the model API connection by entering your API keys.
+
+10
+00:01:05,478 --> 00:01:11,720
+This checkbox determines whether the LLM and VLM use the same model.
+
+11
+00:01:11,720 --> 00:01:16,608
+If you want them to use the same model, you simply select it.
+
+12
+00:01:18,433 --> 00:01:25,937
+Fourth, you need to choose the analysis route and select the components you would like to include.
+
+13
+00:01:26,683 --> 00:01:30,800
+The final two options support multiple selections.
+
+14
+00:01:30,800 --> 00:01:35,803
+In this demonstration, we’ll run both the Code and VLM routes.
+
+15
+00:01:40,052 --> 00:01:47,296
+The Run page displays the complete workflow in real time and streams live logs from the backend.
+
+16
+00:01:48,486 --> 00:01:55,873
+Here, you can monitor the current stage and check whether any errors have occurred.
+
+17
+00:01:59,486 --> 00:02:05,394
+The full six-stage workflow usually takes about six to eight minutes.
+
+18
+00:02:06,270 --> 00:02:10,587
+You can skip ahead to the completed run.
+
+19
+00:02:44,434 --> 00:02:51,465
+The run is now complete. Select Review Features to inspect the results.
+
+20
+00:02:55,469 --> 00:03:01,645
+This run generated ten features across the Code and VLM routes.
+
+21
+00:03:02,792 --> 00:03:14,625
+When you select a feature, its description, category, and validation results are displayed in the panel on the right.
+
+22
+00:03:20,382 --> 00:03:23,057
+The final step is to review the evidence.
+
+23
+00:03:24,242 --> 00:03:30,223
+Select any generated feature from the list.
+
+24
+00:03:30,937 --> 00:03:39,316
+A brief description of the selected feature appears below, while its supporting evidence is displayed on the right.
+
+25
+00:03:40,037 --> 00:03:53,795
+The evidence includes CSV and JSON artifacts that document how each result was generated and extracted.
+
+26
+00:03:59,673 --> 00:04:02,834
+Moreover, the image is also available.
+
+27
+00:04:14,035 --> 00:04:21,882
+You can click this button to open the corresponding file directly.
+
+28
+00:04:30,183 --> 00:04:36,618
+That’s all for the end-to-end MorphAgent workflow. Thanks for watching.

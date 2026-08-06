@@ -1,0 +1,35 @@
+Dataset: MorphAgent demo (Tau protein in neurons, fluorescence microscopy)
+
+Overview
+  - Ten samples for demonstrating the MorphAgent pipeline end to end:
+      WT_1 … WT_5  — wild-type (pseudo-label group WT)
+      MU_1 … MU_5  — mutant (pseudo-label group MU; renamed from WT_6 … WT_10)
+  - Each sample is one imaged neuron / field, stored in its own subdirectory.
+  - Task context: quantify the morphology of Tau protein aggregation and the
+    surrounding cellular structures.
+  - Paired labels for deterministic validation live in ../metadata.csv
+    (columns: sample_id, group, genotype).
+
+Dimension
+  - 2D maximum-intensity projection (MIP), single channel (grayscale intensity
+    of the Tau/structure fluorescence). Image size 1536x1536 or 2048x2048.
+
+Per-sample structure
+  - image.tif                     : the 2D MIP (primary file, input to code features)
+  - slices/slice_0000.png         : an 8-bit PNG view of the MIP (used by VLM scoring)
+  - slices/channel_mapping.json   : channel metadata (single channel here)
+  - segmentation/                 : precomputed masks (bring-your-own; already provided)
+      mask_cell.tif      -> whole-cell region
+      mask_nucleus.tif   -> nucleus region
+      mask_bundle.tif    -> Tau fiber bundles (thick bundled filaments)
+      mask_filament.tif  -> individual thin filaments
+      mask_droplet.tif   -> punctate / droplet-like Tau condensates
+
+Notes for feature design
+  - Masks may be binary or instance-label maps; access them in generated code by
+    key name, e.g. seg["mask_cell"], seg["mask_bundle"] (never by index).
+  - Suggested feature directions: aggregate size / count / area fraction,
+    filament length / straightness / bundling, nuclear vs cytoplasmic
+    distribution, texture and intensity heterogeneity of the Tau signal.
+  - Sample list comes from scanning subdirectories; this file is only for
+    understanding/planning. Use metadata.csv for group-aware validation.

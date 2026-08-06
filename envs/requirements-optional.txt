@@ -1,0 +1,27 @@
+# =============================================================================
+# MorphAgent — OPTIONAL extras (install only if you need these features)
+# =============================================================================
+# Install on top of the unified `morphagent` environment:
+#     conda activate morphagent
+#     pip install -r envs/requirements-optional.txt
+#
+# Everything here is guarded in code — MorphAgent runs fine without it and will
+# simply skip the corresponding feature (with a warning) if the package is
+# missing.
+# =============================================================================
+
+# --- GPU PDF parsing (optional): PaddleX on GPU ----------------------------
+# The unified environment already installs PaddleX with CPU paddlepaddle, which
+# works out of the box. For faster PDF parsing on a CUDA machine, swap in the
+# GPU wheel and set PADDLEX_DEVICE=gpu:0:
+#   pip uninstall -y paddlepaddle && pip install paddlepaddle-gpu==3.0.0
+# (see the PaddlePaddle install docs for the wheel matching your CUDA version)
+
+# --- Local VLM (advanced): self-hosted Qwen3-VL instead of an API VLM -------
+# The default/recommended VLM path is an OpenAI-compatible multimodal API
+# (--vlm-api-provider online). Only install these if you explicitly want to run
+# a local Qwen3-VL model (--vlm-api-provider qwen) and have a suitable GPU.
+modelscope==1.32.0
+transformers==4.57.3
+accelerate==1.12.0
+qwen-vl-utils==0.0.14

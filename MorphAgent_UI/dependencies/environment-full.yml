@@ -1,0 +1,85 @@
+# =============================================================================
+# MorphAgent — unified environment (public build)
+# =============================================================================
+# One environment that covers everything MorphAgent needs:
+#   * Agent brain  : LangChain / LangGraph / OpenAI-compatible client
+#   * Sandbox      : scientific stack for the auto-generated feature code
+#                    (numpy / scipy / scikit-image / opencv / tifffile / mahotas ...)
+#   * Segmentation : Cellpose-SAM (cellpose >= 4.0 + PyTorch)
+#
+# There is NO local LLM/VLM in this build — every model call goes through an
+# OpenAI-compatible HTTP API (configure keys/URLs in ../config.py or via env
+# vars, see ../.env.example).
+#
+# Create it with:
+#   conda env create -f environment.yml
+#   conda activate morphagent
+#
+# Notes
+# -----
+# * PyTorch: the pinned `torch==2.9.1` wheel on PyPI ships CUDA 12 support for
+#   Linux x86_64 out of the box (GPU used automatically if available, otherwise
+#   it falls back to CPU). No extra index URL is required.
+# * PDF ingest uses pymupdf (lite text → LLM). Optional PaddleX OCR lives in
+#   requirements-extra-optional.txt (`RAG_PDF_BACKEND=paddlex`).
+# * Optional extras (PaddleX OCR, local Qwen3-VL) are intentionally left out —
+#   install from requirements-extra-optional.txt only if you need them.
+# * The legacy Allen segmentation backend needs an older, incompatible Python
+#   stack and lives in its own environment — see `environment_allen.yml`.
+# =============================================================================
+name: morphagent
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip>=24.0
+  - pip:
+      # --- Agent orchestration / LLM client -------------------------------
+      # The code only uses langchain-core (messages/tools/documents),
+      # langchain-openai (ChatOpenAI) and langgraph — a self-consistent
+      # langchain 1.x set. (The umbrella `langchain` / community / experimental
+      # packages are intentionally NOT installed; they are unused and their old
+      # 0.3.x pins conflict with langchain-core 1.x.)
+      - langchain-core==1.4.9
+      - langchain-openai==1.3.5
+      - langgraph==1.2.9
+      - openai>=2.45.0,<3
+      - tiktoken==0.12.0
+      - python-dotenv==1.2.1
+      - tenacity==9.1.2
+
+      # --- Literature retrieval / report parsing (HTML/text) --------------
+      - requests==2.32.5
+      - beautifulsoup4==4.14.3
+      - lxml==6.0.2
+
+      # --- PDF text for RAG + Deep Research (lite extract → LLM) ------------
+      - pymupdf>=1.24.0,<2
+
+      # --- Core scientific / imaging stack (agent + sandbox) --------------
+      - numpy==2.2.6
+      - pandas==2.3.3
+      - scipy==1.15.3
+      - matplotlib==3.10.7
+      - seaborn==0.13.2
+      - scikit-image==0.25.2
+      - scikit-learn==1.7.2
+      - tifffile==2025.5.10
+      - imagecodecs==2025.3.30
+      - pillow==12.0.0
+      - opencv-python-headless==4.12.0.88
+      - networkx==3.4.2
+      - PyWavelets==1.8.0
+      - natsort==8.4.0
+      - tqdm==4.67.1
+      - PyYAML==6.0.2
+
+      # --- Extra feature extractors commonly used by generated code -------
+      - mahotas==1.4.18
+      - statsmodels==0.14.6
+      - h5py==3.16.0
+
+      # --- Segmentation: Cellpose-SAM ------------------------------------
+      - torch==2.9.1
+      - torchvision==0.24.1
+      - cellpose==4.0.8

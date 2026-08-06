@@ -1,0 +1,7 @@
+# Mirror of MorphAgent/envs/environment_allen.yml
+name: morphagent_allen
+channels:
+  - defaults
+dependencies:
+  - python=3.6
+  - pip

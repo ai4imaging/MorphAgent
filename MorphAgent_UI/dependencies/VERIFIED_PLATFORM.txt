@@ -1,0 +1,24 @@
+MorphAgent handoff verification snapshot
+Date: 2026-07-19
+
+Primary reviewed platform:
+- macOS on Apple Silicon
+- Python 3.10.20
+- PyQt5 5.15.11
+- QtPy 2.4.3
+- python-dotenv 1.2.1
+- langchain-core 1.4.9
+- langchain-openai 1.3.5
+- langgraph 1.2.9
+- openai 2.46.0
+- pandas 2.3.3
+- scipy 1.15.3
+- scikit-image 0.25.2
+- scikit-learn 1.7.2
+- tifffile 2025.5.10
+- mahotas 1.4.18
+
+The reviewed bundled-demo path reused the supplied segmentation masks and did
+not require Torch or Cellpose. Fresh installs should use the pinned handoff
+requirements rather than copying the maintainer's existing environment.
+
