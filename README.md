@@ -548,3 +548,15 @@ Markdown/text/XML sources are read directly.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
 - **UI: where do I put my own images?** Select the parent folder that contains `dataset/<sample>/image.tif` (see [Input Data Format](#input-data-format-important)). If the path is wrong, the UI shows a dialog with the expected layout.
 - **Windows setup hangs / ToS / libmamba / `conda.exe` crash (`0xc0000005`)?** Use **Lite** (`MorphAgent_UI_Lite`): it accepts Anaconda ToS when possible, creates only `python`+`pip` via conda (defaults), and installs numpy/PyQt/… with **pip**. It does **not** force classic+conda-forge mega-solves. Prefer Miniconda ≥ 23.9; see [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
+
+---
+
+## View UI launch analytics
+
+Open the [public MorphAgent UI analytics dashboard](https://vbr.nathanchung.dev/info/ai4imaging-morphagent-ui) to view total launches, recent traffic, and country distribution. You can also click the badge below.
+
+<p align="center">
+  <a href="https://vbr.nathanchung.dev/info/ai4imaging-morphagent-ui">
+    <img src="https://vbr.nathanchung.dev/badge?page_id=ai4imaging-morphagent-ui&amp;text=UI%20launches%3A%20CNT&amp;color=00b7d4&amp;lcolor=10283d&amp;style=flat&amp;hit=off" alt="MorphAgent UI visitor map" />
+  </a>
+</p>
