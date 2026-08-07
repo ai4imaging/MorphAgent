@@ -215,9 +215,34 @@ def _should_retry_llm_error(exc: Exception) -> bool:
     return False
 
 
+def _extract_max_tokens_limit(exc: Exception) -> Optional[int]:
+    """Extract the provider-reported completion-token ceiling, when available."""
+
+    message = str(exc).lower()
+    patterns = (
+        r"max_tokens\s*:\s*[\d,]+\s*>\s*([\d,]+)",
+        r"supports\s+at\s+most\s+([\d,]+)\s+(?:completion|output)\s+tokens",
+        r"maximum\s+allowed(?:\s+number\s+of)?\s+(?:completion|output)\s+tokens"
+        r"\s*(?:is|:)\s*([\d,]+)",
+        r"maximum(?:\s+allowed)?\s+max_tokens\s*(?:is|:)\s*([\d,]+)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, message)
+        if match:
+            try:
+                limit = int(match.group(1).replace(",", ""))
+            except ValueError:
+                continue
+            if limit > 0:
+                return limit
+    return None
+
+
 def _is_max_tokens_limit_error(exc: Exception) -> bool:
     """True when the provider rejects the *completion* max_tokens (not prompt length)."""
     message = str(exc).lower()
+    if _extract_max_tokens_limit(exc) is not None:
+        return True
     if "max_tokens is too large" in message:
         return True
     if "max_tokens" in message and "at most" in message and "completion" in message:
@@ -572,7 +597,7 @@ class RetryableChatLLM:
         return True
 
     def _maybe_clamp_max_tokens(self, exc: Exception) -> bool:
-        """If the gateway rejects max_tokens (e.g. 65535), drop to 16383 and retry once — do not abort."""
+        """Retry with the provider-reported max_tokens ceiling when available."""
         if not _is_max_tokens_limit_error(exc):
             return False
         if getattr(self, "_max_tokens_clamp_tried", False):
@@ -582,8 +607,10 @@ class RetryableChatLLM:
             current_int = int(current) if current is not None else 0
         except (TypeError, ValueError):
             current_int = 0
-        # Stay under the common 16384 completion ceiling reported by OpenAI-compatible gateways.
-        new_max = 16383
+        reported_limit = _extract_max_tokens_limit(exc)
+        # Retain a conservative fallback for gateways that reject the value
+        # without including their actual ceiling in the response.
+        new_max = reported_limit or 16383
         if current_int and current_int <= new_max:
             return False
         self._max_tokens_clamp_tried = True
@@ -595,8 +622,7 @@ class RetryableChatLLM:
         except Exception:
             pass
         print(
-            f"  [WARN]  Provider rejected max_tokens={current_int or current}; "
-            f"retrying with max_tokens={new_max} (provider={self._provider_name})"
+            f"  [INFO] Adjusted max_tokens to the model limit ({new_max})."
         )
         self._rebuild_llm()
         return True

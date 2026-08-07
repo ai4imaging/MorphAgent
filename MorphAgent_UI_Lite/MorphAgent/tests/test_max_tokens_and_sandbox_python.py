@@ -17,7 +17,7 @@ class MaxTokensClampTests(unittest.TestCase):
         self.assertTrue(_is_max_tokens_limit_error(exc))
         self.assertFalse(_is_context_length_error(exc))
 
-    def test_clamp_sets_16383(self) -> None:
+    def test_clamp_uses_reported_gateway_limit(self) -> None:
         from config import RetryableChatLLM
 
         class _Boom:
@@ -49,7 +49,56 @@ class MaxTokensClampTests(unittest.TestCase):
             llm_params={"max_tokens": 65535, "model": "x", "api_key": "y"},
         )
         self.assertEqual(wrapper.invoke("hi"), "ok")
-        self.assertEqual(wrapper._llm_params["max_tokens"], 16383)
+        self.assertEqual(wrapper._llm_params["max_tokens"], 16384)
+        self.assertEqual(boom.calls, 2)
+
+    def test_claude_max_tokens_format_retries_at_64000(self) -> None:
+        from config import (
+            RetryableChatLLM,
+            _extract_max_tokens_limit,
+            _is_context_length_error,
+            _is_max_tokens_limit_error,
+        )
+
+        error = Exception(
+            "Error code: 400 - {'message': 'max_tokens: 65535 > 64000, "
+            "which is the maximum allowed number of output tokens for "
+            "claude-haiku-4-5-20251001'}"
+        )
+        self.assertEqual(_extract_max_tokens_limit(error), 64000)
+        self.assertTrue(_is_max_tokens_limit_error(error))
+        self.assertFalse(_is_context_length_error(error))
+
+        class _Boom:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def invoke(self, *args, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise error
+                return "ok"
+
+        class _StubLLM(RetryableChatLLM):
+            def _rebuild_llm(self, base_url=None) -> None:  # noqa: ANN001
+                return
+
+        boom = _Boom()
+        wrapper = _StubLLM(
+            llm=boom,
+            provider_name="default",
+            timeout_seconds=1,
+            max_attempts=1,
+            base_retry_delay_seconds=1,
+            max_retry_delay_seconds=1,
+            llm_params={
+                "max_tokens": 65535,
+                "model": "claude-haiku-4-5-20251001",
+                "api_key": "test",
+            },
+        )
+        self.assertEqual(wrapper.invoke("hi"), "ok")
+        self.assertEqual(wrapper._llm_params["max_tokens"], 64000)
         self.assertEqual(boom.calls, 2)
 
     def test_temperature_rejection_retries_without_parameter(self) -> None:
