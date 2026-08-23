@@ -389,23 +389,87 @@ def extract_required_mask_stems(merged_code: str) -> tuple[str, ...]:
     return tuple(sorted(item for item in required if item.strip()))
 
 
-def required_masks_for_round(round_spec: ReuseRoundSpec) -> tuple[str, ...]:
-    """Return exact mask filename stems required by one reusable round."""
+def _parse_mask_stems_from_description(description: str) -> tuple[str, ...]:
+    """Read mask keys out of the ``mask_order_description`` block a run records."""
 
-    required: set[str] = set()
+    stems: list[str] = []
+    for match in re.finditer(
+        r"^\s*-\s*\*\*seg\[\s*[\"']([^\"']+)[\"']\s*\]\*\*",
+        description,
+        re.MULTILINE,
+    ):
+        stem = match.group(1).strip()
+        if stem and stem not in stems:
+            stems.append(stem)
+    return tuple(stems)
+
+
+def history_mask_stems(source_results: str | Path | None) -> tuple[str, ...] | None:
+    """Return the mask stems the source run actually had, or None when unknown.
+
+    An empty tuple means the run provably executed without segmentation masks,
+    which is different from being unable to tell.
+    """
+
+    if source_results is None or not str(source_results).strip():
+        return None
+    summary_path = Path(source_results).expanduser() / "segmentation_summary.json"
+    if not summary_path.is_file():
+        return None
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("segmentation_enabled") is False:
+        return ()
+    description = payload.get("mask_order_description")
+    if not isinstance(description, str):
+        return None
+    if not description.strip():
+        return ()
+    # A description we cannot parse means the format moved on; stay conservative.
+    return _parse_mask_stems_from_description(description) or None
+
+
+def _round_needs_segmentation(round_spec: ReuseRoundSpec) -> bool:
+    return any(bool(feature.get("needs_segmentation")) for feature in round_spec.feature_defs)
+
+
+def required_masks_for_round(
+    round_spec: ReuseRoundSpec,
+    history_masks: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Return exact mask filename stems required by one reusable round.
+
+    ``history_masks`` is the inventory the source run recorded. When it is known,
+    keys inferred from the merged code are intersected with it: merged code often
+    probes a candidate list (``mask_axon``, ``mask_neurite``, ...) and falls back
+    to intensity heuristics, so treating every probed key as mandatory would block
+    datasets that the source run itself ran on happily.
+    """
+
+    explicit: set[str] = set()
     for feature in round_spec.feature_defs:
         for field_name in ("required_masks", "required_mask_stems"):
             raw = feature.get(field_name)
             if isinstance(raw, str) and raw.strip():
-                required.add(raw.strip())
+                explicit.add(raw.strip())
             elif isinstance(raw, (list, tuple, set)):
-                required.update(str(item).strip() for item in raw if str(item).strip())
+                explicit.update(str(item).strip() for item in raw if str(item).strip())
     try:
         merged_code = round_spec.merged_code_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         merged_code = ""
-    required.update(extract_required_mask_stems(merged_code))
-    return tuple(sorted(required))
+    inferred = set(extract_required_mask_stems(merged_code))
+    if history_masks is not None:
+        available = set(history_masks)
+        if inferred:
+            inferred &= available
+        elif _round_needs_segmentation(round_spec):
+            inferred = available
+    return tuple(sorted(explicit | inferred))
 
 
 def _short_sample_list(sample_ids: list[str], limit: int = 12) -> str:
@@ -420,17 +484,19 @@ def _diagnose_reuse_masks(
     rounds: list[ReuseRoundSpec],
     dataset_root: Path,
     sample_ids: list[str],
+    history_masks: tuple[str, ...] | None = None,
 ) -> list[str]:
     blockers: list[str] = []
+    available_by_sample = {
+        sample_id: {
+            path.stem for path in find_segmentation_paths(dataset_root / sample_id)
+        }
+        for sample_id in sample_ids
+    }
     for round_spec in rounds:
-        required = required_masks_for_round(round_spec)
-        segmentation_features = [
-            str(feature.get("name") or "").strip()
-            for feature in round_spec.feature_defs
-            if feature.get("needs_segmentation")
-        ]
+        required = required_masks_for_round(round_spec, history_masks)
         if not required:
-            if segmentation_features:
+            if history_masks is None and _round_needs_segmentation(round_spec):
                 blockers.append(
                     f"Round {round_spec.round_number} contains segmentation-dependent code "
                     "but its required mask filenames could not be determined safely. "
@@ -440,11 +506,9 @@ def _diagnose_reuse_masks(
 
         missing_groups: dict[tuple[str, ...], list[str]] = {}
         for sample_id in sample_ids:
-            available = {
-                path.stem
-                for path in find_segmentation_paths(dataset_root / sample_id)
-            }
-            missing = tuple(mask for mask in required if mask not in available)
+            missing = tuple(
+                mask for mask in required if mask not in available_by_sample[sample_id]
+            )
             if missing:
                 missing_groups.setdefault(missing, []).append(sample_id)
         if not missing_groups:
@@ -454,18 +518,24 @@ def _diagnose_reuse_masks(
             f"{', '.join(masks)} missing in {_short_sample_list(samples)}"
             for masks, samples in sorted(missing_groups.items())
         )
+        origin = (
+            "that the history run used"
+            if history_masks is not None
+            else "referenced by the historical merged code"
+        )
         blockers.append(
-            f"Round {round_spec.round_number} requires segmentation mask file stems: "
-            f"{', '.join(required)}. {details}. Add matching mask files under each "
-            "sample's segmentation/ folder (for example mask_cell.tif)."
+            f"Round {round_spec.round_number} requires segmentation mask file stems "
+            f"{origin}: {', '.join(required)}. {details}. Add matching mask files under "
+            "each sample's segmentation/ folder (for example mask_cell.tif)."
         )
     return blockers
 
 
 def summarize_source_results(source_results: str | Path) -> dict[str, Any]:
     rounds, skipped = discover_reuse_rounds(source_results)
+    history_masks = history_mask_stems(source_results)
     masks_by_round = {
-        item.round_number: required_masks_for_round(item)
+        item.round_number: required_masks_for_round(item, history_masks)
         for item in rounds
     }
     return {
@@ -473,6 +543,7 @@ def summarize_source_results(source_results: str | Path) -> dict[str, Any]:
         "reusable_rounds": len(rounds),
         "skipped_rounds": len(skipped),
         "code_feature_count": sum(len(item.feature_names) for item in rounds),
+        "history_masks": list(history_masks) if history_masks is not None else None,
         "required_masks": sorted(
             {mask for masks in masks_by_round.values() for mask in masks}
         ),
@@ -537,7 +608,11 @@ def diagnose_reuse_inputs(
                         f"{_short_sample_list(empty)}."
                     )
     if rounds and dataset is not None and samples:
-        blockers.extend(_diagnose_reuse_masks(rounds, dataset, samples))
+        blockers.extend(
+            _diagnose_reuse_masks(
+                rounds, dataset, samples, history_mask_stems(source_results)
+            )
+        )
     if (
         source_results
         and data_root
@@ -568,6 +643,18 @@ def _copy_merged_code(source: Path, destination_round: Path) -> Path:
     # Keep a root-level copy for parity with discovery runs.
     shutil.copy2(source, destination_round / "merged_feature_code.py")
     return target
+
+
+def _carry_segmentation_summary(source: Path, destination: Path) -> None:
+    """Carry the source mask inventory forward so reuse output stays reusable."""
+
+    summary = source / "segmentation_summary.json"
+    if not summary.is_file():
+        return
+    try:
+        shutil.copy2(summary, destination / "segmentation_summary.json")
+    except OSError:
+        pass
 
 
 def _write_round_plan(destination_round: Path, feature_defs: Iterable[dict[str, Any]], round_number: int) -> None:
@@ -770,6 +857,7 @@ def run_code_reuse(
         else _default_output_dir(data_input)
     )
     destination.mkdir(parents=True, exist_ok=True)
+    _carry_segmentation_summary(source, destination)
 
     rounds, skipped = discover_reuse_rounds(source)
     sample_ids = list_sample_ids(data_input)

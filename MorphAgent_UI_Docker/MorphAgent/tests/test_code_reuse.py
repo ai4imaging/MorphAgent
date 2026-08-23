@@ -13,6 +13,7 @@ from tools.code_reuse import (
     diagnose_reuse_inputs,
     discover_reuse_rounds,
     extract_required_mask_stems,
+    history_mask_stems,
     run_code_reuse,
     summarize_source_results,
 )
@@ -153,6 +154,42 @@ def _write_source_results(root: Path) -> Path:
     return source
 
 
+def _mask_order_description(stems: tuple[str, ...]) -> str:
+    """Mirror the block tools/data_statistics.py writes into a run summary."""
+
+    lines = [
+        "\n**CRITICAL: Segmentation is passed as a dict `seg` (key = filename stem)**",
+        "Access masks by key only. Available keys and semantics:\n",
+    ]
+    for stem in stems:
+        lines.append(f'  - **seg["{stem}"]**: `{stem}.tif` — **segmentation mask from `{stem}.tif`**')
+    lines.append('\n**Important:** Use `seg.get("key")` or `seg["key"]`; do NOT use position or index.')
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _write_segmentation_summary(
+    source: Path,
+    stems: tuple[str, ...],
+    *,
+    enabled: bool = True,
+) -> None:
+    (source / "segmentation_summary.json").write_text(
+        json.dumps(
+            {
+                "total_samples": 2,
+                "successful": 0,
+                "skipped_user_seg": 2,
+                "failed": 0,
+                "results": {},
+                "mask_order_description": _mask_order_description(stems) if enabled else "",
+                "segmentation_enabled": enabled,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_dataset(root: Path) -> Path:
     data_root = root / "project"
     for sample_id in ("sample_a", "sample_b"):
@@ -249,11 +286,107 @@ def extract_all(img, seg):
             self.assertEqual(diagnose_reuse_inputs(source, data), [])
 
 
+CANDIDATE_MASK_CODE = '''
+def extract_all(img, seg):
+    mask = None
+    for key in ("mask_neurite", "mask_axon", "mask_cell"):
+        if key in seg:
+            mask = seg.get(key)
+            break
+    return {
+        "kept_feature": 1.0 if mask is not None else 0.0,
+        "dropped_feature": 2.0,
+    }
+'''
+
+TWO_MASK_CODE = '''
+def extract_all(img, seg):
+    return {
+        "kept_feature": float(seg.get("mask_cell") is not None),
+        "dropped_feature": float(seg.get("mask_nucleus") is not None),
+    }
+'''
+
+
+class HistoryMaskInventoryTests(unittest.TestCase):
+    """The source run's recorded mask inventory is the primary requirement source."""
+
+    def _source_with_code(self, root: Path, code: str) -> Path:
+        source = _write_source_results(root)
+        (source / "round_1" / "merged_features" / "extract_all.py").write_text(
+            code, encoding="utf-8"
+        )
+        return source
+
+    def test_reads_stems_from_summary_without_matching_the_usage_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source = _write_source_results(Path(raw))
+            _write_segmentation_summary(source, ("mask_cell", "mask_nucleus"))
+            # The trailing 'Use seg["key"]' hint must not be mistaken for a mask.
+            self.assertEqual(history_mask_stems(source), ("mask_cell", "mask_nucleus"))
+
+    def test_unknown_inventory_when_summary_is_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source = _write_source_results(Path(raw))
+            self.assertIsNone(history_mask_stems(source))
+
+    def test_disabled_segmentation_reports_an_empty_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source = _write_source_results(Path(raw))
+            _write_segmentation_summary(source, (), enabled=False)
+            self.assertEqual(history_mask_stems(source), ())
+
+    def test_optional_candidate_keys_do_not_block_when_history_is_known(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = self._source_with_code(root, CANDIDATE_MASK_CODE)
+            data = _write_dataset(root)
+
+            # Without the inventory, every probed candidate looks mandatory.
+            blockers = diagnose_reuse_inputs(source, data)
+            self.assertTrue(any("mask_axon" in item for item in blockers))
+
+            _write_segmentation_summary(source, ("mask_cell",))
+            self.assertEqual(diagnose_reuse_inputs(source, data), [])
+            self.assertEqual(summarize_source_results(source)["required_masks"], ["mask_cell"])
+
+    def test_masks_the_history_run_had_are_still_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = self._source_with_code(root, TWO_MASK_CODE)
+            _write_segmentation_summary(source, ("mask_cell", "mask_nucleus"))
+            data = _write_dataset(root)
+
+            blockers = diagnose_reuse_inputs(source, data)
+            self.assertEqual(len(blockers), 1)
+            self.assertIn("that the history run used", blockers[0])
+            self.assertIn("mask_nucleus missing in sample_a, sample_b", blockers[0])
+
+            for sample_id in ("sample_a", "sample_b"):
+                (data / "dataset" / sample_id / "segmentation" / "mask_nucleus.tif").write_bytes(
+                    b"II*\x00"
+                )
+            self.assertEqual(diagnose_reuse_inputs(source, data), [])
+
+    def test_history_run_without_masks_never_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = self._source_with_code(root, TWO_MASK_CODE)
+            _write_segmentation_summary(source, (), enabled=False)
+            data = _write_dataset(root)
+            for sample_id in ("sample_a", "sample_b"):
+                (data / "dataset" / sample_id / "segmentation" / "mask_cell.tif").unlink()
+
+            self.assertEqual(diagnose_reuse_inputs(source, data), [])
+            self.assertEqual(summarize_source_results(source)["required_masks"], [])
+
+
 class CodeReuseExecutionTests(unittest.TestCase):
     def test_run_code_reuse_writes_matrix_registry_and_skips_models(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             source = _write_source_results(root)
+            _write_segmentation_summary(source, ("mask_cell",))
             data = _write_dataset(root)
             output = root / "reuse_out"
             progress: list[str] = []
@@ -314,6 +447,8 @@ class CodeReuseExecutionTests(unittest.TestCase):
             self.assertTrue(any("[Reuse] Round 1/2" in line for line in progress))
             self.assertTrue((output / "round_1" / "round_results.json").is_file())
             self.assertTrue((output / "round_2" / "merged_features" / "extract_all.py").is_file())
+            # Reuse output must stay reusable: it inherits the mask inventory.
+            self.assertEqual(history_mask_stems(output), ("mask_cell",))
             # Source tree must remain untouched.
             self.assertFalse((source / "reuse_manifest.json").exists())
 
