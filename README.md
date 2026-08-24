@@ -14,7 +14,7 @@ MorphAgent provides two simple UI entry points:
 
 Demo video:
 
-https://github.com/user-attachments/assets/efa9fb0b-0f2d-48f2-8899-7abb2b74b6f5
+https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
 
 ### Desktop — MorphAgent UI Lite
 

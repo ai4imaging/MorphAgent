@@ -42,3 +42,8 @@ test_output/
 
 # ---- Local isolated development worktrees ----
 .worktrees/
+
+# ---- Local demo media (do not commit / push) ----
+/morphagent_video.mp4
+/Supplementary_Video_1.mp4
+/media/
