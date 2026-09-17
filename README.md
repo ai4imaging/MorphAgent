@@ -4,10 +4,6 @@ Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao N
 
 MorphAgent is an LLM/VLM agent that designs and extracts quantitative morphological features from microscopy images. This repository's default path is the **desktop UI**.
 
-Supplementary video:
-
-https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
-
 ## Layout
 
 | Path | What it is |
@@ -16,28 +12,11 @@ https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
 | [`MorphAgent_CLI/`](MorphAgent_CLI/) | Headless `python main.py` pipeline, with its own [README](MorphAgent_CLI/README.md) |
 | [`tutorial/`](tutorial/) | Reproduction of the paper's main results |
 
-The UI is a native window (Qt6 + WebEngine, no browser required) with four pages in the left sidebar:
+## Video tutorial
 
-| Page | What you do there |
-|------|-------------------|
-| **Design** | Attach a dataset and optional knowledge files, ask a biological question, set the feature count, review the configuration, then watch progress and live output on the same page |
-| **Compute** | Apply the feature scripts saved by a previous run to a new dataset — no model calls, no feature redesign |
-| **Visualize** | Load a run's `feature_value.csv` and browse retained features with All / Code / VLM filters and distribution histograms |
-| **Help** | Ask MorphAgent about the paper, figures, methods, or implementation, answered from bundled manuscript and code excerpts |
+A walkthrough of the desktop UI, from installation to reading the results.
 
-Completed runs export a timestamped folder and ZIP automatically. Input images may be multidimensional PNG, TIFF/OME-TIFF, GIF, WebP, or MRC-family files.
-
-## Paper result reproduction
-
-[`tutorial/`](tutorial/) reproduces the main results in the paper. Each subfolder is self-contained (notebooks, code, and cached tables):
-
-| Tutorial | What it reproduces |
-|----------|--------------------|
-| [`tutorial/tutorial_BBBC021/`](tutorial/tutorial_BBBC021/) | BBBC021 MoA benchmarks and main figures (467 MorphAgent features) |
-| [`tutorial/tutorial_Tau/`](tutorial/tutorial_Tau/) | Tau genotype separation, classification, and transcriptome prediction |
-| [`tutorial/tutorial_HSC/`](tutorial/tutorial_HSC/) | Young/Old HSC Figure 3 panels |
-
-Start from the README in each folder and run the notebooks there. Large image payloads (BBBC021) are downloaded separately; they are not in the git tree.
+https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
 
 ## Install the desktop UI
 
@@ -88,6 +67,19 @@ INPUT/
 - Primary files sit directly in the sample folder. `segmentation/` masks are keyed by filename stem (`seg["mask_cell"]`).
 - A short `dataset_index.txt` (or README) under `dataset/` describing channels and dimensions helps planning.
 
+## Using the UI
+
+The UI is a native window (Qt6 + WebEngine, no browser required) with four pages in the left sidebar:
+
+| Page | What you do there |
+|------|-------------------|
+| **Design** | Attach a dataset and optional knowledge files, ask a biological question, set the feature count, review the configuration, then watch progress and live output on the same page |
+| **Compute** | Apply the feature scripts saved by a previous run to a new dataset — no model calls, no feature redesign |
+| **Visualize** | Load a run's `feature_value.csv` and browse retained features with All / Code / VLM filters and distribution histograms |
+| **Help** | Ask MorphAgent about the paper, figures, methods, or implementation, answered from bundled manuscript and code excerpts |
+
+Completed runs export a timestamped folder and ZIP automatically. Input images may be multidimensional PNG, TIFF/OME-TIFF, GIF, WebP, or MRC-family files.
+
 ## Command-line pipeline
 
 The original CLI is packaged separately:
@@ -97,6 +89,18 @@ cd MorphAgent/MorphAgent_CLI
 ```
 
 See [`MorphAgent_CLI/README.md`](MorphAgent_CLI/README.md) and [`MorphAgent_CLI/installation_skill.md`](MorphAgent_CLI/installation_skill.md) for the `morphagent` conda env, `python main.py …`, Cellpose-SAM / Allen, and all CLI flags.
+
+## Paper result reproduction
+
+[`tutorial/`](tutorial/) reproduces the main results in the paper. Each subfolder is self-contained (notebooks, code, and cached tables):
+
+| Tutorial | What it reproduces |
+|----------|--------------------|
+| [`tutorial/tutorial_BBBC021/`](tutorial/tutorial_BBBC021/) | BBBC021 MoA benchmarks and main figures (467 MorphAgent features) |
+| [`tutorial/tutorial_Tau/`](tutorial/tutorial_Tau/) | Tau genotype separation, classification, and transcriptome prediction |
+| [`tutorial/tutorial_HSC/`](tutorial/tutorial_HSC/) | Young/Old HSC Figure 3 panels |
+
+Start from the README in each folder and run the notebooks there. Large image payloads (BBBC021) are downloaded separately; they are not in the git tree.
 
 ## For coding agents
 
