@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_vacuolization_index",
+  "method": "vlm",
+  "name": "vlm_vacuolization_index",
+  "description": "Detects the presence of cytoplasmic vacuoles (holes in the cytoplasmic staining), often a sign of cellular stress or death.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells to inspect cytoplasm for voids.",
+  "method_rationale": "Vacuoles appear as voids which can be confused with background in code, but context helps VLM identify them."
+}

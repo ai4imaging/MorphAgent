@@ -1,0 +1,413 @@
+{
+  "perturbation_detection": {
+    "methods": {
+      "cellprofiler": {
+        "selected_k": "All",
+        "metric": 0.15437575544298449,
+        "metric_name": "mAP",
+        "ci95": [
+          0.1496979055938944,
+          0.15932536020606125
+        ],
+        "n_features": 6278
+      },
+      "deepprofiler": {
+        "selected_k": "All",
+        "metric": 0.19017811120420633,
+        "metric_name": "mAP",
+        "ci95": [
+          0.18534779634140502,
+          0.19510759691626645
+        ],
+        "n_features": 672
+      },
+      "morphagent": {
+        "selected_k": 200,
+        "metric": 0.2281602571418537,
+        "metric_name": "mAP",
+        "ci95": [
+          0.22181396470109344,
+          0.23420148781138064
+        ],
+        "n_features": 200
+      },
+      "deepprofiler_self": {
+        "selected_k": "All",
+        "metric": 0.042285957099470674,
+        "metric_name": "mAP",
+        "ci95": [
+          0.041605096272182986,
+          0.042938653337802675
+        ],
+        "n_features": 672
+      }
+    },
+    "best_k": {
+      "cellprofiler": "All",
+      "deepprofiler": "All",
+      "morphagent": 200,
+      "deepprofiler_self": "All"
+    },
+    "all_k": {
+      "morphagent": {
+        "50": {
+          "metric": 0.1895473271489934,
+          "ci95": [
+            0.18389420824943328,
+            0.19511107098461444
+          ],
+          "n_features": 50
+        },
+        "100": {
+          "metric": 0.21173070062526086,
+          "ci95": [
+            0.20577847392764367,
+            0.21766274457914286
+          ],
+          "n_features": 100
+        },
+        "200": {
+          "metric": 0.2281602571418537,
+          "ci95": [
+            0.22181396470109344,
+            0.23420148781138064
+          ],
+          "n_features": 200
+        },
+        "400": {
+          "metric": 0.20770151996710373,
+          "ci95": [
+            0.2017775813815455,
+            0.21357865946613191
+          ],
+          "n_features": 400
+        },
+        "All": {
+          "metric": 0.18694405679152573,
+          "ci95": [
+            0.1815049069658424,
+            0.1924551789867767
+          ],
+          "n_features": 633
+        }
+      }
+    },
+    "significance": {
+      "morphagent_vs_cellprofiler": {
+        "p": 0.0004997501249375312,
+        "stars": "***"
+      },
+      "morphagent_vs_deepprofiler": {
+        "p": 0.0004997501249375312,
+        "stars": "***"
+      }
+    }
+  },
+  "moa_detection": {
+    "methods": {
+      "cellprofiler": {
+        "selected_k": "All",
+        "metric": 0.47191011235955055,
+        "metric_name": "Accuracy",
+        "ci95": [
+          0.41853932584269665,
+          0.5280898876404494
+        ],
+        "n_features": 6278,
+        "best_k": 3
+      },
+      "deepprofiler": {
+        "selected_k": "All",
+        "metric": 0.5786516853932584,
+        "metric_name": "Accuracy",
+        "ci95": [
+          0.5280898876404494,
+          0.6292134831460674
+        ],
+        "n_features": 672,
+        "best_k": 3
+      },
+      "morphagent": {
+        "selected_k": 100,
+        "metric": 0.6207865168539326,
+        "metric_name": "Accuracy",
+        "ci95": [
+          0.5702247191011236,
+          0.6713483146067416
+        ],
+        "n_features": 100,
+        "best_k": 11
+      },
+      "deepprofiler_self": {
+        "selected_k": "All",
+        "metric": 0.16573033707865167,
+        "metric_name": "Accuracy",
+        "ci95": [
+          0.12921348314606743,
+          0.2050561797752809
+        ],
+        "n_features": 672,
+        "best_k": 31
+      }
+    },
+    "best_k": {
+      "cellprofiler": "All",
+      "deepprofiler": "All",
+      "morphagent": 100,
+      "deepprofiler_self": "All"
+    },
+    "all_k": {
+      "morphagent": {
+        "50": {
+          "metric": 0.547752808988764,
+          "ci95": [
+            0.4943820224719101,
+            0.598314606741573
+          ],
+          "n_features": 50
+        },
+        "100": {
+          "metric": 0.6207865168539326,
+          "ci95": [
+            0.5702247191011236,
+            0.6713483146067416
+          ],
+          "n_features": 100
+        },
+        "200": {
+          "metric": 0.6207865168539326,
+          "ci95": [
+            0.5702247191011236,
+            0.6713483146067416
+          ],
+          "n_features": 200
+        },
+        "400": {
+          "metric": 0.6207865168539326,
+          "ci95": [
+            0.5729634831460674,
+            0.6713483146067416
+          ],
+          "n_features": 400
+        },
+        "All": {
+          "metric": 0.5617977528089888,
+          "ci95": [
+            0.5084269662921348,
+            0.6123595505617978
+          ],
+          "n_features": 633
+        }
+      }
+    },
+    "significance": {
+      "morphagent_vs_cellprofiler": {
+        "p": 0.0004997501249375312,
+        "stars": "***"
+      },
+      "morphagent_vs_deepprofiler": {
+        "p": 0.3008495752123938,
+        "stars": "ns"
+      }
+    }
+  },
+  "same_moa_matching": {
+    "methods": {
+      "cellprofiler": {
+        "selected_k": "All",
+        "metric": 0.5244113498263889,
+        "metric_name": "mAP",
+        "ci95": [
+          0.4563686794704861,
+          0.5971242947048611
+        ],
+        "n_features": 6278,
+        "n_pairs": 32
+      },
+      "deepprofiler": {
+        "selected_k": "All",
+        "metric": 0.5428331163194444,
+        "metric_name": "mAP",
+        "ci95": [
+          0.47281277126736104,
+          0.6150230577256942
+        ],
+        "n_features": 672,
+        "n_pairs": 32
+      },
+      "morphagent": {
+        "selected_k": 200,
+        "metric": 0.6015055338541666,
+        "metric_name": "mAP",
+        "ci95": [
+          0.525320570203993,
+          0.6828006320529514
+        ],
+        "n_features": 200,
+        "n_pairs": 32
+      },
+      "deepprofiler_self": {
+        "selected_k": "All",
+        "metric": 0.4620578342013889,
+        "metric_name": "mAP",
+        "ci95": [
+          0.41067850748697915,
+          0.5154091389973958
+        ],
+        "n_features": 672,
+        "n_pairs": 32
+      }
+    },
+    "best_k": {
+      "cellprofiler": "All",
+      "deepprofiler": "All",
+      "morphagent": 200,
+      "deepprofiler_self": "All"
+    },
+    "all_k": {
+      "morphagent": {
+        "50": {
+          "metric": 0.5744845920138889,
+          "ci95": [
+            0.4994125705295139,
+            0.650118408203125
+          ],
+          "n_features": 50
+        },
+        "100": {
+          "metric": 0.593896484375,
+          "ci95": [
+            0.5191669379340278,
+            0.6709312608506944
+          ],
+          "n_features": 100
+        },
+        "200": {
+          "metric": 0.6015055338541666,
+          "ci95": [
+            0.525320570203993,
+            0.6828006320529514
+          ],
+          "n_features": 200
+        },
+        "400": {
+          "metric": 0.5730577256944445,
+          "ci95": [
+            0.49684719509548614,
+            0.6534602864583332
+          ],
+          "n_features": 400
+        },
+        "All": {
+          "metric": 0.5732421875,
+          "ci95": [
+            0.4969094509548611,
+            0.6540344238281249
+          ],
+          "n_features": 633
+        }
+      }
+    },
+    "significance": {
+      "morphagent_vs_cellprofiler": {
+        "p": 0.16541729135432284,
+        "stars": "ns"
+      },
+      "morphagent_vs_deepprofiler": {
+        "p": 0.29485257371314344,
+        "stars": "ns"
+      }
+    }
+  },
+  "l1000_regression": {
+    "methods": {
+      "cellprofiler": {
+        "metric": 0.096,
+        "metric_name": "R\u00b2",
+        "ci95": [
+          0.0594214244718968,
+          0.1288295014497146
+        ],
+        "n_features": null,
+        "selected_k": "Existing",
+        "R2_point_npz": 0.0959889793896618
+      },
+      "deepprofiler": {
+        "metric": 0.159,
+        "metric_name": "R\u00b2",
+        "ci95": [
+          0.1224753269458476,
+          0.1920577534139549
+        ],
+        "n_features": null,
+        "selected_k": "Existing",
+        "R2_point_npz": 0.1589923218836093
+      },
+      "deepprofiler_self": {
+        "metric": -0.0055,
+        "metric_name": "R\u00b2",
+        "ci95": [
+          -0.0189605993707012,
+          0.0022817558482443
+        ],
+        "n_features": null,
+        "selected_k": "Existing",
+        "R2_point_npz": -0.0055043502881138
+      },
+      "morphagent": {
+        "metric": 0.1772,
+        "metric_name": "R\u00b2",
+        "ci95": [
+          0.1433522733857176,
+          0.2073759023580884
+        ],
+        "n_features": null,
+        "selected_k": "Existing",
+        "R2_point_npz": 0.1230372580039729
+      }
+    },
+    "best_k": {
+      "cellprofiler": "Existing",
+      "deepprofiler": "Existing",
+      "deepprofiler_self": "Existing",
+      "morphagent": "Existing"
+    },
+    "significance": {
+      "morphagent_vs_cellprofiler": {
+        "p": 0.019,
+        "stars": "*"
+      },
+      "morphagent_vs_deepprofiler": {
+        "p": 0.023,
+        "stars": "*"
+      },
+      "morphagent_vs_deepprofiler_self": {
+        "p": 0.0,
+        "stars": "***"
+      }
+    }
+  },
+  "metadata": {
+    "feature_counts": {
+      "cellprofiler": 6278,
+      "deepprofiler": 672,
+      "deepprofiler_self": 672,
+      "morphagent": 633
+    },
+    "n_samples": {
+      "cellprofiler": 3552,
+      "deepprofiler": 3552,
+      "deepprofiler_self": 3552,
+      "morphagent": 3552
+    },
+    "random_seed": 42,
+    "n_bootstrap": 2000,
+    "topk_choices": [
+      "50",
+      "100",
+      "200",
+      "400",
+      "All"
+    ]
+  }
+}

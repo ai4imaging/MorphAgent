@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nuclear_texture_heterogeneity",
+  "method": "vlm",
+  "name": "vlm_nuclear_texture_heterogeneity",
+  "description": "Visually assesses the heterogeneity of nuclear staining (e.g., granular vs smooth). Complements code-based texture metrics with semantic interpretation.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual nuclei.",
+  "method_rationale": "Can distinguish between different *types* of heterogeneity (e.g., speckles vs gradients) that code might conflate."
+}

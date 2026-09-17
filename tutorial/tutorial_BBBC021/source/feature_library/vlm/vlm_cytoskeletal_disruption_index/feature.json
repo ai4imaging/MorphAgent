@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_cytoskeletal_disruption_index",
+  "method": "vlm",
+  "name": "vlm_cytoskeletal_disruption_index",
+  "description": "Visually rates the overall chaos or disruption of the actin/tubulin network compared to a healthy organized meshwork.",
+  "category": "texture",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Judging 'disruption' vs 'organization' is a subjective, qualitative assessment that aligns well with VLM capabilities."
+}

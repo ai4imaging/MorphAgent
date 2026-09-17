@@ -1,0 +1,17 @@
+task,method,reproduced,manuscript,abs_diff,match_3dp
+perturbation_detection,CellProfiler,0.1544,0.154,0.0003757554429844878,True
+perturbation_detection,DeepProfiler,0.1902,0.19,0.0001781112042063271,True
+perturbation_detection,DeepProfiler (retrained on BBBC021),0.0423,0.042,0.00028595709947067116,True
+perturbation_detection,MorphAgent,0.2282,0.228,0.00016025714185369244,True
+moa_detection,CellProfiler,0.4719,0.472,8.988764044942643e-05,True
+moa_detection,DeepProfiler,0.5787,0.579,0.0003483146067415621,True
+moa_detection,DeepProfiler (retrained on BBBC021),0.1657,0.166,0.0002696629213483348,True
+moa_detection,MorphAgent,0.6208,0.621,0.0002134831460673947,True
+same_moa_matching,CellProfiler,0.5244,0.524,0.00041134982638890705,True
+same_moa_matching,DeepProfiler,0.5428,0.543,0.00016688368055561842,True
+same_moa_matching,DeepProfiler (retrained on BBBC021),0.4621,0.462,5.78342013888844e-05,True
+same_moa_matching,MorphAgent,0.6015,0.602,0.0004944661458333721,True
+l1000_regression,CellProfiler,0.096,0.096,0.0,True
+l1000_regression,DeepProfiler,0.159,0.159,0.0,True
+l1000_regression,DeepProfiler (retrained on BBBC021),-0.0055,-0.005,0.0004999999999999996,True
+l1000_regression,MorphAgent,0.1772,0.177,0.00020000000000000573,True

@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_overall_sample_debris",
+  "method": "vlm",
+  "name": "vlm_overall_sample_debris",
+  "description": "Visually estimates the amount of cellular debris (small, irregular fragments) in the image. High debris correlates with extensive cell death and lysis.",
+  "category": "other",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Debris has a 'messy' visual quality distinct from intact cells that VLMs can quantify globally."
+}

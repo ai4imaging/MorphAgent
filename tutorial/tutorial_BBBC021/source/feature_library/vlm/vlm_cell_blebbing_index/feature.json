@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_cell_blebbing_index",
+  "method": "vlm",
+  "name": "vlm_cell_blebbing_index",
+  "description": "Estimates the extent of membrane blebbing (bulges in the plasma membrane), a key feature of apoptosis and pyroptosis.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells to inspect membrane integrity.",
+  "method_rationale": "Blebs are irregular, variable protrusions that are difficult to define with simple geometric rules but visually distinct."
+}

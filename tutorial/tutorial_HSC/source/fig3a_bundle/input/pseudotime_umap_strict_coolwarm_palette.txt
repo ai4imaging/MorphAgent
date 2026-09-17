@@ -1,0 +1,13 @@
+palette_name: coolwarm
+source_svg: pseudotime_umap_strict_coolwarm.svg
+
+hex_colors:
+#3B4CC0
+#6F92F3
+#AAC7FD
+#DDDCDC
+#F7B89C
+#E7745B
+#B40426
+
+hex_colors_inline: #3B4CC0, #6F92F3, #AAC7FD, #DDDCDC, #F7B89C, #E7745B, #B40426

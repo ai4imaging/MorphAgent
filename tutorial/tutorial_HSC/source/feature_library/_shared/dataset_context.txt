@@ -1,0 +1,14 @@
+Mouse long-term hematopoietic stem cells (HSCs), spinning-disk confocal
+mitochondrial imaging. Each sample is a 2D maximum-intensity projection.
+
+Discovery set (published, ~200 nm lateral resolution): 110 single cells
+(48 young, 62 aged) with paired Smart-seq2 transcriptomes.
+Validation set (in-house): 162 single cells (99 young, 63 aged), MitoTracker
+Green, 38.2 nm/px, nominal lateral resolution ~120 nm.
+
+Expected files per sample:
+  image.tif              mitochondrial intensity (2D MIP, or HxWxC with mito in channel 0)
+  segmentation/mito.tif  instance label map of mitochondria
+  segmentation/cell.tif  optional whole-cell mask
+  segmentation/nucleus.tif  optional nucleus mask (needed for the perinuclear-band feature)
+  slices/*.png           2D PNG used by the single VLM feature

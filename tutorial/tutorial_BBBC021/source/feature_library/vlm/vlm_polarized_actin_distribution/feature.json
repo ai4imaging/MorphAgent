@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_polarized_actin_distribution",
+  "method": "vlm",
+  "name": "vlm_polarized_actin_distribution",
+  "description": "Assesses whether actin is polarized to one side of the cell (indicative of migration) or evenly distributed.",
+  "category": "spatial",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells to observe actin distribution.",
+  "method_rationale": "Polarity is a spatial concept requiring identification of the cell axis and distribution relative to it."
+}

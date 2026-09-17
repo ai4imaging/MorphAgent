@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_actin_stress_fiber_alignment",
+  "method": "vlm",
+  "name": "vlm_actin_stress_fiber_alignment",
+  "description": "Visually scores the alignment and prominence of actin stress fibers. While code can measure anisotropy, VLM can better judge the 'distinctness' and 'parallelism' in a biological context.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells showing actin cytoskeleton.",
+  "method_rationale": "Humans (and VLMs) are very good at perceiving 'pattern coherence' and 'fiber distinctness' which can be noisy in pixel-level gradient statistics."
+}

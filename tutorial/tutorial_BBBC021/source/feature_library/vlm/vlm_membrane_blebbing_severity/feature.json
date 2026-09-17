@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_membrane_blebbing_severity",
+  "method": "vlm",
+  "name": "vlm_membrane_blebbing_severity",
+  "description": "Visually assesses the degree of plasma membrane blebbing (irregular bulges) visible in the Actin channel. Blebbing is a key morphological feature distinguishing apoptosis and pyroptosis from healthy cells.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Blebbing involves complex, irregular boundary deformations that are difficult to quantify with simple shape metrics but are visually distinct to a VLM."
+}

@@ -14,8 +14,21 @@ https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
 |------|------------|
 | [`MorphAgent_UI/`](MorphAgent_UI/) | Desktop UI (`scripts/` + nested `MorphAgent/` app) |
 | [`MorphAgent_CLI/`](MorphAgent_CLI/) | Headless `python main.py` pipeline, with its own [README](MorphAgent_CLI/README.md) |
+| [`tutorial/`](tutorial/) | Reproduction of the paper's main results |
 
 UI flow: **Home → Configure → Run → Features → Evidence**. The UI includes the bundled Tau demo, feature extraction, historical code reuse, Ask MorphAgent, and support for multidimensional PNG, TIFF/OME-TIFF, GIF, WebP, and MRC-family images.
+
+## Paper result reproduction
+
+[`tutorial/`](tutorial/) reproduces the main results in the paper. Each subfolder is self-contained (notebooks, code, and cached tables):
+
+| Tutorial | What it reproduces |
+|----------|--------------------|
+| [`tutorial/tutorial_BBBC021/`](tutorial/tutorial_BBBC021/) | BBBC021 MoA benchmarks and main figures (467 MorphAgent features) |
+| [`tutorial/tutorial_Tau/`](tutorial/tutorial_Tau/) | Tau genotype separation, classification, and transcriptome prediction |
+| [`tutorial/tutorial_HSC/`](tutorial/tutorial_HSC/) | Young/Old HSC Figure 3 panels |
+
+Start from the README in each folder and run the notebooks there. Large image payloads (BBBC021) are downloaded separately; they are not in the git tree.
 
 ## Install the desktop UI
 
@@ -71,3 +84,4 @@ See [`MorphAgent_CLI/README.md`](MorphAgent_CLI/README.md) and [`MorphAgent_CLI/
 |------|------|-------------------|
 | Desktop UI | [`MorphAgent_UI/README.md`](MorphAgent_UI/README.md) | **`MorphAgent_UI/`** |
 | CLI pipeline | [`MorphAgent_CLI/installation_skill.md`](MorphAgent_CLI/installation_skill.md) | **`MorphAgent_CLI/`** |
+| Paper result reproduction | [`tutorial/`](tutorial/) | the matching `tutorial/tutorial_*` folder |

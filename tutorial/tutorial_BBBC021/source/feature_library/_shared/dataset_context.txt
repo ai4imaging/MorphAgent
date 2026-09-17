@@ -1,0 +1,6 @@
+BBBC021 Cell Painting of MCF-7 breast cancer cells.
+Each sample is a 2D RGB uint8 image of shape (512, 512, 3):
+  channel 0 / Red   = F-actin (cytoskeleton)
+  channel 1 / Green = β-tubulin (microtubules)
+  channel 2 / Blue  = DAPI (nuclear DNA)
+VLM inputs are the three per-channel PNG slices under slices/.

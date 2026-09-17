@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nuclear_cap_presence",
+  "method": "vlm",
+  "name": "vlm_nuclear_cap_presence",
+  "description": "Detects the presence of 'nuclear caps' (asymmetric clustering of organelles or nuclear envelope deformations), a phenotype linked to oxidative stress and specific drug mechanisms.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells, focusing on the nuclear-cytoplasmic interface.",
+  "method_rationale": "This feature describes a specific, asymmetric spatial configuration that is semantically distinct and easier to describe in natural language than to code geometrically."
+}

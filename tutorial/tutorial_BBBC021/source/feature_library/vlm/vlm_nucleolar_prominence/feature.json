@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nucleolar_prominence",
+  "method": "vlm",
+  "name": "vlm_nucleolar_prominence",
+  "description": "Visually assesses the prominence or distinctness of nucleoli (darker or brighter spots inside the nucleus depending on staining). Nucleolar stress is a key drug response pathway.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Identifying nucleoli within the nucleus texture is a semantic sub-object recognition task."
+}

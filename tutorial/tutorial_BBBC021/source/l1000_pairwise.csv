@@ -1,0 +1,13 @@
+metric,i,j,method_i,method_j,p_two_sided,q_fdr_bh
+R2,0,1,CellProfiler,DeepProfiler (Old),0.0,0.0
+R2,0,2,CellProfiler,DeepProfiler (New),0.0,0.0
+R2,0,3,CellProfiler,BPAgent,0.019,0.022799999999999997
+R2,1,2,DeepProfiler (Old),DeepProfiler (New),0.0,0.0
+R2,1,3,DeepProfiler (Old),BPAgent,0.023,0.023000000000000003
+R2,2,3,DeepProfiler (New),BPAgent,0.0,0.0
+Mean_Pearson_r,0,1,CellProfiler,DeepProfiler (Old),0.001,0.0015
+Mean_Pearson_r,0,2,CellProfiler,DeepProfiler (New),0.0,0.0
+Mean_Pearson_r,0,3,CellProfiler,BPAgent,0.01,0.012
+Mean_Pearson_r,1,2,DeepProfiler (Old),DeepProfiler (New),0.0,0.0
+Mean_Pearson_r,1,3,DeepProfiler (Old),BPAgent,0.017,0.017
+Mean_Pearson_r,2,3,DeepProfiler (New),BPAgent,0.0,0.0

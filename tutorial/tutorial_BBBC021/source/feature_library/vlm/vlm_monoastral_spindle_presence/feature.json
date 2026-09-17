@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_monoastral_spindle_presence",
+  "method": "vlm",
+  "name": "vlm_monoastral_spindle_presence",
+  "description": "Visually estimates the prevalence of monoastral spindles (rosette-like chromatin surrounded by a radial microtubule array). This specific phenotype is the hallmark of Eg5 inhibition (e.g., Monastrol) and is visually distinct but hard to code geometrically.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells to isolate potential mitotic figures.",
+  "method_rationale": "Identifying a 'rosette' chromatin pattern with radial microtubules requires high-level pattern recognition that VLMs handle better than rule-based geometry."
+}

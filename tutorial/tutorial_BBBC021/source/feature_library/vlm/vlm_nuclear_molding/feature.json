@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nuclear_molding",
+  "method": "vlm",
+  "name": "vlm_nuclear_molding",
+  "description": "Visually detects nuclear molding, where nuclei deform against each other or against vacuoles. This indicates crowding or high plasticity.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Requires interpreting the interaction boundary between adjacent objects."
+}

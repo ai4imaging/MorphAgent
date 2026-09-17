@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nuclear_fragmentation_severity",
+  "method": "vlm",
+  "name": "vlm_nuclear_fragmentation_severity",
+  "description": "A visual assessment score of nuclear fragmentation (karyorrhexis) and condensation. The model evaluates the DAPI channel for signs of shattered or irregular nuclear bodies indicative of late-stage apoptosis.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment the nuclear region (DAPI channel) and immediate surrounding area.",
+  "method_rationale": "Distinguishing true apoptotic fragmentation from mitotic chromosomes or artifacts requires semantic understanding of 'shattered' vs 'condensed' appearances."
+}

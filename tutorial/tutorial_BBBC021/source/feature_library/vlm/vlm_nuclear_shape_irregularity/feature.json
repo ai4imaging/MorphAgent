@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_nuclear_shape_irregularity",
+  "method": "vlm",
+  "name": "vlm_nuclear_shape_irregularity",
+  "description": "Visually assesses nuclear shape irregularities such as lobulation, folding, or kidney shapes, which are subtle indicators of stress or specific drug effects.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual nuclei.",
+  "method_rationale": "VLM can describe 'irregularity' in a semantic way (e.g., 'kidney-shaped') that goes beyond simple circularity metrics."
+}

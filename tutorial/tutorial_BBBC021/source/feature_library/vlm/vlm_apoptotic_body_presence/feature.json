@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_apoptotic_body_presence",
+  "method": "vlm",
+  "name": "vlm_apoptotic_body_presence",
+  "description": "Detects the presence of apoptotic bodies (small, condensed, fragmented cell remnants). Indicates late-stage apoptosis.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Apoptotic bodies have a distinct clustered, fragmented appearance suitable for visual detection."
+}

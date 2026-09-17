@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_invadopodia_like_structures",
+  "method": "vlm",
+  "name": "vlm_invadopodia_like_structures",
+  "description": "Visually identifies actin-rich protrusions extending from the cell body, resembling invadopodia. This relates to cell motility and metastatic potential.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Recognizing specific functional protrusions requires distinguishing them from general cell spreading or retraction fibers."
+}

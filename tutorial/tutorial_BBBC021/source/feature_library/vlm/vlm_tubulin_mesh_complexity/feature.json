@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_tubulin_mesh_complexity",
+  "method": "vlm",
+  "name": "vlm_tubulin_mesh_complexity",
+  "description": "Rates the visual complexity and density of the microtubule meshwork in interphase cells.",
+  "category": "texture",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Assessing 'complexity' is a subjective visual task that correlates with network integrity."
+}

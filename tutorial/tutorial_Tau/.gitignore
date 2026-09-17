@@ -1,0 +1,13 @@
+# Notebook and CLI outputs are regenerated on every run.
+data/outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Never commit credentials
+.api_key
+**/.api_key
+.env

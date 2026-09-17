@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_microtubule_bundling_severity",
+  "method": "vlm",
+  "name": "vlm_microtubule_bundling_severity",
+  "description": "Provides a visual score for the severity of microtubule bundling (thick, rigid fibers). This phenotype is characteristic of taxane treatment and involves distinguishing between fine meshworks and coarse, hyper-intense cables.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells, focusing on the Tubulin channel.",
+  "method_rationale": "Distinguishing 'bundling' from simply 'bright' microtubules involves perceiving the thickness and rigidity of fibers, a semantic visual task well-suited for VLMs."
+}

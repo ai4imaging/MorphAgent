@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_lamellipodia_presence",
+  "method": "vlm",
+  "name": "vlm_lamellipodia_presence",
+  "description": "Detects the visual presence of broad, sheet-like actin protrusions (lamellipodia) at cell edges. This indicates active migration and intact actin polymerization machinery, which may be inhibited by actin-targeting drugs.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Identifying specific subcellular structures like lamellipodia requires recognizing shape and texture patterns that are hard to define with simple thresholds."
+}

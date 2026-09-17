@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_anaphase_bridge_detection",
+  "method": "vlm",
+  "name": "vlm_anaphase_bridge_detection",
+  "description": "Detects the presence of anaphase bridges (DNA strands connecting separating nuclei). This is a specific sign of chromosome segregation defects.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Fine DNA threads between nuclei are hard to segment but visually recognizable as a specific pattern."
+}

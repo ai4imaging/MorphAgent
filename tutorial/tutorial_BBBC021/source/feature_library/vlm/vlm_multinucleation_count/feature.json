@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_multinucleation_count",
+  "method": "vlm",
+  "name": "vlm_multinucleation_count",
+  "description": "Visually counts cells that appear to have multiple nuclei within a single cytoplasmic boundary. Multinucleation is a specific sign of cytokinesis failure, often induced by drugs like Cytochalasin or Taxanes.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Associating multiple nuclei with a single cell boundary is a complex grouping task that VLMs can perform intuitively."
+}

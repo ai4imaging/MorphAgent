@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_spindle_polarity_defects",
+  "method": "vlm",
+  "name": "vlm_spindle_polarity_defects",
+  "description": "Visually identifies defects in spindle polarity, such as multipolar spindles (more than 2 poles). This is associated with centrosome amplification or clustering defects.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Counting spindle poles and assessing their geometry is a complex structural task."
+}

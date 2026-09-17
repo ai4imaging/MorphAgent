@@ -1,0 +1,14 @@
+# Image payload — not shipped; drop local copies into data/dataset/
+data/dataset
+data/dataset/
+data/*.zip
+data/_extract_tmp/
+
+# Regenerated plots, smoke CSVs
+data/outputs/
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.api_key
+**/.api_key

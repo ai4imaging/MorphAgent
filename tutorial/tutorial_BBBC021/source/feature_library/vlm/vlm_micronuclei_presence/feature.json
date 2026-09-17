@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_micronuclei_presence",
+  "method": "vlm",
+  "name": "vlm_micronuclei_presence",
+  "description": "Uses a VLM to detect the presence of micronuclei (small DAPI-positive bodies distinct from the main nucleus). This is a hallmark of genomic instability and DNA damage.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment the nuclear region and immediate surroundings.",
+  "method_rationale": "Distinguishing true micronuclei from debris or apoptotic bodies involves contextual judgment suitable for a VLM."
+}

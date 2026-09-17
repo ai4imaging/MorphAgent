@@ -1,0 +1,5 @@
+feature_family,modality,multiclass_cv_accuracy_mean,n_features
+expert-designed features,SR,0.3778659370725034,14
+MorphAgent,SR,0.5446511627906977,350
+expert-designed features,WF,0.2786867305061559,14
+MorphAgent,WF,0.4920109439124487,350

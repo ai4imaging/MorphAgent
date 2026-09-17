@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_cell_rounding_severity",
+  "method": "vlm",
+  "name": "vlm_cell_rounding_severity",
+  "description": "Visually scores the prevalence of rounded, bright cells. This morphology is typical of cells in mitosis or cells undergoing detachment/death.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Global assessment of a prevalent shape phenotype is efficient with VLM."
+}

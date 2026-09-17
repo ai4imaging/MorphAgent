@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_membrane_blebbing_index",
+  "method": "vlm",
+  "name": "vlm_membrane_blebbing_index",
+  "description": "Visually estimates the degree of plasma membrane blebbing, a key feature of pyroptosis and apoptosis. This involves recognizing balloon-like protrusions on the cell surface.",
+  "category": "morphology",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells, focusing on the boundary.",
+  "method_rationale": "Blebbing is a qualitative morphological feature ('balloon-like') that is difficult to robustly quantify with standard curvature metrics on noisy boundaries."
+}

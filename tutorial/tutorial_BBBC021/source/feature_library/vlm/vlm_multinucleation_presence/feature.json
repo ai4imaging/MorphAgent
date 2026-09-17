@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_multinucleation_presence",
+  "method": "vlm",
+  "name": "vlm_multinucleation_presence",
+  "description": "Visually detects cells containing multiple nuclei, a sign of cytokinesis failure.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Detecting multiple nuclei within a single cytoplasmic boundary requires understanding cell containment, which VLMs can infer visually."
+}

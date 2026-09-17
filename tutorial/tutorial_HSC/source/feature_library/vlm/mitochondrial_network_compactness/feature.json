@@ -1,0 +1,9 @@
+{
+  "feature_name": "mitochondrial_network_compactness",
+  "method": "vlm",
+  "name": "mitochondrial_network_compactness",
+  "description": "Visually scores how compact versus dispersed the mitochondrial network appears within the cell. Higher values indicate a more compact, centrally concentrated mitochondrial organization; lower values indicate a more dispersed network.",
+  "category": "spatial",
+  "needs_segmentation": false,
+  "method_rationale": "Compact versus dispersed mitochondrial organization is a gestalt spatial pattern that is reliably scored by a vision model on a 2D MIP."
+}

@@ -1,0 +1,5 @@
+feature_family,modality,n_features_used,cv_accuracy_mean,cv_roc_auc_mean
+MorphAgent,SR,50,0.8762845849802371,0.9472832722832722
+MorphAgent,WF,50,0.8051383399209486,0.8637362637362637
+expert-designed features,SR,14,0.8221343873517786,0.908119658119658
+expert-designed features,WF,14,0.6268774703557313,0.6585012210012211

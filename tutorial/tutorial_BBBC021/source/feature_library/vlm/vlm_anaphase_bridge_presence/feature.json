@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_anaphase_bridge_presence",
+  "method": "vlm",
+  "name": "vlm_anaphase_bridge_presence",
+  "description": "Visually detects DNA bridges connecting separating nuclei (anaphase bridges). This indicates DNA replication stress or telomere fusion/resolution defects.",
+  "category": "morphology",
+  "needs_segmentation": false,
+  "segmentation_prompt": null,
+  "method_rationale": "Detecting thin, faint DNA strands between specific nuclear configurations is a high-level pattern recognition task."
+}
