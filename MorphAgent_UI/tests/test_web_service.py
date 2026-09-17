@@ -726,6 +726,59 @@ def test_history_cannot_remove_active_or_saving_run(workspace,status,export_stat
     assert job['id'] in service.jobs and results.exists()
 
 
+def _run_with_vlm_feature(workspace):
+    previous=workspace/'old-results';previous.mkdir()
+    (previous/'features.csv').write_text('sample_id,area,vlm_shape\na,1,20\n')
+    code=previous/'round_1/features/area';code.mkdir(parents=True)
+    (code/'extract.py').write_text('def extract(img, seg): return 1')
+    (previous/'round_1/feature_plan.json').write_text(json.dumps({'features':[
+        {'name':'area','method':'code','description':'Cell area'},
+        {'name':'vlm_shape','method':'vlm','description':'Overall shape'}]}))
+    return previous
+
+
+def test_compute_passes_credentials_only_when_a_vlm_feature_is_selected(workspace):
+    previous=_run_with_vlm_feature(workspace)
+    (workspace/'reuse_code.py').write_text(
+        "import json,pathlib,sys,os\n"
+        "p=pathlib.Path(sys.argv[sys.argv.index('--results-dir')+1])\n"
+        "(p/'seen.json').write_text(json.dumps({'argv':sys.argv[1:],'vlm':os.environ.get('VLM_API_KEY','')}))\n"
+        "(p/'features.csv').write_text('sample_id,area,vlm_shape\\na,2,30\\n')")
+    service=make_service(workspace)
+    source=service.add_existing_run(str(previous))
+    data=service.add_dataset(str(workspace/'demo/data'))
+    payload={'sourceRunId':source['id'],'datasetId':data['id'],'question':'Measure shape',
+             'featureNames':['area','vlm_shape']}
+    assert service.preflight_compute(payload)['ready']
+    job=service.start_reuse(payload)
+    deadline=time.monotonic()+5
+    while time.monotonic()<deadline and service.run_detail(job['id'])['status'] in ('starting','running'):
+        time.sleep(.05)
+    seen=json.loads((Path(job['resultsDir'])/'seen.json').read_text())
+    assert seen['vlm']=='private-test-key'
+    assert seen['argv'][seen['argv'].index('--question')+1]=='Measure shape'
+    assert '--vlm-concurrency' in seen['argv']
+    assert seen['argv'][seen['argv'].index('--features')+1:]==['area','vlm_shape']
+    assert service.run_detail(job['id'])['route']=='both'
+    assert json.loads((Path(job['resultsDir'])/'ui_run_manifest.json').read_text())['method']=='both'
+
+
+def test_compute_with_a_vlm_feature_requires_vlm_credentials(workspace):
+    previous=_run_with_vlm_feature(workspace)
+    service=service_type()(workspace,python_executable=sys.executable)
+    service.save_settings({'baseUrl':'https://test.invalid/v1','apiKey':'llm-only','model':'m',
+                           'sameConnection':False})
+    source=service.add_existing_run(str(previous))
+    data=service.add_dataset(str(workspace/'demo/data'))
+    payload={'sourceRunId':source['id'],'datasetId':data['id'],'question':'Measure',
+             'featureNames':['area','vlm_shape']}
+    assert not service.preflight_compute(payload)['ready']
+    with pytest.raises(ValueError,match='VLM'):
+        service.start_reuse(payload)
+    # The same run is fine when only its saved code is replayed.
+    assert service.preflight_compute({**payload,'featureNames':['area']})['ready']
+
+
 def test_reuse_rejects_failed_history_empty_selection_and_unknown_features(workspace):
     results=workspace/'saved';results.mkdir()
     (results/'features.csv').write_text('sample_id,area\na,1\n')

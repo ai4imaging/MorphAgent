@@ -687,14 +687,20 @@ class WorkspaceService:
             raise ValueError('Target dataset must contain a primary image in each sample folder.')
         return source, data, chosen, question, summary
 
+    @staticmethod
+    def _compute_route(chosen):
+        """Saved code replays offline; saved VLM features still need the scoring API."""
+        methods = {'vlm' if f['method'] == 'vlm' else 'code' for f in chosen}
+        return 'both' if len(methods) > 1 else methods.pop()
+
     def preflight_compute(self, payload):
         with self.lock:
-            issues = self._credential_issues('code')
             try:
                 _, _, chosen, _, summary = self._prepare_compute(payload)
             except ValueError as exc:
-                issues.append({'severity':'blocker', 'code':'compute_inputs', 'message':str(exc)})
-                return {'ready':False, 'issues':issues}
+                return {'ready':False, 'issues':[*self._credential_issues('code'),
+                        {'severity':'blocker', 'code':'compute_inputs', 'message':str(exc)}]}
+            issues = self._credential_issues(self._compute_route(chosen))
             if space := self._space_issue(summary):
                 issues.append({'severity':'blocker', 'code':'disk_space', 'message':space})
             if self.closing or any(j['status'] in ACTIVE for j in self.jobs.values()):
@@ -707,10 +713,12 @@ class WorkspaceService:
                 raise ValueError('The workspace is closing. Restart it before starting another run.')
             if any(j['status'] in ACTIVE for j in self.jobs.values()):
                 raise ValueError('Wait for the current run or stop it first.')
-            issues = self._credential_issues('code')
+            source, data, chosen, question, summary = self._prepare_compute(payload)
+            chosen_code = [c for c in chosen if c['method'] != 'vlm']
+            route = self._compute_route(chosen)
+            issues = self._credential_issues(route)
             if issues:
                 raise ValueError(' '.join(i['message'] for i in issues))
-            source, data, chosen, question, summary = self._prepare_compute(payload)
             source_root = Path(source['resultsDir'])
             key = uuid.uuid4().hex
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -718,26 +726,32 @@ class WorkspaceService:
             results = directory / 'results'
             results.mkdir(parents=True)
             config = RunConfig(data_root=data['path'], repository_root=str(self.repo), results_dir=str(results),
-                               python_executable=self.python, query=question, method='code')
+                               python_executable=self.python, query=question, method=route)
             self._copy_inputs(config, summary, directory, {'knowledgeEnabled':False})
             command = [self.python, '-u', str(self.repo / 'reuse_code.py'), '--source-results', str(source_root),
                        '--data-root', config.data_root, '--results-dir', str(results), '--code-parallel-workers', '1',
+                       '--question', question, '--vlm-concurrency', str(config.vlm_online_concurrency),
                        '--features', *[c['name'] for c in chosen]]
             write_json(results / 'ui_run_manifest.json', {'kind':'reuse', 'source_results':str(source_root),
-                       'query':question, 'method':'code', 'prompt_usage':'run_context_only',
+                       'query':question, 'method':route, 'prompt_usage':'run_context_only',
                        'data_root':config.data_root, 'command':command, 'dataset_summary':summary.as_dict()})
             job = {'id':key, 'name':timestamp, 'timestamp':timestamp, 'status':'starting', 'kind':'reuse',
                    'sourceRunId':source['id'], 'selectedFeatures':[c['name'] for c in chosen],
-                   'startedAt':time.time(), 'resultsDir':str(results), 'stage':'quantify', 'route':'code',
+                   'startedAt':time.time(), 'resultsDir':str(results), 'stage':'quantify', 'route':route,
                    'question':question, 'datasetId':data['id'], 'rounds':0, 'exitCode':None,
-                   'initialEstimateSeconds':max(30, 12 * len(chosen) * summary.sample_count),
+                   # Code runs per feature and sample; VLM features share one call per sample.
+                   'initialEstimateSeconds':max(30, 12 * len(chosen_code) * summary.sample_count + 25 * math.ceil(
+                       (summary.sample_count if len(chosen) > len(chosen_code) else 0)
+                       / max(1, config.vlm_online_concurrency))),
                    'etaProgress':5, 'totalMeasurements':len(chosen) * summary.sample_count, 'completedMeasurements':0}
             self.jobs[key]=job
             self._persist()
             env=self._child_environment()
             env.update(config.pipeline_environment())
+            # Replaying saved code needs no credentials; rescoring saved VLM features does.
+            if route in ('vlm', 'both'):
+                env.update(self.model_environment())
             env.update(CONDA_ENV='', PYTHONUNBUFFERED='1', PYTHONUTF8='1', PYTHONIOENCODING='utf-8')
-            # Code reuse has no need for model credentials, even in inherited environments.
             threading.Thread(target=self._execute, args=(key,command,env), daemon=True).start()
             return dict(job)
 

@@ -78,7 +78,7 @@ The UI is a native window (Qt6 + WebEngine, no browser required) with four pages
 | Page | What you do there |
 |------|-------------------|
 | **Design** | Attach a dataset and optional knowledge files, ask a biological question, set the feature count, review the configuration, then watch progress and live output on the same page |
-| **Compute** | Apply the feature scripts saved by a previous run to a new dataset — no model calls, no feature redesign |
+| **Compute** | Apply the features saved by a previous run to a new dataset — saved code is replayed offline, saved VLM features are scored again by the VLM, and nothing is redesigned |
 | **Visualize** | Load a run's `feature_value.csv` and browse retained features with All / Code / VLM filters and distribution histograms |
 | **Help** | Ask MorphAgent about the paper, figures, methods, or implementation, answered from bundled manuscript and code excerpts |
 

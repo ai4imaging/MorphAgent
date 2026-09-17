@@ -50,7 +50,7 @@ async function ui({failDocumentName='',additionalCode=false,historyKind='reuse',
       if(endpoint==='runs/computed')data={id:'computed',kind:'reuse',status:'running',question:'Compute cell area',name:'computed',features:[],artifacts:[],startedAt:Date.now()/1000,eta:{remainingSeconds:30},selectedFeatures:['area']};
       if(endpoint==='runs'){data={id:'new',kind:'discovery',status:'running',question:body.question};runs.push(data);}
       if(endpoint==='runs/new')data={id:'new',status:'running',startedAt:Date.now()/1000,question:'Measure',name:'timestamp',features:[],artifacts:[],eta:{remainingSeconds:300,progressPercent:20}};
-      if(endpoint==='runs/ok')data={...runs[0],kind:historyKind,question:'Historical question',selectedFeatures:['area'],features:[{name:'area',description:'Cell area',method:'code',status:'retained',reusable:true},{name:'visual',method:'vlm',status:'retained',reusable:false},{name:'dropped',method:'code',status:'dropped',reusable:false}],artifacts:[],exportStatus:'ready',lastExport:{directory:'/workspace/exports/20260915_120000_000000',filename:'20260915_120000_000000.zip'}};
+      if(endpoint==='runs/ok')data={...runs[0],kind:historyKind,question:'Historical question',selectedFeatures:['area'],features:[{name:'area',description:'Cell area',method:'code',status:'retained',reusable:true},{name:'visual',description:'Visual score',method:'vlm',status:'retained',reusable:true},{name:'dropped',method:'code',status:'dropped',reusable:false}],artifacts:[],exportStatus:'ready',lastExport:{directory:'/workspace/exports/20260915_120000_000000',filename:'20260915_120000_000000.zip'}};
       if(endpoint.includes('/distribution?feature='))data={count:3,missing:0,minimum:0,maximum:2,bins:[{low:0,high:1,count:1},{low:1,high:2,count:2}]};
       if(endpoint.includes('/logs'))data={lines:[],offset:0};
       if(endpoint==='runs/ok' && additionalCode)data.features.push({name:'perimeter',description:'Cell perimeter',method:'code',status:'retained',reusable:true});
@@ -301,7 +301,9 @@ test('Compute displays all available code without selection controls',async()=>{
   assert.ok(!html.includes('type="checkbox"'));
   assert.ok(!html.includes('reuse-all')&&!html.includes('reuse-clear'));
   assert.match(html,/Add data/);
-  assert.match(html,/No executable code/);
+  assert.match(html,/Replays saved code/);
+  assert.match(html,/Rescored by the VLM/);
+  assert.match(html,/Nothing reusable saved/);
 });
 test('Design, Compute, Visualize and Help navigation live only in the sidebar',async()=>{
   const app=await ui();
@@ -316,11 +318,12 @@ test('Design, Compute, Visualize and Help navigation live only in the sidebar',a
   assert.ok(!header.includes('data-page=')&&!header.includes('Analysis workflow'));
   assert.match(html,/data-action="delete-history"/);
 });
-test('Reuse monitor describes saved scripts without claiming new seeding or validation',async()=>{
+test('Reuse monitor describes saved features without claiming new seeding or validation',async()=>{
   const app=await ui();
   await app.click('load-job',{id:'ok'});
   const html=app.run('runPage()');
-  assert.match(html,/Saved per-feature scripts/);
+  assert.match(html,/Saved features only/);
+  assert.match(html,/Code is replayed, VLM features are rescored/);
   assert.ok(!html.includes('seed 42'));
   assert.match(html,/no new validation/i);
 });
@@ -522,7 +525,7 @@ test('Compute blocks missing API, confirms all inputs, and stays on Compute afte
   await Promise.all([app.click('confirm-run'),app.click('confirm-run')]);
   assert.equal(app.calls.filter(c=>c.endpoint==='compute').length,1);
   assert.equal(app.calls.find(c=>c.endpoint==='compute').body.question,'Compute cell area');
-  assert.deepEqual(app.calls.find(c=>c.endpoint==='compute').body.featureNames,['area']);
+  assert.deepEqual(app.calls.find(c=>c.endpoint==='compute').body.featureNames,['area','visual']);
   assert.equal(app.run('state.page'),'compute');
   assert.match(app.run('reusePage()'),/submitted-question/);
   assert.match(app.run('reusePage()'),/Compute cell area/);
@@ -530,7 +533,7 @@ test('Compute blocks missing API, confirms all inputs, and stays on Compute afte
   assert.equal(app.run('state.question'),'Independent design question');
 });
 
-test('Filtering the read-only feature list still computes every available script',async()=>{
+test('Filtering the read-only feature list still computes every reusable feature',async()=>{
   const app=await ui({additionalCode:true});
   await app.click('compute-source');await app.click('reuse-demo');
   app.run("state.search='perimeter';state.computeQuestion='Compute morphology';Object.assign(state.config,{apiKey:'fixture',baseUrl:'https://test.invalid',model:'fixture'})");
@@ -540,7 +543,8 @@ test('Filtering the read-only feature list still computes every available script
   assert.match(app.run('runDialog()'),/area/);
   assert.match(app.run('runDialog()'),/perimeter/);
   await app.click('confirm-run');
-  assert.deepEqual(app.calls.find(c=>c.endpoint==='compute').body.featureNames,['area','perimeter']);
+  // Saved VLM features are rescored alongside the saved code, never silently dropped.
+  assert.deepEqual(app.calls.find(c=>c.endpoint==='compute').body.featureNames,['area','visual','perimeter']);
 });
 
 for(const historyKind of ['discovery','reuse'])test(`Leaving ${historyKind} history opens independent new-run forms`,async()=>{

@@ -27,8 +27,10 @@ def saved(tmp_path):
 def test_catalog_only_offers_individual_code_inside_source(saved, tmp_path):
     from morphagent_ui.feature_outputs import feature_catalog
     by_name={c['name']:c for c in feature_catalog(saved)}
-    assert by_name['area']['reusable']
-    assert not by_name['visual']['reusable']
+    assert by_name['area']['reusable'] and by_name['area']['code_status']=='available'
+    # A VLM feature ships no script; it is reusable because it can be rescored.
+    assert by_name['visual']['reusable'] and by_name['visual']['codePath'] is None
+    assert by_name['visual']['code_status']=='vlm_scored'
     script=saved/'round_1/features/area/extract.py'
     script.unlink();script.symlink_to(tmp_path/'outside.py')
     (tmp_path/'outside.py').write_text('def extract(img,seg): return 999')
@@ -49,7 +51,7 @@ def test_export_three_contents_with_matching_feature_csv(saved, tmp_path):
     assert (root/'feature/area/code/extract.py').read_text()==(saved/'round_1/features/area/extract.py').read_text()
     assert not list(root.rglob('values.csv'))
     assert not list((root/'feature/visual/code').glob('*.py'))
-    assert next(d for d in descriptions if d['name']=='visual')['code_status']=='vlm_no_code'
+    assert next(d for d in descriptions if d['name']=='visual')['code_status']=='vlm_scored'
     with zipfile.ZipFile(info['archive']) as archive:
         assert root.name+'/feature/area/code/extract.py' in archive.namelist()
         assert root.name+'/value/feature_value.csv' in archive.namelist()
@@ -73,7 +75,59 @@ def test_selected_reuse_does_not_execute_unselected_code(saved, tmp_path):
     assert list(csv.DictReader((output/'features.csv').open()))==[{'sample_id':'s1','area':'16.0'}]
     assert not (output/'round_1/features/intensity').exists()
     assert json.loads((output/'reuse_manifest.json').read_text())['selected_features']==['area']
-    with pytest.raises(ValueError):run_selected_reuse(saved,dataset.parent.parent,tmp_path/'bad',['visual'])
+    assert not json.loads((output/'reuse_manifest.json').read_text())['vlm_calls']
+    with pytest.raises(ValueError):run_selected_reuse(saved,dataset.parent.parent,tmp_path/'bad',['unknown'])
+
+
+@pytest.fixture
+def offline_vlm_paths(monkeypatch):
+    """Path selection asks the LLM which images a feature needs; keep tests offline."""
+    import utils_helpers
+    monkeypatch.setattr(utils_helpers,'select_appropriate_data_source',
+                        lambda sample_dir,feature,description=None:[str(sample_dir/'image.tif')])
+
+
+def test_selected_reuse_rescores_vlm_features_alongside_code(saved, tmp_path, monkeypatch, offline_vlm_paths):
+    import numpy as np
+    import tifffile
+    import nodes.execution
+    from tools.selected_reuse import run_selected_reuse
+    dataset=tmp_path/'data/dataset/s1';dataset.mkdir(parents=True)
+    tifffile.imwrite(dataset/'image.tif',np.ones((4,4),dtype=np.uint8))
+    seen={}
+    def fake_batch(features,image_paths,state,segmentation_mask=None,log_file=None,gpu_id=None):
+        seen.update(names=[f['name'] for f in features],question=state['user_query'],
+                    images=list(image_paths),sample=state['sample_id'])
+        return {f['name']:71.5 for f in features}
+    monkeypatch.setattr(nodes.execution,'_execute_vlm_features_batch',fake_batch)
+    output=tmp_path/'mixed'
+    result=run_selected_reuse(saved,dataset.parent.parent,output,['area','visual'],question='Measure tau')
+    assert result['complete'] and result['vlm_calls'] and not result['llm_calls']
+    # One batched call covers every selected VLM feature, exactly like a discovery run.
+    assert seen['names']==['visual'] and seen['question']=='Measure tau' and seen['sample']=='s1'
+    assert list(csv.DictReader((output/'features.csv').open()))==[
+        {'sample_id':'s1','area':'16.0','visual':'71.5'}]
+    plan=json.loads((output/'round_1/feature_plan.json').read_text())['features']
+    assert {f['name']:f['method'] for f in plan}=={'area':'code','visual':'vlm'}
+    registry={e['name']:e for e in json.loads((output/'feature_registry.json').read_text())['entries']}
+    assert registry['visual']['method']=='vlm' and registry['visual']['current_status']=='retained'
+    # No script is fabricated for a feature that never had one.
+    assert not (output/'round_1/features/visual').exists()
+
+
+def test_selected_reuse_records_a_failed_vlm_score(saved, tmp_path, monkeypatch, offline_vlm_paths):
+    import numpy as np
+    import tifffile
+    import nodes.execution
+    from tools.selected_reuse import run_selected_reuse
+    dataset=tmp_path/'data/dataset/s1';dataset.mkdir(parents=True)
+    tifffile.imwrite(dataset/'image.tif',np.ones((4,4),dtype=np.uint8))
+    monkeypatch.setattr(nodes.execution,'_execute_vlm_features_batch',
+                        lambda *a,**k:(_ for _ in ()).throw(RuntimeError('endpoint refused')))
+    monkeypatch.setattr('tools.selected_reuse.VLM_ATTEMPTS',1)
+    result=run_selected_reuse(saved,dataset.parent.parent,tmp_path/'vlm-down',['visual'],question='Measure')
+    assert not result['complete']
+    assert 'endpoint refused' in result['errors']['visual']['s1']
 
 
 def test_selected_reuse_failure_is_not_complete(saved, tmp_path):
@@ -98,7 +152,8 @@ def test_portable_export_can_compute_without_original_run(saved, tmp_path):
     assert set(cards)=={'area','intensity','visual'}
     assert cards['area']['codePath']=='area/code/extract.py'
     assert cards['area']['description']=='Area of cell'
-    assert cards['area']['reusable'] and not cards['visual']['reusable']
+    assert cards['area']['reusable'] and cards['visual']['reusable']
+    assert cards['visual']['codePath'] is None
     # A moved bundle is self-contained; historical source paths are not required.
     saved.rename(tmp_path/'old-source-moved')
     sample=tmp_path/'new-data/dataset/new_sample';sample.mkdir(parents=True)

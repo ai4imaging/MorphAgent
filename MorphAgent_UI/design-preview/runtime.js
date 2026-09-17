@@ -225,7 +225,7 @@
       '<div class="summary-row"><small>'+ (j.kind==='reuse'?'Selected features':'Feature number')+'</small><strong>'+esc(j.kind==='reuse'?(j.selectedFeatures||[]).length:j.featureNumber??'—')+'</strong></div>'+
       '<div class="summary-row"><small>Analysis mode</small><strong>'+esc(j.kind==='reuse'?'Compute · saved code':(mode?mode.name+' · ':'')+loops)+'</strong></div>'+
       (j.kind==='reuse'?'':'<div class="summary-row"><small>Knowledge</small><strong>'+(j.referenceCount||0)+' uploaded files</strong></div>')+
-      '<p class="preview-note">'+(j.kind==='reuse'?'Saved per-feature scripts only. No model calls; no new validation.':'Reproducibility enabled · seed 42. Your original inputs are preserved.')+'</p></aside></div>'+
+      '<p class="preview-note">'+(j.kind==='reuse'?'Saved features only. Code is replayed, VLM features are rescored; no new features and no new validation.':'Reproducibility enabled · seed 42. Your original inputs are preserved.')+'</p></aside></div>'+
       '<div id="runtime-error" class="runtime-error" role="alert">'+esc(live.lastError)+'</div>'+
       '<div class="live-log-header"><h2>Live output</h2><span>'+(isActive?'Process active':statusLabel(j))+'</span></div>'+
       '<pre class="live-log" id="live-log" aria-label="Run console">'+esc(live.logs.join('\n')||'Process output will appear here immediately after launch.')+'</pre>'+
@@ -233,12 +233,12 @@
   };
   const computeFeatures = () => (live.reuseSource?.features||[]).filter(f=>f.reusable);
   featureRows = function() {
-    return (live.reuseSource?.features||[]).filter(f=>`${f.name} ${f.category} ${f.method}`.toLowerCase().includes(state.search.toLowerCase())).map(f=>`<div class="compute-feature-row"><div><strong>${esc(f.name)}</strong><p>${esc(f.description||'No description saved.')}</p></div><span class="route-tag">${esc(f.method.toUpperCase())}</span><small>${f.reusable?'Ready to compute':'No executable code'}</small></div>`).join('')||empty('No matching features.');
+    return (live.reuseSource?.features||[]).filter(f=>`${f.name} ${f.category} ${f.method}`.toLowerCase().includes(state.search.toLowerCase())).map(f=>`<div class="compute-feature-row"><div><strong>${esc(f.name)}</strong><p>${esc(f.description||'No description saved.')}</p></div><span class="route-tag">${esc(f.method.toUpperCase())}</span><small>${f.reusable?(f.method==='vlm'?'Rescored by the VLM':'Replays saved code'):'Nothing reusable saved'}</small></div>`).join('')||empty('No matching features.');
   };
   reusePage = function() {
     if(live.job?.kind==='reuse' && !live.computeDraft)return runPage();
     const d=live.reuseData, source=live.reuseSource;
-    return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>What would you like to compute?</h1><p>Apply your saved feature code to a new dataset.</p></div>
+    return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>What would you like to compute?</h1><p>Apply the features saved by a previous run to a new dataset.</p></div>
       <div class="composer"><textarea id="compute-question" aria-label="Compute question" placeholder="Describe what you want to measure on this dataset…">${esc(state.computeQuestion)}</textarea>
       <div class="composer-footer"><div class="composer-tools">
       <button class="composer-chip ${source?'filled':''}" data-action="compute-source">${icon('history')}<span>${source?'Previous run attached':'Upload features'}</span></button>
@@ -246,10 +246,10 @@
       ${source?`<button class="composer-chip" data-action="compute-features" aria-expanded="${state.computeFeaturesOpen}">${icon('code')}<span>${computeFeatures().length} features available</span>${icon(state.computeFeaturesOpen?'down':'chevron')}</button>`:''}
       </div><button class="submit" data-action="prepare-compute" aria-label="Review and compute">${icon('arrow')}</button></div></div>
       <div class="compute-attachments">
-      ${source?`<div class="compute-attachment">${icon('history')}<div><strong>${esc(source.name)}</strong><small>Previous run · ${computeFeatures().length} executable features available</small><p class="dataset-path">${esc(source.resultsDir)}</p></div><button class="subtle-link" data-action="compute-source">Change</button></div>`:''}
+      ${source?`<div class="compute-attachment">${icon('history')}<div><strong>${esc(source.name)}</strong><small>Previous run · ${computeFeatures().length} reusable features available</small><p class="dataset-path">${esc(source.resultsDir)}</p></div><button class="subtle-link" data-action="compute-source">Change</button></div>`:''}
       ${d?`<div class="compute-attachment">${icon('folder')}<div><strong>${esc(d.name)}</strong><small>New dataset · ${d.summary.sample_count} samples · ${d.summary.primary_image_count} images</small><p class="dataset-path">${esc(d.path)}</p></div><button class="subtle-link" data-action="reuse-upload">Change</button></div>`:''}
       </div>
-      ${source&&state.computeFeaturesOpen?`<section class="compute-feature-picker"><div class="compute-feature-heading"><h2>Saved features</h2></div><p class="muted-note">All available feature code will run automatically.</p><label class="search-box">${icon('search')}<input id="feature-search" type="search" placeholder="Search features…" aria-label="Search features" value="${esc(state.search)}"></label><div class="reuse-features" id="feature-list">${featureRows()}</div></section>`:''}
+      ${source&&state.computeFeaturesOpen?`<section class="compute-feature-picker"><div class="compute-feature-heading"><h2>Saved features</h2></div><p class="muted-note">Every reusable feature runs automatically.</p><label class="search-box">${icon('search')}<input id="feature-search" type="search" placeholder="Search features…" aria-label="Search features" value="${esc(state.search)}"></label><div class="reuse-features" id="feature-list">${featureRows()}</div></section>`:''}
       ${!d?`<button class="starter compute-demo" data-action="reuse-demo"><span class="starter-copy"><strong>Try with the Tau demo</strong><span>Use the demo as your new target dataset</span></span>${icon('right')}</button>`:''}
       <div id="runtime-error" class="runtime-error" role="alert">${esc(live.lastError)}</div></section>`;
   };
@@ -340,7 +340,7 @@
     if(!live.reuseSource)return showRunIssue({title:'Feature folder required',message:'Upload the feature folder from a saved run.',label:'Choose feature folder'});
     if(!live.reuseData)return showRunIssue({title:'Dataset required',message:'Add a new target dataset before continuing.',label:'Add data'});
     if(!state.computeQuestion.trim())return showRunIssue({title:'Question required',message:'Describe what you want to measure on this dataset.',target:'compute-question',label:'Enter your question'});
-    if(!computeFeatures().length)return showRunIssue({title:'No executable features',message:'This run has no standalone feature code. Load another previous run.',label:'Review previous run'});
+    if(!computeFeatures().length)return showRunIssue({title:'No reusable features',message:'This run saved neither standalone feature code nor VLM feature definitions. Load another previous run.',label:'Review previous run'});
     const issue=apiConnectionIssue('code');if(issue)return showRunIssue(issue);
     try {
       setSettings(await post('settings',state.config));

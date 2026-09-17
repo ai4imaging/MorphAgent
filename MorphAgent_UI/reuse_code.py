@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""CLI entry point for reusing completed MorphAgent code features on a new dataset.
+"""CLI entry point for reusing completed MorphAgent features on a new dataset.
 
-This path never imports the LangGraph planner, knowledge modules, LLM clients, or VLM
-scoring. It only loads historical merged code and executes it against the selected data.
+This path never imports the LangGraph planner, knowledge modules, or LLM clients: no
+feature is redesigned. Merged-round reuse (without --features) executes historical code
+only. Selected reuse (--features) replays saved code scripts and, for VLM features that
+have no script, rescores the new images against their saved descriptions.
 """
 
 from __future__ import annotations
@@ -57,7 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional conda environment name used to execute feature code.",
     )
     parser.add_argument('--features', nargs='+', default=None,
-                        help='Execute only these standalone per-feature scripts. Omit for legacy merged-round reuse.')
+                        help='Execute only these saved per-feature extractors. Omit for legacy merged-round reuse.')
+    parser.add_argument('--question', default='',
+                        help='Biological question passed to VLM scoring prompts (selected reuse only).')
+    parser.add_argument('--vlm-concurrency', type=int, default=1,
+                        help='Samples scored concurrently when selected features include VLM ones.')
     return parser
 
 
@@ -76,7 +82,9 @@ def main(argv: list[str] | None = None) -> int:
             from datetime import datetime
             output = args.results_dir or str(Path(args.data_root)/'results'/datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
             result = run_selected_reuse(args.source_results, args.data_root, output, args.features,
-                                        conda_env=args.conda_env.strip() or None)
+                                        conda_env=args.conda_env.strip() or None,
+                                        question=args.question,
+                                        vlm_concurrency=max(1, int(args.vlm_concurrency)))
             return 0 if result['complete'] else 3
         except Exception as exc:
             print(f'[Reuse] [ERROR] {exc}', file=sys.stderr)

@@ -128,22 +128,26 @@ reloads the knowledge file after it is rebuilt.
    run's `feature/` folder. The browser fallback asks for that folder path.
    Unzip a received ZIP first. Older raw `results/` directories remain supported. Loading does
    not execute anything; imported completion is labelled unverified.
-2. Click **N features available** to inspect the read-only feature list. All
-   available standalone `extract.py` scripts run automatically; no checkboxes
-   or selection/clear controls are shown. VLM features and missing code are
-   labelled **No executable code** and are not run. Search only filters the view.
+2. Click **N features available** to inspect the read-only feature list. Every
+   reusable feature runs automatically; no checkboxes or selection/clear controls
+   are shown. Saved `extract.py` scripts are labelled **Replays saved code**, and
+   saved VLM features — which never had a script — are labelled **Rescored by the
+   VLM** and are scored again from their saved descriptions. Features with neither
+   are labelled **Nothing reusable saved**. Search only filters the view.
 3. Click **Add data** to upload a new target folder, or use the Tau demo. Enter
    your question in the composer. These inputs are independent of Design.
 4. Submit with the arrow or Enter. Missing source, data, question, selected code,
    or API settings opens a blocking reminder. **Review run configuration** lists
    the question, Compute mode, source run, target data, and selected feature names.
    Only **Confirm and run** starts execution; cancelling preserves your draft.
-   API configuration is required consistently with Design, but the saved
-   code path itself makes **no LLM/VLM calls** and receives no model credentials.
-   The prompt is saved as context; it does not rewrite the historical scripts.
+   API configuration is required consistently with Design. Replaying saved code
+   makes **no LLM/VLM calls** and receives no model credentials; selecting a saved
+   VLM feature does score the new images through the VLM, so those runs need VLM
+   credentials and are billed like a Design run. The prompt is saved as context
+   and passed to VLM scoring; it never rewrites the historical scripts.
    All available individual extractors run, not a merged round script. Use
-   trusted code; images and masks must match its requirements. No new validation
-   is performed.
+   trusted code; images and masks must match its requirements. No feature is
+   redesigned and no new validation is performed.
 5. Stay on Compute: the question appears at the top with progress, live output,
    elapsed time and an approximate remaining time beneath. Results are saved
    automatically and an inline download is provided. **New computation** starts

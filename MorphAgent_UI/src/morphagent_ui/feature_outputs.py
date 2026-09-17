@@ -91,21 +91,23 @@ def feature_catalog(results: str | Path) -> list[dict]:
             except (OSError, UnicodeError, SyntaxError):
                 script = None
         item['codePath'] = script.relative_to(root).as_posix() if script and card.method == 'code' else None
-        item['reusable'] = bool(item['codePath'])
-        item['code_status'] = 'available' if item['reusable'] else 'vlm_no_code' if card.method == 'vlm' else 'missing_code'
+        # A VLM feature carries no script: it is recomputed by scoring the new images
+        # against its saved description, the same way the original run did.
+        item['reusable'] = bool(item['codePath']) or card.method == 'vlm'
+        item['code_status'] = 'available' if item['codePath'] else 'vlm_scored' if card.method == 'vlm' else 'missing_code'
         items.append(item)
     return items
 
 
 def selected_features(results: str | Path, names) -> list[dict]:
     if not isinstance(names, list) or not names or any(not isinstance(n, str) for n in names):
-        raise ValueError('Select at least one code feature.')
+        raise ValueError('Select at least one feature.')
     available = {f['name']: f for f in feature_catalog(results)}
     result = []
     for name in dict.fromkeys(names):
         item = available.get(name)
         if not item or not item['reusable']:
-            raise ValueError(f'No standalone reusable code for feature: {name}')
+            raise ValueError(f'Nothing reusable saved for feature: {name}')
         result.append(item)
     return result
 
