@@ -1,6 +1,16 @@
-# Agentic cell profiling across microscopy modalities via biologically grounded feature design
+# Biologically grounded cell profiling across microscopy modalities
 
-Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao Niu, Yaorong Guo, Jinzhuo Wang, Liangyi Chen, He Sun
+Enze Ye<sup>1,2,†</sup>, Xiaoxuan Wu<sup>1,2,3,†</sup>, Rui Peng<sup>1,4,†</sup>, Wenjia Hu<sup>5</sup>, Xiangyou Li<sup>1,2</sup>, Xuefei Zhang<sup>1,2</sup>, Mengxiao Niu<sup>1,2</sup>, Yaorong Guo<sup>1,2</sup>, Xinlei Sheng<sup>6</sup>, Jinzhuo Wang<sup>1,\*</sup>, Liangyi Chen<sup>1,2,3,4,\*</sup>, He Sun<sup>1,2,4,\*</sup>
+
+<sup>1</sup> College of Future Technology, Peking University, Beijing, China<br>
+<sup>2</sup> National Biomedical Imaging Center, Peking University, Beijing, China<br>
+<sup>3</sup> PKU-IDG/McGovern Institute for Brain Research, Beijing, China<br>
+<sup>4</sup> Center for BioMed-X Research, Academy for Advanced Interdisciplinary Studies, Peking University, Beijing, China<br>
+<sup>5</sup> Yuanpei College, Peking University, Beijing, China<br>
+<sup>6</sup> Institute of Human Immunology, Shenzhen Medical Academy of Research and Translation, Shenzhen, China
+
+<sup>†</sup> Contributed equally to this work: Enze Ye, Xiaoxuan Wu, and Rui Peng.<br>
+<sup>\*</sup> Corresponding authors: J. Wang (wangjinzhuo@pku.edu.cn), L. Chen (lychen@pku.edu.cn), and H. Sun (hesun@pku.edu.cn)
 
 MorphAgent is an LLM/VLM agent that designs and extracts quantitative morphological features from microscopy images. This repository's default path is the **desktop UI**.
 
@@ -11,12 +21,6 @@ MorphAgent is an LLM/VLM agent that designs and extracts quantitative morphologi
 | [`MorphAgent_UI/`](MorphAgent_UI/) | Self-contained desktop UI: pipeline, UI package, frontend, installer, and bundled Tau demo |
 | [`MorphAgent_CLI/`](MorphAgent_CLI/) | Headless `python main.py` pipeline, with its own [README](MorphAgent_CLI/README.md) |
 | [`tutorial/`](tutorial/) | Reproduction of the paper's main results |
-
-## Video tutorial
-
-A walkthrough of the desktop UI, from installation to reading the results.
-
-https://github.com/user-attachments/assets/0bf0fd55-e039-4551-a5be-eddc6035a114
 
 ## Install the desktop UI
 
@@ -41,7 +45,7 @@ conda activate morphagent_lite
 python launch_desktop_ui.py
 ```
 
-A browser workspace with the same history and results is available via `python launch_web_ui.py` (then open http://127.0.0.1:8766). The older Qt5 interface remains at `python launch_ui.py`.
+A browser workspace with the same history and results is available via `python launch_web_ui.py` (then open http://127.0.0.1:8766).
 
 Detailed UI notes: [`MorphAgent_UI/README.md`](MorphAgent_UI/README.md) (desktop), [`MorphAgent_UI/README_WEB.md`](MorphAgent_UI/README_WEB.md) (browser workflow and data formats).
 
