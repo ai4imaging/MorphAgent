@@ -122,6 +122,8 @@ See [`MorphAgent_CLI/README.md`](MorphAgent_CLI/README.md) and [`MorphAgent_CLI/
 | [`tutorial/tutorial_Tau/`](tutorial/tutorial_Tau/) | Tau genotype separation, classification, and transcriptome prediction |
 | [`tutorial/tutorial_HSC/`](tutorial/tutorial_HSC/) | Young/Old HSC Figure 3 panels |
 
+Each folder also ships a recorded walkthrough (`tutorial_*.mp4`) of its notebooks being run and explained; the BBBC021 one additionally shows how the desktop app designs the feature set and reuses it on new data.
+
 Start from the README in each folder and run the notebooks there. Large image payloads (BBBC021) are downloaded separately; they are not in the git tree.
 
 ## For coding agents

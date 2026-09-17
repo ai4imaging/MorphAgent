@@ -50,9 +50,6 @@ test_output/
 
 # ---- Local demo media (do not commit / push) ----
 /Supplementary_Video.mp4
-/tutorial_BBBC021.mp4
-/tutorial_HSC.mp4
-/tutorial_Tau.mp4
 /media/
 
 # ---- Local maintenance helper (not part of the release) ----

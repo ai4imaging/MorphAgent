@@ -7,6 +7,9 @@ those features buy you on Tau, and reproduces the published panels end to end.
 Everything needed is in this folder: no downloads, no credentials, no external
 checkouts. The bundled measurement tables total about 15 MB.
 
+Recorded walkthrough: [`tutorial_Tau.mp4`](tutorial_Tau.mp4) (2½ min) runs the notebook
+end to end, including the gene-prediction section that takes several minutes.
+
 ## Quick start
 
 ```bash

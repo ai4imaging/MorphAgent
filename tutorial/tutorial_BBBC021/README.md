@@ -2,6 +2,8 @@
 
 Self-contained walkthrough of the MorphAgent BBBC021 results. The **467 feature extractors**, MoA map, L1000 tables, and cached figure metrics all live in `source/`. The only external payload is the image dataset (Zenodo).
 
+Recorded walkthrough: [`tutorial_BBBC021.mp4`](tutorial_BBBC021.mp4) (4½ min) runs all three notebooks and shows where the desktop app fits — designing the feature set from the images, and reusing it on a new dataset.
+
 ## Layout
 
 ```

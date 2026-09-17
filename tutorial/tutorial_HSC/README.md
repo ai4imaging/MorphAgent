@@ -1,5 +1,7 @@
 # MorphAgent HSC tutorial — Figure 3
 
+Recorded walkthrough: [`tutorial_HSC.mp4`](tutorial_HSC.mp4) (2 min) runs the notebook end to end.
+
 One notebook. It replays the Young/Old PCA panels from:
 
 - `HSC_Fig3a_YoungOld_reproduction_20260916.zip` (110-cell discovery)
