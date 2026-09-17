@@ -65,7 +65,6 @@ INPUT/
 
 - Sample ID = subdirectory name. Recommend ≥5 samples.
 - Primary files sit directly in the sample folder. `segmentation/` masks are keyed by filename stem (`seg["mask_cell"]`).
-- If a sample has no masks, this UI skips auto-segmentation and continues.
 - A short `dataset_index.txt` (or README) under `dataset/` describing channels and dimensions helps planning.
 
 ## Command-line pipeline
