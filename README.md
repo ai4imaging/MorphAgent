@@ -1,16 +1,6 @@
 # Biologically grounded cell profiling across microscopy modalities
 
-Enze Ye<sup>1,2,†</sup>, Xiaoxuan Wu<sup>1,2,3,†</sup>, Rui Peng<sup>1,4,†</sup>, Wenjia Hu<sup>5</sup>, Xiangyou Li<sup>1,2</sup>, Xuefei Zhang<sup>1,2</sup>, Mengxiao Niu<sup>1,2</sup>, Yaorong Guo<sup>1,2</sup>, Xinlei Sheng<sup>6</sup>, Jinzhuo Wang<sup>1,\*</sup>, Liangyi Chen<sup>1,2,3,4,\*</sup>, He Sun<sup>1,2,4,\*</sup>
-
-<sup>1</sup> College of Future Technology, Peking University, Beijing, China<br>
-<sup>2</sup> National Biomedical Imaging Center, Peking University, Beijing, China<br>
-<sup>3</sup> PKU-IDG/McGovern Institute for Brain Research, Beijing, China<br>
-<sup>4</sup> Center for BioMed-X Research, Academy for Advanced Interdisciplinary Studies, Peking University, Beijing, China<br>
-<sup>5</sup> Yuanpei College, Peking University, Beijing, China<br>
-<sup>6</sup> Institute of Human Immunology, Shenzhen Medical Academy of Research and Translation, Shenzhen, China
-
-<sup>†</sup> Contributed equally to this work: Enze Ye, Xiaoxuan Wu, and Rui Peng.<br>
-<sup>\*</sup> Corresponding authors: J. Wang (wangjinzhuo@pku.edu.cn), L. Chen (lychen@pku.edu.cn), and H. Sun (hesun@pku.edu.cn)
+Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao Niu, Yaorong Guo, Xinlei Sheng, Jinzhuo Wang, Liangyi Chen, He Sun
 
 MorphAgent is an LLM/VLM agent that designs and extracts quantitative morphological features from microscopy images. This repository's default path is the **desktop UI**.
 
