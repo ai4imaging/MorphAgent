@@ -1,4 +1,0 @@
-,n_total,n_var,n_const_dropped,n_redundant_dropped,n_min_subset,n_rows
-CellProfiler,6278,6256,22,4972,1284,3652
-DeepProfiler,672,672,0,232,440,3552
-MorphAgent,467,467,0,176,291,3552
