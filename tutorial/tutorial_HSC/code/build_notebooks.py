@@ -400,4 +400,4 @@ display(summary)
 """,
 )
 
-write(nb, cells, "hsc_morphagent.ipynb")
+write(nb, cells, "hsc.ipynb")

@@ -9,7 +9,7 @@ Copied under `source/fig3a_bundle/`.
 
 ```
 tutorial_HSC/
-  notebook/hsc_morphagent.ipynb
+  notebook/hsc.ipynb
   source/fig3a_bundle/
     input/selected_features.csv              locked 25 names
     input/features_code_filtered_*.csv       110-cell MorphAgent features
@@ -27,7 +27,7 @@ tutorial_HSC/
 python -m pip install -r requirements.txt
 ```
 
-Open `notebook/hsc_morphagent.ipynb` and run all cells. Same functions as `source/fig3a_bundle/run_all.sh` (blur panel uses `--combo-index 11`, the published 0.795 setting).
+Open `notebook/hsc.ipynb` and run all cells. Same functions as `source/fig3a_bundle/run_all.sh` (blur panel uses `--combo-index 11`, the published 0.795 setting).
 
 ## Expected CV ROC AUC (5-fold × 5 repeats, seed 42)
 
