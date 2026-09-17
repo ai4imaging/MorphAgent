@@ -49,7 +49,12 @@ test_output/
 .worktrees/
 
 # ---- Local demo media (do not commit / push) ----
+# The UI demo is served from GitHub user-attachments so that cloning the repo
+# does not drag the video along; only the README link points at it.
 /Supplementary_Video.mp4
+/demo.mp4
+/demo_.mp4
+/demo_.srt
 /media/
 
 # ---- Local maintenance helper (not part of the release) ----

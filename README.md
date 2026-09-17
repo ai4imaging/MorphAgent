@@ -12,6 +12,10 @@ MorphAgent is an LLM/VLM agent that designs and extracts quantitative morphologi
 | [`MorphAgent_CLI/`](MorphAgent_CLI/) | Headless `python main.py` pipeline, with its own [README](MorphAgent_CLI/README.md) |
 | [`tutorial/`](tutorial/) | Reproduction of the paper's main results |
 
+## UI demo
+
+https://github.com/user-attachments/assets/3697a93e-cb5a-43b3-8b6e-28c17e512c6d
+
 ## Install the desktop UI
 
 ```bash
