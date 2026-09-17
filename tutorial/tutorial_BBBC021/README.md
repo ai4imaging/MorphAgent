@@ -18,7 +18,7 @@ tutorial_BBBC021/
     extract_morphagent_features.py
     reproduce_main_figures.py
   source/
-    feature_library/          439 code extractors + 28 VLM feature specs
+    feature_library/          438 code extractors + 29 VLM feature specs
     cached_results/           small JSON/CSV/PNG used to replot the paper figures
     morphagent_467_feature_names.csv
     drug_moa_source.csv
@@ -61,7 +61,7 @@ data/dataset/<sample_id>/
 
 ## VLM features
 
-28 of the 467 names start with `vlm_`. They call an OpenAI-compatible vision endpoint (`POST /v1/chat/completions` with `image_url` parts). **This tutorial does not ship a base URL or API key.** In notebook 02, paste your own values into:
+29 of the 467 names start with `vlm_`. They call an OpenAI-compatible vision endpoint (`POST /v1/chat/completions` with `image_url` parts). **This tutorial does not ship a base URL or API key.** In notebook 02, paste your own values into:
 
 ```python
 VLM_API_BASE_URL = ""

@@ -8,7 +8,7 @@ Two MorphAgent feature sets, as plain CSVs keyed to column names in `data/tables
 
 | File | Size | Used by |
 |---|---|---|
-| `feature_list_301_classification.csv` | 301 code-derived descriptors | the Tau feature-space panel |
+| `feature_list_301_classification.csv` | 237 code + 64 vlm descriptors | the Tau feature-space panel |
 | `feature_list_400_prediction.csv` | 200 `code_` + 200 `vlm_` | transcriptome prediction |
 
 The lists were designed on different cohorts and are independent. Descriptor generation prompts are not included.

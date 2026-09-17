@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_actin_stress_fiber_abundance",
+  "method": "vlm",
+  "name": "vlm_actin_stress_fiber_abundance",
+  "description": "Visually scores the abundance of actin stress fibers. High values indicate numerous thick, parallel contractile fibers; low values correspond to cortical or diffuse actin without prominent stress fibers.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells using the Actin channel.",
+  "method_rationale": "Evaluating the 'prominence' or 'organization' of fibers is a subjective visual task that VLMs can perform consistently."
+}

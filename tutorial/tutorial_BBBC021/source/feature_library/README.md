@@ -4,8 +4,8 @@ One folder per named feature from Supplementary Feature List 1. Nothing here dep
 
 | Kind | Count | Path |
 |------|-------|------|
-| Code (`extract.py`) | 439 | `code/<feature_name>/extract.py` |
-| VLM (planner record) | 28 | `vlm/<feature_name>/feature.json` |
+| Code (`extract.py`) | 438 | `code/<feature_name>/extract.py` |
+| VLM (planner record) | 29 | `vlm/<feature_name>/feature.json` |
 
 `manifest.csv` lists every name, its method (`code` / `vlm`), category, and a path relative to this folder.
 

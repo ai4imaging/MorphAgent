@@ -1,0 +1,10 @@
+{
+  "feature_name": "vlm_actin_puncta_prominence",
+  "method": "vlm",
+  "name": "vlm_actin_puncta_prominence",
+  "description": "Visually scores how prominent high-intensity actin puncta appear within cells (e.g., focal adhesions or actin aggregates). Higher values indicate more conspicuous punctate actin structures against the surrounding cytoskeleton.",
+  "category": "texture",
+  "needs_segmentation": true,
+  "segmentation_prompt": "Segment individual cells using the Actin channel.",
+  "method_rationale": "Judging how conspicuous punctate actin structures are against the surrounding cytoskeleton is a visual assessment rather than a fixed detection threshold, so it is scored by a VLM."
+}

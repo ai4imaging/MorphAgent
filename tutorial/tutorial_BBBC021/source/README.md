@@ -4,7 +4,7 @@ Everything the notebooks need besides the images.
 
 | Path | Role |
 |------|------|
-| `feature_library/` | 467 MorphAgent features: 439 `code/<name>/extract.py` and 28 `vlm/<name>/feature.json` |
+| `feature_library/` | 467 MorphAgent features: 438 `code/<name>/extract.py` and 29 `vlm/<name>/feature.json` |
 | `feature_library/manifest.csv` | Name, method, category, relative path, description |
 | `cached_results/` | Cached metrics + PNG/SVG used by notebook 03 |
 | `morphagent_467_feature_names.csv` | Canonical vocabulary (n = 467) |

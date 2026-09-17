@@ -338,8 +338,8 @@ def run_vlm_feature(
 def estimate_full_runtime(
     code_sec_per_sample: float,
     vlm_sec_per_sample: float,
-    n_code: int = 439,
-    n_vlm: int = 28,
+    n_code: int = 438,
+    n_vlm: int = 29,
     n_images: int = 3552,
 ) -> Dict[str, float]:
     code_hours = n_code * n_images * code_sec_per_sample / 3600.0

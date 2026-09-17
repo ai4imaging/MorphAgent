@@ -216,9 +216,10 @@ def build() -> Path:
     CSVs under `source/feature_lists/`:
 
     * **301 features** — the Tau descriptor space behind the classification
-      figure. These are code-derived measurements, retained after review of a
-      larger candidate set with semantically overlapping descriptors collapsed
-      to one representative each.
+      figure: 237 code-derived measurements plus 64 vision-language
+      descriptors, retained after review of a larger candidate set with
+      semantically overlapping descriptors collapsed to one representative
+      each.
     * **400 features** — the descriptor space used for transcriptome
       prediction: 200 code-derived measurements (`code_` prefix) plus 200
       vision-language descriptors (`vlm_` prefix).
@@ -231,7 +232,8 @@ def build() -> Path:
     list_301 = pd.read_csv(paths.LIST_301)
     list_400 = pd.read_csv(paths.LIST_400)
 
-    print(f"301-feature list: {len(list_301)} features, all {list_301.feature_kind.unique()[0]}-derived")
+    print(f"301-feature list: {len(list_301)} features")
+    print(list_301.feature_kind.value_counts().to_string())
     print("review score distribution:")
     print(list_301.review_score.value_counts().sort_index().to_string())
 
@@ -239,8 +241,8 @@ def build() -> Path:
     print(list_400.feature_kind.value_counts().to_string())
     """)
     code(cells, """
-    print("301-feature list — first 10 entries")
-    print(list_301.head(10).to_string(index=False))
+    print("301-feature list — code-derived and vision-language examples")
+    print(list_301.groupby("feature_kind").head(5).to_string(index=False))
 
     print("\\n400-feature list — code-derived and vision-language examples")
     print(list_400.groupby("feature_kind").head(4).to_string(index=False))

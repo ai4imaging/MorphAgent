@@ -142,8 +142,8 @@ md(cells, r"""
 
 `source/feature_library/` holds one folder per feature:
 
-- **439 code features** — `extract.py` with `extract(img, seg) → float`
-- **28 VLM features** — a planner record scored by a vision model (0–100)
+- **438 code features** — `extract.py` with `extract(img, seg) → float`
+- **29 VLM features** — a planner record scored by a vision model (0–100)
 
 Images come from `data/dataset/` (notebook 01). This notebook runs a **smoke test** on a few samples. A full 3,552-image × 467-feature pass is documented but not launched here.
 """)
@@ -227,8 +227,8 @@ Smoke timings on this machine, extrapolated to 3,552 images:
 
 | Workload | Approx. serial time |
 |----------|---------------------|
-| 439 code features | ~29 h (~2 h with 16 processes) |
-| 28 VLM features, one call each | hundreds of hours |
+| 438 code features | ~29 h (~2 h with 16 processes) |
+| 29 VLM features, one call each | hundreds of hours |
 | VLM batched (1 call / image) | ~14 h, depends on your API |
 
 CLI:

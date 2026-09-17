@@ -77,7 +77,7 @@ named in a list can be looked up directly in the corresponding table.
 
 | List | Size | Composition | Used by |
 |---|---|---|---|
-| `feature_list_301_classification.csv` | 301 | code-derived descriptors, retained after review with semantically overlapping features collapsed to one representative each | the classification figure's feature space |
+| `feature_list_301_classification.csv` | 301 | 237 code-derived plus 64 vision-language descriptors, retained after review with semantically overlapping features collapsed to one representative each | the classification figure's feature space |
 | `feature_list_400_prediction.csv` | 400 | 200 code-derived (`code_` prefix) plus 200 vision-language (`vlm_` prefix) | transcriptome prediction |
 
 The two lists were designed on different cohorts and are independent of one
