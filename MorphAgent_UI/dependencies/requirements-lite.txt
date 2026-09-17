@@ -1,11 +1,14 @@
-# MorphAgent UI Lite — minimal deps for Tau demo + Code/VLM API.
-# No PDF / RAG / PubMed / Deep Research / Allen packages.
+# MorphAgent desktop workspace + lightweight Code/VLM analysis dependencies.
+# No heavy RAG / PubMed / Deep Research / Allen packages.
+# Included by both macOS/Linux and Windows setup scripts.
+-r requirements-desktop.txt
 
 langchain-core==1.4.9
 langchain-openai==1.3.5
 langgraph==1.2.9
 openai>=2.45.0,<3
 python-dotenv==1.2.1
+pypdf>=5,<7
 # httpx needs socksio when ALL_PROXY/HTTPS_PROXY is socks:// (common on campus networks).
 socksio==1.0.0
 

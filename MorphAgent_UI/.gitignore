@@ -1,9 +1,21 @@
+# ---- Secrets ----
+.env
+*.key
+
+# ---- Workspace runtime state (datasets, history, runs, exports) ----
+.web_workspace/
 logs/
 *.log
-MorphAgent/.env
-MorphAgent/.rag_cache/
-MorphAgent/**/__pycache__/
-MorphAgent/**/*.pyc
-MorphAgent/*.egg-info/
-**/__pycache__/
+!demo/data/results/completed_demo_run/ui_console.log
+
+# ---- Local-only manuscript PDFs used to rebuild the Help knowledge bundle ----
+manuscript/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ---- OS / editor ----
 .DS_Store

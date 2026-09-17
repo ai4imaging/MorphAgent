@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f7f5" />
+    <title>MorphAgent · Workspace preview</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <input id="dataset-input" type="file" webkitdirectory multiple hidden />
+    <input id="reuse-dataset-input" type="file" webkitdirectory multiple hidden />
+    <input id="knowledge-input" type="file" accept=".pdf,.docx,.txt,.md" multiple hidden />
+    <script src="app.js"></script>
+    <script src="runtime.js"></script>
+  </body>
+</html>

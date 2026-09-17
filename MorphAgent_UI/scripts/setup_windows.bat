@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-REM MorphAgent UI Lite installer for Windows (double-click this file).
+REM MorphAgent desktop installer for Windows (double-click this file).
 
 set "EXITCODE=0"
 set "HANDOFF="
@@ -12,17 +12,16 @@ if errorlevel 1 (
   goto :HOLD
 )
 set "HANDOFF=%CD%"
-title MorphAgent UI Setup
+title MorphAgent Desktop Setup
 
 chcp 65001 >nul 2>&1
 
 echo ============================================================
-echo  MorphAgent UI setup (Windows)
-echo  Scope: Tau demo + Code/VLM
-echo  Knowledge: precomputed txt (skip PDF/PubMed/Allen)
+echo  MorphAgent desktop setup (Windows)
+echo  Includes PySide6 / WebEngine and lightweight Code/VLM dependencies
+echo  Preserves legacy PyQt5; no separate desktop environment
 echo  Working directory: %CD%
 echo  Creates single conda env: morphagent_lite
-echo  Live PDF/literature/Allen are not included in Lite.
 echo ============================================================
 echo.
 

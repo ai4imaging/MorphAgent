@@ -1,36 +1,31 @@
 #!/usr/bin/env bash
-# MorphAgent UI — single-env setup (macOS / Linux).
+# MorphAgent desktop workspace — single-env setup (macOS / Linux).
 # Creates conda env morphagent_lite (Python + pip only), then pip-installs everything else.
 #
 # Avoids classic+conda-forge mega-solves that crash old conda on large indexes.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HANDOFF_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_NAME="${MORPHAGENT_ENV_NAME:-morphagent_lite}"
-REQ_FILE="${HANDOFF_ROOT}/dependencies/requirements-lite.txt"
-ENV_FILE="${HANDOFF_ROOT}/MorphAgent/.env"
-ENV_EXAMPLE="${HANDOFF_ROOT}/MorphAgent/.env.example"
+REQ_FILE="${REPO_ROOT}/dependencies/requirements-lite.txt"
+ENV_FILE="${REPO_ROOT}/.env"
+ENV_EXAMPLE="${REPO_ROOT}/.env.example"
 
 export CONDA_REPORT_ERRORS="${CONDA_REPORT_ERRORS:-false}"
 # Do not force CONDA_NO_PLUGINS / CONDA_SOLVER=classic by default (keeps libmamba when available).
 # Classic fallback is applied only around a tiny python+pip create if needed.
 
 echo "============================================================"
-echo " MorphAgent UI setup"
-echo " Scope: Tau demo + Code/VLM; knowledge via precomputed txt"
-echo "        (skips PDF parse / PubMed / auto deep-research / Allen)"
-echo " Root: ${HANDOFF_ROOT}"
+echo " MorphAgent desktop setup (Qt6 + WebEngine)"
+echo " Scope: new desktop workspace + lightweight Code/VLM analysis"
+echo "        (no automatic PubMed retrieval or Allen installation)"
+echo " Root: ${REPO_ROOT}"
 echo " Env:  ${ENV_NAME} (python+pip via conda; science stack via pip)"
-echo " Live PDF/literature/Allen are not included in Lite."
 echo "============================================================"
 
 if ! command -v conda >/dev/null 2>&1; then
   echo "ERROR: conda was not found. Install Miniconda/Anaconda first." >&2
-  exit 1
-fi
-if [[ ! -f "${HANDOFF_ROOT}/MorphAgent/launch_ui.py" ]]; then
-  echo "ERROR: missing ${HANDOFF_ROOT}/MorphAgent/launch_ui.py" >&2
   exit 1
 fi
 if [[ ! -f "${REQ_FILE}" ]]; then
@@ -89,7 +84,7 @@ fi
 echo "[..] Upgrading pip"
 conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -U pip setuptools wheel
 
-echo "[..] pip install -r dependencies/requirements-lite.txt (includes PyQt5; no conda-forge science solve)"
+echo "[..] Installing science dependencies, PySide6/WebEngine, and legacy PyQt5 via pip"
 if ! conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${REQ_FILE}" --retries 5; then
   echo "[WARN] Full pip install failed; retrying PyQt5 via pip only, then requirements again"
   conda run --no-capture-output -n "${ENV_NAME}" python -m pip install "PyQt5>=5.15,<5.16" qtpy --retries 5 || true
@@ -97,14 +92,14 @@ if ! conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -r "${
 fi
 
 echo "[..] pip install -e MorphAgent"
-conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -e "${HANDOFF_ROOT}/MorphAgent"
+conda run --no-capture-output -n "${ENV_NAME}" python -m pip install -e "${REPO_ROOT}"
 
 # Seed .env for Lite defaults without clobbering existing API keys.
 if [[ ! -f "${ENV_FILE}" && -f "${ENV_EXAMPLE}" ]]; then
   cp "${ENV_EXAMPLE}" "${ENV_FILE}"
 fi
 if [[ -f "${ENV_FILE}" ]]; then
-  ENV_FILE="${ENV_FILE}" ENV_NAME="${ENV_NAME}" python3 - <<'PY'
+  ENV_FILE="${ENV_FILE}" ENV_NAME="${ENV_NAME}" conda run --no-capture-output -n "${ENV_NAME}" python - <<'PY'
 import os
 from pathlib import Path
 path = Path(os.environ["ENV_FILE"])
@@ -140,7 +135,7 @@ echo "[..] verify_install.py"
 conda run --no-capture-output -n "${ENV_NAME}" python "${SCRIPT_DIR}/verify_install.py"
 
 echo
-echo "[OK] UI setup complete (Tau demo trial)."
+echo "[OK] Desktop setup complete in ${ENV_NAME} (no separate desktop environment)."
 echo "     Launch: bash scripts/start_ui.sh"
-echo "     Knowledge: demo/precomputed/*.txt injected into prompts"
+echo "     Opens the new desktop workspace; enter your API connection in Settings."
 echo "============================================================"

@@ -1,7 +1,7 @@
 # ---- Secrets ----
 .env
 *.key
-MorphAgent_UI/MorphAgent/.env
+MorphAgent_UI/.env
 
 # ---- Python ----
 __pycache__/
@@ -14,21 +14,24 @@ dist/
 
 # ---- MorphAgent runtime outputs / caches ----
 # Not "results/" itself: that would also hide the intentionally bundled
-# MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ demo output.
+# MorphAgent_UI/demo/data/results/completed_demo_run/ demo output.
 run_*/
 reuse_ui_*/
 *.log
-!MorphAgent_UI/MorphAgent/demo/data/results/completed_demo_run/ui_console.log
+!MorphAgent_UI/demo/data/results/completed_demo_run/ui_console.log
 .rag_cache/
 .morphagent_repro_cache/
-MorphAgent_UI/MorphAgent/.rag_cache/
+MorphAgent_UI/.rag_cache/
 
 # ---- User data (do NOT commit datasets) ----
 # Anchored to repo root only, so bundled UI demo data
-# (MorphAgent_UI/MorphAgent/demo/data/) is still tracked.
+# (MorphAgent_UI/demo/data/) is still tracked.
 /data/
 /datasets/
 /demo/
+MorphAgent_UI/.web_workspace/
+MorphAgent_UI/logs/
+MorphAgent_UI/manuscript/
 
 # ---- Segmentation / model artifacts ----
 *.tif.out/
@@ -48,3 +51,6 @@ test_output/
 # ---- Local demo media (do not commit / push) ----
 /Supplementary_Video.mp4
 /media/
+
+# ---- Local maintenance helper (not part of the release) ----
+/scripts/

@@ -3,9 +3,9 @@ param()
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Handoff = (Resolve-Path (Join-Path $ScriptDir "..")).Path
+$RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 $EnvName = if ($env:MORPHAGENT_ENV_NAME) { $env:MORPHAGENT_ENV_NAME } else { "morphagent_lite" }
-$Launch = Join-Path $Handoff "MorphAgent\launch_ui.py"
+$Launch = Join-Path $RepoRoot "launch_desktop_ui.py"
 
 . (Join-Path $ScriptDir "conda_windows.ps1")
 Ensure-CondaUtf8Env

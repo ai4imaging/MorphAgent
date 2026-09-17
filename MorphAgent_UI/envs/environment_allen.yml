@@ -1,0 +1,55 @@
+# =============================================================================
+# MorphAgent — Allen segmentation environment (OPTIONAL / legacy)
+# =============================================================================
+# Only needed if you want the classic Allen Institute (aicssegmentation)
+# backend for nucleus / cytoplasm / filament / mitochondria segmentation
+# (see ../segmentation_allen/). The default MorphAgent segmentation backend is
+# Cellpose-SAM, which lives in the unified `morphagent` environment and needs
+# NONE of this.
+#
+# This backend depends on an old, frozen scientific stack (Python 3.6,
+# numpy 1.19, scikit-image 0.15) that CANNOT be merged into the modern
+# `morphagent` environment — hence a dedicated, isolated env.
+#
+# Create it with:
+#   conda env create -f environment_allen.yml
+#   conda activate morphagent_allen
+#   # then install the vendored aicssegmentation package (editable):
+#   pip install -e ../segmentation_allen
+#
+# Then point MorphAgent at it via config.py / env var when needed:
+#   export SEGMENTATION_CONDA_ENV=morphagent_allen
+#
+# NOTE: Python 3.6 is end-of-life; these pins reflect a known-working install.
+# If conda-forge no longer serves a pin on your platform, relax it slightly.
+# =============================================================================
+name: morphagent_allen
+channels:
+  - conda-forge
+dependencies:
+  - python=3.6
+  - pip
+  - pip:
+      - numpy==1.19.5
+      - scipy==1.5.4
+      - scikit-image==0.15.0
+      - scikit-learn==0.24.2
+      - scikit-fmm==2022.3.26
+      - numba==0.53.1
+      - llvmlite==0.36.0
+      - pandas==1.1.5
+      - matplotlib==3.3.4
+      - Pillow==8.4.0
+      - networkx==2.5.1
+      - PyWavelets==1.1.1
+      - tifffile==2020.9.3
+      - imagecodecs==2020.5.30
+      - itk==5.2.1.post1
+      - readlif==0.6.5
+      - aicsimageio==3.3.1
+      - aicsimageprocessing==0.7.1
+      - aicspylibczi==2.8.0
+      - PyYAML==6.0.1
+      # The aicssegmentation package itself is vendored under
+      # ../segmentation_allen — install it editable AFTER creating this env:
+      #   pip install -e ../segmentation_allen

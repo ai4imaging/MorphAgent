@@ -1,0 +1,5 @@
+# Qt6 shell for launch_desktop_ui.py; included by the standard setup requirements.
+# Can also be installed on its own to upgrade an existing Lite environment.
+# PySide6 brings matching Essentials, Addons (WebEngine), and shiboken6 wheels.
+# Keep this pin aligned with the desktop extra in pyproject.toml.
+PySide6==6.10.2

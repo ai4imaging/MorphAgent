@@ -10,13 +10,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Handoff = (Resolve-Path (Join-Path $ScriptDir "..")).Path
-$LogDir = Join-Path $Handoff "logs"
+$RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
+$LogDir = Join-Path $RepoRoot "logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $StatusFile = Join-Path $LogDir "setup_last_status.txt"
-$ReqFile = Join-Path $Handoff "dependencies\requirements-lite.txt"
-$EnvFile = Join-Path $Handoff "MorphAgent\.env"
-$EnvExample = Join-Path $Handoff "MorphAgent\.env.example"
+$ReqFile = Join-Path $RepoRoot "dependencies\requirements-lite.txt"
+$EnvFile = Join-Path $RepoRoot ".env"
+$EnvExample = Join-Path $RepoRoot ".env.example"
 
 function Write-Status([string]$Text) {
     Set-Content -LiteralPath $StatusFile -Value $Text -Encoding UTF8
@@ -38,18 +38,14 @@ try {
     if (-not (Test-PathSafe $ReqFile)) {
         throw "Missing requirements: $ReqFile"
     }
-    if (-not (Test-PathSafe (Join-Path $Handoff "MorphAgent\launch_ui.py"))) {
-        throw "Missing MorphAgent app under $Handoff"
-    }
 
     Write-Host "[OK] Using conda: $($script:CondaExe)"
     Accept-AnacondaTosBestEffort
-    Write-Host "[OK] Lite: conda only creates python+pip; numpy/PyQt/etc install via pip"
+    Write-Host "[OK] Desktop: conda only creates python+pip; science/Qt packages install via pip"
     Write-Host "[OK] CONDA_NO_PLUGINS=$($env:CONDA_NO_PLUGINS) CONDA_SOLVER=$($env:CONDA_SOLVER)"
-    Write-Host "[..] Lite scope: Tau demo + Code/VLM; knowledge via precomputed txt"
-    Write-Host "[..] Skips PDF parse / PubMed / auto deep-research / Allen"
-    Write-Host "[..] Live PDF/literature/Allen are not included in Lite."
-
+    Write-Host "[..] New Qt6/WebEngine workspace + lightweight Code/VLM analysis"
+    Write-Host "[..] No automatic PubMed retrieval or Allen installation"
+    
     $envList = & $script:CondaExe env list 2>$null | Out-String
     $exists = $envList -match "(?m)^\s*$([regex]::Escape($EnvName))\s"
     if ($exists -and ($Recreate -or $env:MORPHAGENT_RECREATE_ENVS -eq "1")) {
@@ -72,7 +68,7 @@ try {
     & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -U pip setuptools wheel
     if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed ($LASTEXITCODE)" }
 
-    Write-Host "[..] pip install -r requirements-lite.txt (includes PyQt5; no conda-forge science solve)"
+    Write-Host "[..] Installing science dependencies, PySide6/WebEngine, and legacy PyQt5 via pip"
     & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -r $ReqFile --retries 5
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[WARN] Full pip install failed; retrying PyQt5 via pip only, then requirements again"
@@ -84,7 +80,7 @@ try {
     }
 
     Write-Host "[..] pip install -e MorphAgent"
-    $MorphRoot = Join-Path $Handoff "MorphAgent"
+    $MorphRoot = $RepoRoot
     & $script:CondaExe run --no-capture-output -n $EnvName python -m pip install -e $MorphRoot
     if ($LASTEXITCODE -ne 0) { throw "pip install -e MorphAgent failed ($LASTEXITCODE)" }
 
@@ -130,8 +126,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "verify_install.py failed ($LASTEXITCODE)" }
 
     Write-Status "OK env=$EnvName"
-    Write-Host "[OK] UI setup complete (Tau demo trial). Next: start_ui_windows.bat"
-    Write-Host "[..] Knowledge: demo/precomputed/*.txt injected into prompts"
+    Write-Host "[OK] Desktop setup complete in $EnvName. Next: start_ui_windows.bat"
+    Write-Host "[..] Opens the new desktop workspace; enter your API connection in Settings."
     exit 0
 } catch {
     $msg = "$_"
