@@ -49,7 +49,7 @@ A browser workspace with the same history and results is available via `python l
 
 Detailed UI notes: [`MorphAgent_UI/README.md`](MorphAgent_UI/README.md) (desktop), [`MorphAgent_UI/README_WEB.md`](MorphAgent_UI/README_WEB.md) (browser workflow and data formats).
 
-## Dataset layout (for your own images)
+## Design: which data folder to select
 
 In **Design → Add data**, select the parent folder that contains `dataset/<sample>/`:
 
@@ -70,6 +70,34 @@ INPUT/
 - Sample ID = subdirectory name. Recommend ≥5 samples.
 - Primary files sit directly in the sample folder. `segmentation/` masks are keyed by filename stem (`seg["mask_cell"]`).
 - A short `dataset_index.txt` (or README) under `dataset/` describing channels and dimensions helps planning.
+
+## Compute: which feature folder to select
+
+Compute needs two paths: the features to reuse, and the new images to measure.
+
+**Upload features** — select the `feature/` folder of a finished run. Every run exports one automatically under `MorphAgent_UI/.web_workspace/exports/`, and the picker opens there:
+
+```
+.web_workspace/exports/20260917_160440_146222/   # auto-created when a run finishes
+├── feature/                           # ← select this folder
+│   ├── feature_descriptions.csv       # required: the feature index
+│   ├── nuclear_condensed_fraction/
+│   │   └── code/extract.py            # Code feature: the script that is replayed
+│   └── vlm_cell_rounding_score/
+│       └── code/definition.json       # VLM feature: no script, only its definition
+└── value/feature_value.csv            # measurements only — use this in Visualize, not Compute
+```
+
+- Point at `feature/` itself, not at the timestamped folder above it: the export root holds no feature index and is rejected.
+- Unzip a received `YYYYMMDD_HHMMSS_ffffff.zip` first, then pick the `feature/` folder inside it.
+- A raw `results/` directory from an older run also works, as does its parent folder (Compute descends into `results/` for you).
+- The folder must contain a readable feature index: `feature_descriptions.csv` for an export, or `round_*/features/<name>/extract.py` for a raw run. Otherwise Compute reports `Select an exported feature folder (e.g., ./exports/YYMMDD_time/feature).`
+- `value/feature_value.csv` holds measurements without any feature definition. Visualize accepts it; Compute loads it but finds nothing to reuse.
+- Everything reusable runs; there is nothing to tick. Code features replay their saved `extract.py`, VLM features are scored again from their saved description, and features the original run dropped are left out.
+
+**Add data** — the target dataset uses exactly the `dataset/<sample>/` layout described above. Because saved code is replayed verbatim, the new images must match what that code expects: the same channel order, and `segmentation/` masks under the same filename stems (a script calling `seg["mask_cell"]` needs `mask_cell.tif` in every sample). Sample names and sample count are free.
+
+Keys are required as in Design. Replaying code alone makes no API calls and the child process receives no credentials; selecting a VLM feature does call the VLM, so those runs need valid VLM settings and are billed. No feature is redesigned or revalidated on either path.
 
 ## Using the UI
 
