@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MorphAgent UI Lite — single-env setup (macOS / Linux).
+# MorphAgent UI — single-env setup (macOS / Linux).
 # Creates conda env morphagent_lite (Python + pip only), then pip-installs everything else.
 #
 # Avoids classic+conda-forge mega-solves that crash old conda on large indexes.
@@ -17,7 +17,7 @@ export CONDA_REPORT_ERRORS="${CONDA_REPORT_ERRORS:-false}"
 # Classic fallback is applied only around a tiny python+pip create if needed.
 
 echo "============================================================"
-echo " MorphAgent UI Lite setup"
+echo " MorphAgent UI setup"
 echo " Scope: Tau demo + Code/VLM; knowledge via precomputed txt"
 echo "        (skips PDF parse / PubMed / auto deep-research / Allen)"
 echo " Root: ${HANDOFF_ROOT}"
@@ -27,6 +27,10 @@ echo "============================================================"
 
 if ! command -v conda >/dev/null 2>&1; then
   echo "ERROR: conda was not found. Install Miniconda/Anaconda first." >&2
+  exit 1
+fi
+if [[ ! -f "${HANDOFF_ROOT}/MorphAgent/launch_ui.py" ]]; then
+  echo "ERROR: missing ${HANDOFF_ROOT}/MorphAgent/launch_ui.py" >&2
   exit 1
 fi
 if [[ ! -f "${REQ_FILE}" ]]; then
@@ -136,7 +140,7 @@ echo "[..] verify_install.py"
 conda run --no-capture-output -n "${ENV_NAME}" python "${SCRIPT_DIR}/verify_install.py"
 
 echo
-echo "[OK] Lite setup complete (Tau demo trial)."
+echo "[OK] UI setup complete (Tau demo trial)."
 echo "     Launch: bash scripts/start_ui.sh"
 echo "     Knowledge: demo/precomputed/*.txt injected into prompts"
 echo "============================================================"

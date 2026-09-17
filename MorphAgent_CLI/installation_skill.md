@@ -5,8 +5,8 @@
 > step has a concrete verification you MUST run before moving on. Do not skip
 > verifications. Prefer failing loudly and fixing, over guessing.
 >
-> Related: for the lightweight desktop UI, use
-> [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
+> Related: for the desktop UI, use
+> [`../MorphAgent_UI/README.md`](../MorphAgent_UI/README.md).
 
 ## 0. What MorphAgent is (mental model)
 
@@ -33,7 +33,7 @@ that contains the agent, the code sandbox, and Cellpose-SAM. There is also an
 Allen `aicssegmentation` backend.
 
 ```bash
-# from the repo root
+# from MorphAgent_CLI/
 conda env create -f envs/environment.yml      # creates env `morphagent`
 conda activate morphagent
 ```
@@ -87,7 +87,7 @@ faster on GPU; VLM scoring only needs the API and works CPU-only).
 Then confirm the app itself imports and the CLI starts:
 
 ```bash
-cd <repo root>
+cd MorphAgent_CLI            # this directory
 python main.py --help        # must print usage without tracebacks
 ```
 

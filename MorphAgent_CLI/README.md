@@ -1,28 +1,30 @@
-# MorphAgent
+# MorphAgent CLI
 
-MorphAgent is an **automatic microscopy image feature extraction agent** built on large language models (LLMs) and multimodal vision-language models (VLMs). Given a batch of microscopy images and a one-sentence natural-language task description, it automatically:
+Headless / scripted pipeline (`python main.py …`). This package is the original MorphAgent command-line agent.
 
-1. **Understands the dataset** (dimensions, channels, markers, naming conventions);
-2. **Automatically segments** cells / nuclei / cytoplasm and other structures (Cellpose-SAM, or Allen aicssegmentation);
-3. **Plans features** (morphology, intensity, texture, distribution, spatial, and other categories);
-4. Extracts scalar features via two complementary paths:
-   - **Code features**: the LLM generates an `extract()` Python function that runs in an isolated sandbox environment, self-debugs, and executes in batch;
-   - **VLM features**: a multimodal model scores images feature by feature (a continuous score of 0–100);
-5. (Optional) injects external knowledge: **expert_knowledge** (expert materials), **auto_deep_research** (deep research reports), **auto_literature_retrieval / RAG** (literature corpus);
-6. **Deterministically validates** and filters features, and outputs a feature table CSV.
+The desktop UI lives one directory up: [`../README.md`](../README.md) and [`../MorphAgent_UI/`](../MorphAgent_UI/).
 
-> This repository is the **public, general-purpose build**: it accesses models only through an **OpenAI-compatible API** (**no local model deployment whatsoever**), and it contains no specific datasets, experiments, or paper-analysis code. You only need to prepare your own dataset and configure an API to run it on any microscopy dataset.
+---
+
+## For coding agents (Codex / Claude Code / Cursor)
+
+If you are asked to **install or run the CLI**, stay in **`MorphAgent_CLI/`** and follow this README plus [`installation_skill.md`](installation_skill.md). Do not invent an install path from the git root.
+
+| Goal | Read this file | Working directory |
+|------|----------------|-------------------|
+| CLI pipeline (`main.py`, Cellpose-SAM env) | [`installation_skill.md`](installation_skill.md) | **`MorphAgent_CLI/`** |
+| Desktop Qt UI | [`../MorphAgent_UI/README.md`](../MorphAgent_UI/README.md) | **`MorphAgent_UI/`** |
 
 ---
 
 ## Table of Contents
 
+- [For coding agents (Codex / Claude Code / Cursor)](#for-coding-agents-codex--claude-code--cursor)
 - [Key Features](#key-features)
 - [Directory Structure](#directory-structure)
 - [Environment & Installation](#environment--installation)
 - [Configuration (API & Models)](#configuration-api--models)
 - [Input Data Format (Important)](#input-data-format-important)
-- [Graphical UI (fast path)](#graphical-ui-fast-path)
 - [Quick Start](#quick-start)
 - [Output](#output)
 - [Auto Segmentation (auto_segmentation)](#auto-segmentation-auto_segmentation)
@@ -38,10 +40,10 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 |------|------|------|
 | Code feature extraction | The LLM generates/repairs an `extract(img, seg)` function and runs it in batch | LLM API + sandbox conda environment |
 | VLM feature scoring | A multimodal model scores images feature by feature on a continuous scale | Multimodal API (e.g. GPT-4o) |
-| auto_segmentation | Generates masks with Cellpose-SAM (default) or Allen aicssegmentation | GPU (Cellpose) / CPU (Allen) |
-| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` -> LLM digests -> injects into planning | Deep-research/LLM API (PDF: lite text extract) |
-| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) -> lite PDF text -> LLM digests -> injects into planning | Internet + pymupdf + LLM API |
-| expert_knowledge | Reads expert materials under `expert_knowledge/` -> LLM digests | LLM API |
+| auto_segmentation | Generates masks with Allen (UI default) or Cellpose-SAM; existing masks are reused | Optional Allen env / GPU for Cellpose |
+| auto_deep_research | One API call writes a report into `deep_research/`, or reads your `.md/.txt/.pdf` → LLM digests → injects into planning | Deep-research/LLM API (PDF: lite text extract) |
+| auto_literature_retrieval (RAG) | Downloads open-access PubMed PDFs into `RAG/` (or reads your `.xml/.pdf`) → lite PDF text → LLM digests → injects into planning | Internet + pymupdf + LLM API |
+| expert_knowledge | Reads expert materials under `expert_knowledge/` → LLM digests | LLM API |
 | Deterministic validation | Unsupervised / supervised (metadata) feature filtering with multi-round deduplication | None |
 
 ---
@@ -49,14 +51,12 @@ MorphAgent is an **automatic microscopy image feature extraction agent** built o
 ## Directory Structure
 
 ```
-MorphAgent/
+MorphAgent_CLI/
 ├── main.py                  # Main entry point (processes the whole dataset in batch)
-├── launch_ui.py             # focused Qt launcher; optional napari mode
-├── morphagent_ui/           # UI state, controller, theme, screens, and optional napari manifest
 ├── config.py                # Global configuration (USER CONFIGURATION block at the top)
 ├── graph.py / state.py      # LangGraph pipeline and state
 ├── utils_helpers.py         # Dataset indexing / image path lookup
-├── nodes/                   # researcher -> prompt_gen -> execution nodes
+├── nodes/                   # researcher → prompt_gen → execution nodes
 ├── tools/                   # Code generation/execution/repair, VLM client, segmentation calls
 ├── knowledge/               # Dataset understanding, expert/deep_research/RAG, prompts/
 │   └── prompts/             # 6 general-purpose prompt templates (JSON)
@@ -65,20 +65,26 @@ MorphAgent/
 ├── segmentation_allen/      # Allen aicssegmentation backend (vendored + CLI entry point)
 ├── envs/                    # Environment yaml files (see "Environment & Installation")
 ├── .env.example             # Configuration template (copy to .env)
+├── installation_skill.md    # Agent install/run guide
 └── README.md
 ```
+
+The git repository root also contains:
+
+- [`../MorphAgent_UI/`](../MorphAgent_UI/) — desktop UI (`scripts/` + nested `MorphAgent/` app)
+
 
 ---
 
 ## Environment & Installation
 
 This project has **no local large model**: all LLM/VLM calls go through an OpenAI-compatible API. The environment only needs to cover
-agent orchestration, sandbox scientific computing, and Cellpose-SAM segmentation. Everything is merged into **one** unified environment.
+agent orchestration, sandbox scientific computing, and (optional) segmentation backends.
 
-- **`morphagent` (unified environment, Python 3.10)**: runs the main program (LangChain/LangGraph/OpenAI client), the sandbox that executes generated code (numpy/scipy/scikit-image/opencv/tifffile/mahotas, etc.), and **Cellpose-SAM** segmentation (cellpose ≥ 4.0 + PyTorch). For convenience, the agent, sandbox, and segmentation are merged into the same environment.
-- **`morphagent_allen` (optional/legacy, Python 3.6)**: Allen `aicssegmentation` has older dependencies (scikit-image 0.15, numpy 1.19) that **cannot be merged with a modern environment**, so it must be created separately. The default Cellpose-SAM path does not use it at all.
+- **`morphagent` (unified environment, Python 3.10)**: runs the main program (LangChain/LangGraph/OpenAI client), the sandbox that executes generated code (numpy/scipy/scikit-image/opencv/tifffile/mahotas, etc.), and **Cellpose-SAM** segmentation when used. For convenience, the agent, sandbox, and Cellpose path are merged into the same environment.
+- **`morphagent_allen` (optional, Python 3.6)**: Allen `aicssegmentation` has older dependencies that **cannot be merged with a modern environment**, so it must be created separately. When masks are missing, this CLI can use Allen if that env is installed, otherwise skip.
 
-Installation:
+Installation (from `MorphAgent_CLI/`):
 
 ```bash
 # 1) Unified main environment (recommended)
@@ -99,18 +105,16 @@ PY
 # 3) (Optional) extra features such as PDF parsing / local VLM
 #   pip install -r envs/requirements-optional.txt
 
-# 3b) (Optional, recommended for desktop use) MorphAgent UI
-pip install -e ".[ui]"
-
-# 4) (Optional/legacy) Allen segmentation environment
+# 4) (Optional) Allen segmentation environment (used by the UI when masks are missing)
 conda env create -f envs/environment_allen.yml # creates morphagent_allen
 conda activate morphagent_allen
 pip install -e segmentation_allen              # installs vendored aicssegmentation
 python segmentation_allen/check_installation.py
-export SEGMENTATION_CONDA_ENV=morphagent_allen # make the main program use the Allen segmentation backend
+export SEGMENTATION_CONDA_ENV=morphagent_allen
+export SEGMENTATION_BACKEND=allen
 ```
 
-> See `envs/README.md` for details.
+> For the desktop UI, see the repository [root README](../README.md) and [`../MorphAgent_UI/`](../MorphAgent_UI/). Environment details for this CLI package are in `envs/README.md`.
 
 ---
 
@@ -122,16 +126,18 @@ There are two ways (you **must explicitly specify the model name to use**):
 
 ```bash
 cp .env.example .env      # edit .env and fill in your values
-source .env               # only needed for direct `python main.py` CLI runs
+source .env               # or export manually
 
 export LLM_BASE_URL="https://api.openai.com/v1"
-export LLM_API_KEY="sk-..."
-export LLM_MODEL="gpt-4o"          # text model used for planning/writing code/review
+export LLM_API_KEY="******"
+export LLM_MODEL="gpt-5.5"          # text model used for planning/writing code/review
 
 export VLM_BASE_URL="https://api.openai.com/v1"
-export VLM_API_KEY="sk-..."
-export VLM_MODEL="gpt-4o"          # multimodal (vision) model used for scoring
+export VLM_API_KEY="******"
+export VLM_MODEL="gpt-5.5"          # multimodal (vision) model used for scoring
 ```
+
+In the **UI**, fill the same fields on Configure → Model API; they are applied automatically on **Run MorphAgent** and written to `MorphAgent/.env` (no manual editing required).
 
 **Option B: Edit `config.py` directly**
 
@@ -149,7 +155,7 @@ MorphAgent makes **very general** assumptions about the data layout: **one datas
 
 ### 1. Top-level layout
 
-The directory you point `--data-root` at (denoted `INPUT`) can be one of two forms, and the program will recognize them automatically:
+The directory you point `--data-root` at (or the folder you select in the UI; denoted `INPUT`) can be one of two forms, and the program will recognize them automatically:
 
 ```
 # Form 1: INPUT is directly the dataset root
@@ -159,12 +165,14 @@ INPUT/                         # == data_root
 ├── sample_0002/
 └── ...
 
-# Form 2: INPUT is the project root, containing a dataset/ subdirectory (recommended, allows knowledge folders)
-INPUT/                         # == project_root
+# Form 2: INPUT is the project root, containing a dataset/ subdirectory (recommended)
+INPUT/                         # == project_root  ← select this folder in the UI
 ├── dataset/                   # == data_root (auto-detected)
 │   ├── dataset_index.txt
 │   ├── sample_0001/
-│   └── ...
+│   │   └── image.tif          # primary image (required for custom data)
+│   └── sample_0002/
+│       └── image.tif
 ├── expert_knowledge/          # optional
 ├── deep_research/             # optional
 └── RAG/                       # optional
@@ -172,6 +180,8 @@ INPUT/                         # == project_root
 
 - **Sample ID = subdirectory name**: `read_dataset_index()` directly scans all non-hidden subdirectories under `data_root` as the sample list, and **does not rely on any manifest inside an index file**. The directory name is the sample ID (processed in sorted order).
 - If a `dataset/` directory exists under `INPUT`, then `data_root=INPUT/dataset` and `project_root=INPUT`; otherwise `data_root=INPUT` and `project_root` is the parent directory of `INPUT`. Knowledge folders (`expert_knowledge/`, `deep_research/`, `RAG/`) always live under **project_root**.
+- **Recommend ≥5 samples** so validation has enough unique values. The UI warns below that threshold but does not block Run.
+- In the UI, if the selected path cannot be used (missing `dataset/`, no sample folders, or no images), a dialog explains the expected layout.
 
 ### 2. Inside each sample directory
 
@@ -182,7 +192,7 @@ sample_0001/
 ├── slices/                    # (2) secondary directory (derived data), preferred by VLM features
 │   ├── slice_0000_channel_0.png
 │   └── ...
-└── segmentation/              # (3) segmentation masks (auto-generated by this tool, or bring your own)
+└── segmentation/              # (3) segmentation masks (auto-generated, or bring your own)
     ├── mask_cell.tif
     ├── mask_nucleus.tif
     └── ...
@@ -190,7 +200,7 @@ sample_0001/
 
 - **(1) Primary files (primary)**: image files **directly** under the sample directory (excluding subdirectories). These are the input for **Code features** (the `img` in `extract(img, ...)`). Supports `.tif/.tiff/.png/.jpg/.jpeg/.bmp/.gif`. The generated code chooses the reading method by extension (tifffile for TIFF, PIL for PNG/JPG).
 - **(2) Secondary directories (secondary)**: image files inside subdirectories of the sample directory (e.g. `slices/*.png`). **VLM features** prefer these 2D slices that are easy to view visually; if none exist, they fall back to the primary files. These slices can be generated automatically by this tool's preprocessing stage (normalized slices for multi-channel/z-stack data), or you can bring your own.
-- **(3) `segmentation/`**: the segmentation mask directory (see the next section).
+- **(3) `segmentation/`**: the segmentation mask directory (see the next section). Custom data with only `image.tif` (no masks) is supported — the UI will attempt Allen segmentation when available, otherwise skip and continue.
 
 ### 3. Segmentation masks and the `seg` dictionary (key point)
 
@@ -216,7 +226,7 @@ Here **`seg` is a dictionary** whose keys are the **file name stems** of the mas
 
 ### 4. Dataset description file (description)
 
-Placed under `data_root` and located by priority: `dataset_index.txt` -> `README.md` -> `README.txt` -> `dataset_description.json` -> `description.txt` (you can also specify the path explicitly with `--description`).
+Placed under `data_root` and located by priority: `dataset_index.txt` → `README.md` → `README.txt` → `dataset_description.json` → `description.txt` (you can also specify the path explicitly with `--description`).
 
 It is **free text** handed to the LLM to understand, telling the agent about: the data dimensions (2D/3D/multi-channel/z-stack), what each channel captures (markers/colors), file naming conventions, etc. The clearer it is written, the more accurate the feature planning. Example:
 
@@ -242,55 +252,8 @@ Notes: single cell per image; pixel size ~0.65 um.
 | `RAG/` | Literature corpus (PMC `.xml`; `.pdf` also supported), placed flat at the top level of this directory | The LLM digests them in batch into literature knowledge and injects it into planning (with hash caching) |
 
 - These are all **optional** and can be turned off with `--disable-expert-knowledge` / `--disable-deep-research` / `--disable-rag`.
-- You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)).
-- PDFs use lightweight PyMuPDF text extract by default (optional PaddleX via `RAG_PDF_BACKEND=paddlex`); `.md/.txt/.xml` are read directly.
-
----
-
-## Graphical UI (fast path)
-
-The focused Qt workspace wraps the existing `main.py` pipeline without duplicating its scientific logic. It has five destinations—Home, Configure, Run, Features, and Evidence—with API setup merged into Configure. Home can load a completed run for result-only debugging or open **Ask MorphAgent**, a paper-and-code companion that does not add another workflow destination to the sidebar. Features uses an equal-width table/detail layout; Evidence uses an equal-width review layout with a three-column feature selector and a compact name/description summary beside curated measurements, validation, provenance, and image previews. The default evidence preview opens the first curated source rather than prioritizing an image. The MorphAgent window opens maximized by default and contains no empty napari canvas or layer-control panel.
-
-![MorphAgent graphical home](docs/assets/morphagent-ui-home.png)
-
-```bash
-conda activate morphagent
-pip install -e ".[ui]"             # first UI launch only
-python launch_ui.py                 # automatically reads the repository .env
-```
-
-If you specifically need napari layers and its microscopy canvas, install and request that mode explicitly:
-
-```bash
-pip install -e ".[napari]"
-python launch_ui.py --with-napari
-```
-
-The repository includes the Tau-neuron reference workflow under
-[`demo/`](demo/). Its **10 samples** (`WT_1`–`WT_5` wild-type, `MU_1`–`MU_5` mutant) already contain images,
-VLM slices, and segmentation masks per sample; its precomputed RAG digest also
-avoids reparsing the bundled PDFs. The shortest verified path is:
-
-1. Open **Configure** and select **Load demo dataset**.
-2. Confirm the Tau aggregation question, then complete **Model API**. Leave **Use the same connection for image scoring** unchecked unless LLM and VLM share one endpoint.
-3. Select the analysis route and knowledge sources, then press **Run MorphAgent**. Demo scale is **1 round × 5 candidates · target 5** (open **Config** for advanced knobs). Masks are reused when present; missing masks use Allen when available. A 1-round demo run typically takes about **5–30 minutes**, depending on model response speed.
-4. Follow **Live run**: Inspect -> Prepare -> Plan -> Quantify -> Validate -> Export. Completed files remain in the run directory after cancellation or failure.
-5. Open **Features** to inspect and filter the feature cards. Open **Evidence** to choose a feature independently and inspect its measurements, validation decisions, and provenance. Shared run-level preview folders are not shown as per-feature images.
-
-During UI/result debugging, choose **Load a previous run** on Home and select the specific completed `run_ui_*` results folder. MorphAgent loads Features and Evidence directly without launching `main.py`, making API calls, or rerunning segmentation and feature extraction.
-
-### Ask MorphAgent paper companion
-
-Choose **Ask MorphAgent** on Home, then click **Use default API and start chatting** for the one-click reviewer path—no fields need to be filled. The bundled default connection is token-limited; reviewers can instead enter their own OpenAI Chat Completions–compatible Base URL, API key, and text model. The chat retrieves relevant excerpts from the bundled manuscript, supplementary material, algorithm/prompt assets, and a sanitized snapshot of first-party source code before each answer. It is designed to explain contributions, evidence, implementation, figures, and limitations positively but must not invent results or hide documented limitations. Answers include source labels such as `[Manuscript]`, `[Supplementary]`, and `[Code: ...]`.
-
-The same repository-local `.env` fields used by Configure (`LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`) are reused. The key remains masked and is never inserted into the knowledge bundle or conversation. Relevant paper/code excerpts and the reviewer’s question are sent to the configured provider; therefore reviewers should use a provider permitted to receive manuscript text. Assistant responses render GitHub-style Markdown (headings, emphasis, lists, links, and tables) through Qt with raw HTML disabled. Chat history is kept only in memory for the current UI session.
-
-To use another dataset, select its project root or `dataset/` directory, scan it,
-and write a new biological question instead of loading the reference demo.
-
-The **Model API** section reads and safely updates the repository-local `.env`, which is excluded by `.gitignore`. Saved keys are never displayed again, copied into commands, written to run manifests, or printed in logs; leaving a key field blank preserves the existing value. No `source` or terminal exports are required for UI launches. Low-frequency controls such as candidate count, rounds, route ratio, workers, and concurrency also live in `.env` instead of occupying a separate Settings page. Keep `LLM_MAX_TOKENS` and `MERGE_MAX_TOKENS` within the selected provider's limits; the reference gateway was verified at `16384`. For generated-code and segmentation safeguards, resume semantics, and output details, see [docs/UI_GUIDE.md](docs/UI_GUIDE.md).
-
-See the [reference demo guide](demo/README.md) or run the [reference notebook](demo/morphagent_demo.ipynb) for the same configuration without the graphical interface.
+- You can populate `deep_research/` and `RAG/` **automatically** with `--auto-deep-research` and `--auto-literature-retrieval` (see [Auto Deep Research & Literature Retrieval](#auto-deep-research--literature-retrieval)). In the UI, **Load demo dataset** digests prepared folders only; custom datasets may enable auto deep-research / PubMed when those knowledge sources are checked.
+- `.pdf` parsing uses lightweight PyMuPDF text extract by default (optional PaddleX via `RAG_PDF_BACKEND=paddlex`); `.md/.txt/.xml` sources are read directly.
 
 ---
 
@@ -309,7 +272,8 @@ python main.py "Generate unbiased morphological features for these microscopy im
 
 - The positional argument is the **natural-language task description** (it feeds into the feature planning prompt).
 - `--method both`: use both code and vlm; you can also use `code` or `vlm`.
-- The first run automatically: understands the dataset -> (optionally) segments -> plans features -> generates/executes code + VLM scoring -> validates -> writes CSV.
+- The first run automatically: understands the dataset → (optionally) segments → plans features → generates/executes code + VLM scoring → validates → writes CSV.
+- For a guided first run with the bundled Tau demo, use the [desktop UI](../README.md) instead.
 
 ---
 
@@ -331,9 +295,16 @@ By default, results are written to `<project_root>/results/run_<timestamp>/` (ca
 
 ## Auto Segmentation (auto_segmentation)
 
-### Cellpose-SAM (default, integrated into the main pipeline)
+### Allen (UI default when masks are missing)
 
-Step 2.4 of the main program automatically segments all samples (requires a GPU). You can also call it separately:
+When a sample has no files under `segmentation/`, the UI pipeline defaults to Allen (`SEGMENTATION_BACKEND=allen`, conda env `morphagent_allen`). If that environment is not installed, segmentation is skipped for those samples and the run continues.
+
+```bash
+conda activate morphagent_allen
+python segmentation_allen/run_segment_image_tif.py input.tif -o sample_dir/segmentation/
+```
+
+### Cellpose-SAM (optional / CLI)
 
 ```bash
 # Single image
@@ -344,23 +315,7 @@ python tools/segment_tif_with_cpsam.py input.tif -o sample_dir/segmentation/ -c 
 python -c "from tools.segmentation import segment_all_samples; ..."
 ```
 
-This outputs `cyto.tif` / `nuclei.tif` / `cytoplasm.tif` to each sample's `segmentation/`. Use `--disable-segmentation` to turn it off.
-
-### Allen aicssegmentation (optional, separate environment)
-
-Good for classic nucleus/cytoplasm segmentation and fiber/mitochondria-like punctate structures. Requires the `morphagent_allen` environment (see `segmentation_allen/README_SEGMENTATION.md`):
-
-```bash
-conda activate morphagent_allen
-# Nucleus + cytoplasm (TIFF)
-python segmentation_allen/run_segment_image_tif.py input.tif -o out_dir/ -c 2 0 1
-# Mitochondria / punctate structures
-python segmentation_allen/run_segment_mitochondria.py input.tif -o out_dir/
-# PNG batch
-python segmentation_allen/segmentation_pipeline.py -d png_dir/ -o out_dir/
-```
-
-Place the generated masks into each sample's `segmentation/`, and the main pipeline will use them directly (skipping Cellpose by default).
+This outputs `cyto.tif` / `nuclei.tif` / `cytoplasm.tif` to each sample's `segmentation/`. Use `--disable-segmentation` to turn it off. Existing masks are always reused when present (`--segmentation-skip-if-present`).
 
 ---
 
@@ -369,7 +324,7 @@ Place the generated masks into each sample's `segmentation/`, and the main pipel
 Both capabilities are **fully autonomous** in this build — no local model or heavy
 subsystem is deployed. Each is a single, cheap step wired into the pipeline:
 
-### auto_deep_research — one API call -> report -> digest
+### auto_deep_research — one API call → report → digest
 
 Add `--auto-deep-research` and MorphAgent makes **one call** to a deep-research
 model (`DEEP_RESEARCH_MODEL`, falls back to your LLM) to write a
@@ -388,7 +343,7 @@ model (e.g. Perplexity `sonar-deep-research`, OpenAI `gpt-4o-search-preview`);
 any strong chat model also works. You can still drop your own `.md`/`.txt`/`.pdf`
 reports into `deep_research/` instead of (or in addition to) generating one.
 
-### auto_literature_retrieval — keyword -> PubMed PDFs -> lite text -> digest
+### auto_literature_retrieval — keyword → PubMed PDFs → lite text → digest
 
 Add `--auto-literature-retrieval` and MorphAgent searches PubMed / Europe PMC for
 your keywords, downloads **open-access PDFs** into `project_root/RAG/`, extracts
@@ -412,11 +367,9 @@ You can also just place your own `.pdf` / PMC `.xml` files into `RAG/` and skip
 
 ### PDF parsing (lite by default)
 
-RAG and deep-research PDFs use **lightweight text extraction** (`pymupdf`, with
-`pypdf` fallback) then an LLM summary — fast enough for demo/UI on CPU/Mac.
-Optional layout OCR: install PaddleX from `envs/requirements-optional.txt` and
-set `RAG_PDF_BACKEND=paddlex` (and `PADDLEX_DEVICE=gpu:0` with a GPU wheel if
-desired). Markdown/text/XML sources are read directly.
+RAG and deep-research PDFs use **lightweight text extraction** (`pymupdf`) then an
+LLM summary. Optional layout OCR: install PaddleX and set `RAG_PDF_BACKEND=paddlex`.
+Markdown/text/XML sources are read directly.
 
 ---
 
@@ -437,13 +390,12 @@ desired). Markdown/text/XML sources are read directly.
 | `--llm-model` / `--vlm-online-model` | none | Override the model name |
 | `--enable-segmentation` / `--disable-segmentation` | enabled | Auto-segmentation toggle |
 | `--segmentation-skip-if-present` | enabled | Skip segmentation if masks already exist (your own masks take priority) |
-| `--segmentation-run-even-if-present` | off | Rerun Cellpose for every sample and overwrite its generated mask trio |
 | `--enable-* / --disable-*` (expert-knowledge / deep-research / rag) | enabled | Toggles for each knowledge source |
 | `--auto-deep-research` + `--deep-research-query` | off | Generate a deep-research report (one API call) into `deep_research/` before digesting |
 | `--auto-literature-retrieval` + `--pubmed-query` | off | Download open-access PubMed PDFs into `RAG/` before digesting |
 | `--pubmed-max-results` / `--pubmed-min-year` / `--pubmed-include-non-oa` | 8 / 0 / off | Tune the PubMed search & download |
 | `--paddlex-device` | `cpu` | Only used when `RAG_PDF_BACKEND=paddlex` (`cpu` or `gpu:0`) |
-| `--reproduce` | off in raw CLI; on in UI | Deterministic mode (temperature=0 + VLM caching) |
+| `--reproduce` | off | Deterministic mode (temperature=0 + VLM caching) |
 | `--code-parallel-workers` | 1 | Number of parallel processes for running merged code across all samples |
 | `--vlm-online-concurrency` | 1 | Number of concurrent threads for the online VLM API |
 
@@ -453,8 +405,22 @@ desired). Markdown/text/XML sources are read directly.
 
 ## FAQ
 
-- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU; but **Cellpose-SAM segmentation requires a GPU**. Without a GPU, you can disable segmentation (`--disable-segmentation`) or use your own masks / Allen (CPU) instead.
+- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The Lite UI demo reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU), or disable segmentation.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
-- **PDF parsing?** Default is PyMuPDF lite extract -> LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
+- **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.
 - **VLM scoring is very slow / times out?** Increase `--vlm-online-concurrency`, or tune environment variables such as `VLM_ONLINE_REQUEST_TIMEOUT` (see `config.py`).
+- **UI: where do I put my own images?** Select the parent folder that contains `dataset/<sample>/image.tif` (see [Input Data Format](#input-data-format-important)). If the path is wrong, the UI shows a dialog with the expected layout.
+- **Windows setup hangs / ToS / libmamba / `conda.exe` crash (`0xc0000005`)?** Use the desktop UI ([`../MorphAgent_UI/`](../MorphAgent_UI/)): it accepts Anaconda ToS when possible, creates only `python`+`pip` via conda (defaults), and installs numpy/PyQt/… with **pip**. Prefer Miniconda ≥ 23.9; see [`../MorphAgent_UI/README.md`](../MorphAgent_UI/README.md).
+
+---
+
+## View UI launch analytics
+
+Open the [public MorphAgent UI analytics dashboard](https://vbr.nathanchung.dev/info/ai4imaging-morphagent-ui) to view total launches, recent traffic, and country distribution. You can also click the badge below.
+
+<p align="center">
+  <a href="https://vbr.nathanchung.dev/info/ai4imaging-morphagent-ui">
+    <img src="https://vbr.nathanchung.dev/badge?page_id=ai4imaging-morphagent-ui&amp;text=UI%20launches%3A%20CNT&amp;color=00b7d4&amp;lcolor=10283d&amp;style=flat&amp;hit=off" alt="MorphAgent UI visitor map" />
+  </a>
+</p>

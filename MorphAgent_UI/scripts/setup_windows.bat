@@ -7,17 +7,17 @@ set "HANDOFF="
 
 cd /d "%~dp0\.."
 if errorlevel 1 (
-  echo [ERROR] Could not cd to MorphAgent_UI_Lite folder from "%~dp0"
+  echo [ERROR] Could not cd to MorphAgent_UI folder from "%~dp0"
   set "EXITCODE=1"
   goto :HOLD
 )
 set "HANDOFF=%CD%"
-title MorphAgent UI Lite Setup
+title MorphAgent UI Setup
 
 chcp 65001 >nul 2>&1
 
 echo ============================================================
-echo  MorphAgent UI Lite setup (Windows)
+echo  MorphAgent UI setup (Windows)
 echo  Scope: Tau demo + Code/VLM
 echo  Knowledge: precomputed txt (skip PDF/PubMed/Allen)
 echo  Working directory: %CD%

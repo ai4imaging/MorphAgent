@@ -17,7 +17,7 @@ cannot be merged into the modern `morphagent` environment, so it lives in its
 own environment.
 
 ```bash
-# from the repo root
+# from MorphAgent_CLI/
 conda env create -f envs/environment_allen.yml   # creates morphagent_allen
 conda activate morphagent_allen
 pip install -e segmentation_allen                 # install vendored aicssegmentation

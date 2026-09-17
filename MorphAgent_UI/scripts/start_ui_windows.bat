@@ -3,12 +3,12 @@ setlocal EnableExtensions
 REM MorphAgent UI Lite launcher for Windows (double-click this file).
 
 cd /d "%~dp0\.."
-title MorphAgent UI Lite
+title MorphAgent UI
 
 chcp 65001 >nul 2>&1
 
 echo ============================================================
-echo  Starting MorphAgent UI Lite
+echo  Starting MorphAgent UI
 echo  Working directory: %CD%
 echo  Env: morphagent_lite
 echo ============================================================

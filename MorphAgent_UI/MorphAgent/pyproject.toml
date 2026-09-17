@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "morphagent-ui-lite"
+name = "morphagent-ui"
 version = "0.1.0"
-description = "MorphAgent UI Lite — single-env Qt desktop (no Allen / no sandbox)"
+description = "MorphAgent UI — single-env Qt desktop"
 requires-python = ">=3.10"
 dependencies = [
   "python-dotenv>=1.0",

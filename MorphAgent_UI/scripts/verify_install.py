@@ -93,7 +93,7 @@ def main() -> int:
                 errors.append(f"completed-run feature {name} is all zero")
 
     if errors:
-        print("[FAIL] MorphAgent UI Lite verification failed:")
+        print("[FAIL] MorphAgent UI verification failed:")
         for item in errors:
             print(f"  - {item}")
         return 1

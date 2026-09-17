@@ -17,7 +17,7 @@ environment variables listed in `../.env.example`.
 ## 1. Unified environment (recommended)
 
 ```bash
-# from the repo root
+# from MorphAgent_CLI/
 conda env create -f envs/environment.yml
 conda activate morphagent
 ```

@@ -38,6 +38,9 @@ try {
     if (-not (Test-PathSafe $ReqFile)) {
         throw "Missing requirements: $ReqFile"
     }
+    if (-not (Test-PathSafe (Join-Path $Handoff "MorphAgent\launch_ui.py"))) {
+        throw "Missing MorphAgent app under $Handoff"
+    }
 
     Write-Host "[OK] Using conda: $($script:CondaExe)"
     Accept-AnacondaTosBestEffort
@@ -127,7 +130,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "verify_install.py failed ($LASTEXITCODE)" }
 
     Write-Status "OK env=$EnvName"
-    Write-Host "[OK] Lite setup complete (Tau demo trial). Next: start_ui_windows.bat"
+    Write-Host "[OK] UI setup complete (Tau demo trial). Next: start_ui_windows.bat"
     Write-Host "[..] Knowledge: demo/precomputed/*.txt injected into prompts"
     exit 0
 } catch {
