@@ -2,13 +2,13 @@
 
 **Tau demo trial.** Single-environment handoff: install lightly, open the Qt UI, Load demo, and run one Code/VLM round with prepared knowledge summaries.
 
-| | **Lite** | Full `MorphAgent_UI_Docker` |
-|--|----------|----------------------|
-| Scope | Tau demo + Code/VLM API | Full research workflow |
-| Env | **`morphagent_lite` only** | `morphagent` + sandbox (+ optional Allen) |
-| Knowledge | Prepared txt, or configured-LLM synthesis from the biological question | Live PDF / PubMed / deep-research generation |
-| Segmentation | Reuse masks if present; **never auto-seg** | Allen when masks missing |
-| Install | `conda create` (Python) then slim pip | Conda + broader science stack |
+| | **Lite** |
+|--|----------|
+| Scope | Tau demo + Code/VLM API |
+| Env | **`morphagent_lite` only** |
+| Knowledge | Prepared txt, or configured-LLM synthesis from the biological question |
+| Segmentation | Reuse masks if present; **never auto-seg** |
+| Install | `conda create` (Python) then slim pip |
 
 UI flow: **Home → Configure → Run → Features → Evidence**.
 
@@ -43,7 +43,7 @@ Prepared demo files:
 - `MorphAgent/demo/precomputed/deep_research_summary.txt`
 - `MorphAgent/demo/precomputed/rag_knowledge_summary.txt`
 
-For live literature fetch, PDF ingestion, or Allen segmentation, use [`MorphAgent_UI_Docker`](../MorphAgent_UI_Docker/).
+Live literature fetch, PDF ingestion, and Allen segmentation are not included in Lite.
 
 ## Prerequisites
 
@@ -83,7 +83,7 @@ MORPHAGENT_RECREATE_ENVS=1 bash scripts/setup.sh
 
 - Samples with `dataset/<sample>/segmentation/*` masks → reused.
 - Samples without masks → skipped (`skipped_no_backend`); Code/VLM still run without `seg`.
-- For automatic Allen segmentation, use the full [`MorphAgent_UI_Docker`](../MorphAgent_UI_Docker/) package.
+- Samples without masks continue without automatic segmentation.
 
 ## What setup does
 

@@ -7,8 +7,6 @@
 >
 > Related: for the lightweight desktop UI, use
 > [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
-> For the containerized UI package under `MorphAgent_UI_Docker/`, use
-> [`installation_skill_UI.md`](installation_skill_UI.md).
 
 ## 0. What MorphAgent is (mental model)
 

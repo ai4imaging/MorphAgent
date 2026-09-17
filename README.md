@@ -7,10 +7,7 @@ Enze Ye, Xiaoxuan Wu, Rui Peng, Wenjia Hu, Xiangyou Li, Xuefei Zhang, Mengxiao N
 
 ## UI Demo
 
-MorphAgent provides two simple UI entry points:
-
-- [`MorphAgent_UI_Lite/`](MorphAgent_UI_Lite/) — lightweight desktop UI in one Conda environment.
-- [`MorphAgent_UI_Docker/`](MorphAgent_UI_Docker/) — complete browser-accessible Docker package.
+The desktop UI lives in [`MorphAgent_UI_Lite/`](MorphAgent_UI_Lite/).
 
 Demo video:
 
@@ -31,19 +28,6 @@ Lite includes the bundled Tau demo, feature extraction, historical code reuse, A
 
 Detailed instructions: [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md).
 
-### Docker — MorphAgent UI Docker
-
-```bash
-cd MorphAgent/MorphAgent_UI_Docker
-mkdir -p docker-data workspace
-docker compose -f docker/docker-compose.yml build
-docker compose -f docker/docker-compose.yml up -d
-```
-
-Open [http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale](http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale).
-
-Docker instructions and offline-image details are in [`MorphAgent_UI_Docker/docker/README.md`](MorphAgent_UI_Docker/docker/README.md).
-
 ---
 
 ## For coding agents (Codex / Claude Code / Cursor)
@@ -54,10 +38,8 @@ If you are an autonomous agent asked to **install or run MorphAgent**, read the 
 |------|----------------|-------------------|
 | CLI pipeline (`main.py`, Cellpose-SAM env) | [`installation_skill.md`](installation_skill.md) | **git repo root** |
 | Desktop Qt UI Lite (Tau demo + Configure / Run) | [`MorphAgent_UI_Lite/README_LITE.md`](MorphAgent_UI_Lite/README_LITE.md) | **`MorphAgent_UI_Lite/`** |
-| Docker UI package | [`installation_skill_UI.md`](installation_skill_UI.md) | **`MorphAgent_UI_Docker/`** |
 
 - Prefer the Lite README when the user mentions the GUI demo, `MorphAgent_UI_Lite`, or a quick Tau trial.
-- Prefer the Docker UI skill when the user needs the complete containerized stack.
 - Prefer the CLI skill when the user wants a headless / scripted `python main.py …` run.
 - Do **not** invent alternate install paths; the skill / README files above are the source of truth for agents.
 - Humans: the [UI Demo](#ui-demo) section above is the short path; agents should still follow the files in the table.
@@ -112,7 +94,6 @@ MorphAgent/
 ├── validation/              # Deterministic feature validation and registry
 ├── segmentation_allen/      # Allen aicssegmentation backend (vendored + CLI entry point)
 ├── MorphAgent_UI_Lite/      # Lite desktop UI (Tau demo; single env morphagent_lite)
-├── MorphAgent_UI_Docker/    # Docker UI package (Allen + broader stack)
 ├── envs/                    # Environment yaml files (see "Environment & Installation")
 ├── .env.example             # Configuration template (copy to .env)
 └── README.md
@@ -158,7 +139,7 @@ export SEGMENTATION_CONDA_ENV=morphagent_allen
 export SEGMENTATION_BACKEND=allen
 ```
 
-> For the desktop UI install path, prefer the [UI Demo](#ui-demo) scripts under `MorphAgent_UI_Lite/` (or full `MorphAgent_UI_Docker/`). See `envs/README.md` for CLI environment details.
+> For the desktop UI install path, prefer the [UI Demo](#ui-demo) scripts under `MorphAgent_UI_Lite/`. See `envs/README.md` for CLI environment details.
 
 ---
 
@@ -449,8 +430,7 @@ Markdown/text/XML sources are read directly.
 
 ## FAQ
 
-- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The UI demo / Docker image reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU; UI default when masks are missing), or disable segmentation.
-- **Docker vs manual install?** Manual install (recommended for a quick trial) creates `morphagent_lite` under `MorphAgent_UI_Lite/scripts/`. Docker is the one-click browser path for the full `MorphAgent_UI_Docker` image (noVNC). You only need one of them.
+- **Do I really need a GPU?** LLM/VLM go through the API and need no local GPU. The Lite UI demo reuses bundled masks and does not require a GPU. Cellpose-SAM (optional, CLI path) generally needs a GPU; without one, reuse your own masks, use Allen (CPU), or disable segmentation.
 - **Code execution reports missing packages?** Generated code runs in `CONDA_ENV` (default `morphagent`) and will try to `pip/conda install` automatically. Pre-installing common scientific-computing libraries into that environment is more reliable.
 - **PDF parsing?** Default is PyMuPDF lite extract → LLM (`RAG_PDF_BACKEND=lite`). PaddleX is optional for scanned/OCR-heavy PDFs only.
 - **Literature download failed but search worked?** That is almost always a network restriction on the server (no outbound HTTP/FTP to NCBI/EBI, or region blocking). Run on a machine with internet (a proxy via `HTTPS_PROXY` works) or drop PDFs into `RAG/` manually.

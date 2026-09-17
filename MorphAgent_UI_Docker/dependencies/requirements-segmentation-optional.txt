@@ -1,6 +1,0 @@
-# Install only when Regenerate Cellpose masks is required.
-# GPU-specific Torch installation may need to follow pytorch.org for the target machine.
-torch==2.9.1
-torchvision==0.24.1
-cellpose==4.0.8
-
