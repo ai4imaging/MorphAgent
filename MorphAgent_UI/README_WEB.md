@@ -5,6 +5,10 @@ Prefer a desktop window without opening a browser? Use
 [README.md](README.md). Both entry points use this same workflow
 and results; the desktop entry uses its own Qt WebEngine renderer.
 
+This browser entry point is also the one to use when MorphAgent runs on a
+server: configure the server once, then open the workspace from the browser on
+your own machine. See [Run on a server](#run-on-a-server-open-in-a-local-browser).
+
 The new browser UI calls the same root `main.py` and `reuse_code.py` used by the
 desktop UI. It is not a simulated workflow. The original desktop launcher remains
 available and unchanged.
@@ -35,6 +39,49 @@ Alternatively run `MorphAgent_UI\scripts\start_web_ui_windows.bat`.
 Open **http://127.0.0.1:8766**. Keep the terminal running. Ctrl+C stops the service
 and its active analysis. Closing only the browser does not stop the analysis.
 If the port is busy, use `python launch_web_ui.py --port 8767`.
+
+## Run on a server, open in a local browser
+
+This is the intended way to use MorphAgent on a remote machine. Install it on
+the server exactly as described in [README.md](README.md), then start the
+service there with `--no-browser`, since a headless server has no browser to
+open:
+
+```bash
+# on the server
+cd MorphAgent_UI
+conda activate morphagent_lite
+python launch_web_ui.py --no-browser
+```
+
+Forward the port from your own machine and open the workspace there:
+
+```bash
+# on your own machine
+ssh -N -L 8766:127.0.0.1:8766 <user>@<server>
+```
+
+Open **http://127.0.0.1:8766** in your local browser. Nothing else needs to be
+configured. Datasets, runs, history, and results all live on the server, the
+analysis runs there, and only the interface travels through the tunnel.
+
+These are two independent SSH sessions, and they fail differently. Closing the
+`-N -L` tunnel only disconnects the browser; the analysis keeps running on the
+server and reappears in the workspace when you reopen the tunnel. Closing the
+session that started `launch_web_ui.py` stops the service and its active run, so
+start it under `tmux`, `screen`, or `nohup` if you want it to survive a
+disconnect.
+
+Keep the same port number on both ends of the tunnel. The service binds to
+`127.0.0.1` and rejects any request whose `Host` header is not
+`127.0.0.1:<port>` or `localhost:<port>`, so `--port 8899` on the server needs
+`-L 8899:127.0.0.1:8899` locally. There is no `--host` option: publishing the
+port on a public interface is not supported, and the SSH tunnel is what keeps
+the single-user security model intact.
+
+Enter your API Base URL, key, and model in **Settings** after the page loads.
+They are held in the server-side process for that session only and are never
+written to disk, so they must be entered again after the service restarts.
 
 For a fresh installation, follow the existing UI setup instructions first. The
 updated `dependencies/requirements-lite.txt` includes `pypdf` for PDF references.
@@ -233,7 +280,9 @@ Partially completed reuse runs are also packaged, explicitly labelled partial.
   older raw results folder). **Visualize → Upload feature_value.csv** accepts the
   exported `value/feature_value.csv` file.
 - The server binds only to `127.0.0.1`, checks Host/Origin, and uses a per-session
-  API token. It is a single-user local tool, not a remotely exposed web service.
+  API token. It is a single-user tool, not a remotely exposed web service. To use
+  it on a server, tunnel the port over SSH as described above rather than trying
+  to publish it on a public interface.
 - Enabled documents and relevant images are sent to the configured model during
   analysis. Generated code executes locally, as in the original UI.
 - A stopped/crashed process can leave partial artifacts. They are retained for

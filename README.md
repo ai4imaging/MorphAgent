@@ -39,7 +39,18 @@ conda activate morphagent_lite
 python launch_desktop_ui.py
 ```
 
-A browser workspace with the same history and results is available via `python launch_web_ui.py` (then open http://127.0.0.1:8766).
+**Working on a server?** Use the browser workspace instead of the desktop window. Install MorphAgent on the server exactly as above, start the service there, forward the port, and drive it from the browser on your own machine — nothing else to configure:
+
+```bash
+# on the server
+cd MorphAgent_UI && conda activate morphagent_lite
+python launch_web_ui.py --no-browser
+
+# on your own machine
+ssh -N -L 8766:127.0.0.1:8766 <user>@<server>
+```
+
+Then open http://127.0.0.1:8766 locally. Datasets, runs, history, and results stay on the server and are identical to the desktop workspace. Keep the same port number on both ends of the tunnel: the service binds to loopback only and rejects a mismatched `Host` header, so `--port 8899` on the server needs `-L 8899:127.0.0.1:8899` locally.
 
 Detailed UI notes: [`MorphAgent_UI/README.md`](MorphAgent_UI/README.md) (desktop), [`MorphAgent_UI/README_WEB.md`](MorphAgent_UI/README_WEB.md) (browser workflow and data formats).
 
