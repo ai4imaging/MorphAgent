@@ -542,7 +542,7 @@ def test_http_token_origin_and_static_isolation(workspace):
         server.shutdown();server.server_close()
 
 
-def test_compute_records_prompt_but_never_passes_api_to_saved_code(workspace):
+def test_compute_inherits_the_source_question_and_never_passes_api_to_saved_code(workspace):
     (workspace/'.env').write_text('')
     previous=workspace/'old-results';previous.mkdir()
     (previous/'features.csv').write_text('sample_id,area\na,1\n')
@@ -550,11 +550,12 @@ def test_compute_records_prompt_but_never_passes_api_to_saved_code(workspace):
     f=previous/'round_1/features/area';f.mkdir(parents=True)
     (f/'extract.py').write_text('def extract(img, seg): return 1')
     (previous/'round_1/feature_plan.json').write_text(json.dumps({'features':[{'name':'area','method':'code'}]}))
+    (previous/'ui_run_manifest.json').write_text(json.dumps({'query':'Compute area on my new data'}))
     (workspace/'reuse_code.py').write_text("import pathlib,sys,os\nassert not os.environ.get('LLM_API_KEY') and not os.environ.get('VLM_API_KEY')\np=pathlib.Path(sys.argv[sys.argv.index('--results-dir')+1]);(p/'features.csv').write_text('sample_id,area\\na,2\\n')")
     service=make_service(workspace)
     source=service.add_existing_run(str(previous))
     d=service.add_dataset(str(workspace/'demo/data'))
-    j=service.start_reuse({'sourceRunId':source['id'],'datasetId':d['id'],'featureNames':['area'],'question':'Compute area on my new data'})
+    j=service.start_reuse({'sourceRunId':source['id'],'datasetId':d['id'],'featureNames':['area']})
     deadline=time.monotonic()+5
     while time.monotonic()<deadline:
         detail=service.run_detail(j['id'])
@@ -585,7 +586,7 @@ def test_compute_loads_timestamp_export_and_checks_api_before_execution(workspac
     nested=service.add_existing_run(str(results.parent))
     assert Path(nested['resultsDir'])==results
     data=service.add_dataset(str(workspace/'demo/data'))
-    payload={'sourceRunId':source['id'],'datasetId':data['id'],'featureNames':['area'],'question':'Measure cell area'}
+    payload={'sourceRunId':source['id'],'datasetId':data['id'],'featureNames':['area']}
     check=service.preflight_compute(payload)
     assert not check['ready'] and any('API' in i['message'] for i in check['issues'])
     with pytest.raises(ValueError,match='API'):
@@ -593,7 +594,6 @@ def test_compute_loads_timestamp_export_and_checks_api_before_execution(workspac
     assert len(service.jobs)==2
     service.save_settings({'baseUrl':'https://test.invalid/v1','apiKey':'fixture-only','model':'fixture'})
     assert service.preflight_compute(payload)['ready']
-    assert not service.preflight_compute({**payload,'question':''})['ready']
     assert Path(service.bootstrap()['exportsDirectory'])==service.root/'exports'
     assert Path(service.bootstrap()['exportsDirectory']).is_dir()
 
@@ -734,6 +734,7 @@ def _run_with_vlm_feature(workspace):
     (previous/'round_1/feature_plan.json').write_text(json.dumps({'features':[
         {'name':'area','method':'code','description':'Cell area'},
         {'name':'vlm_shape','method':'vlm','description':'Overall shape'}]}))
+    (previous/'ui_run_manifest.json').write_text(json.dumps({'query':'Measure shape'}))
     return previous
 
 
@@ -747,8 +748,7 @@ def test_compute_passes_credentials_only_when_a_vlm_feature_is_selected(workspac
     service=make_service(workspace)
     source=service.add_existing_run(str(previous))
     data=service.add_dataset(str(workspace/'demo/data'))
-    payload={'sourceRunId':source['id'],'datasetId':data['id'],'question':'Measure shape',
-             'featureNames':['area','vlm_shape']}
+    payload={'sourceRunId':source['id'],'datasetId':data['id'],'featureNames':['area','vlm_shape']}
     assert service.preflight_compute(payload)['ready']
     job=service.start_reuse(payload)
     deadline=time.monotonic()+5
@@ -756,7 +756,7 @@ def test_compute_passes_credentials_only_when_a_vlm_feature_is_selected(workspac
         time.sleep(.05)
     seen=json.loads((Path(job['resultsDir'])/'seen.json').read_text())
     assert seen['vlm']=='private-test-key'
-    assert seen['argv'][seen['argv'].index('--question')+1]=='Measure shape'
+    assert seen['argv'][seen['argv'].index('--question')+1]=='Measure shape'  # inherited, not asked for
     assert '--vlm-concurrency' in seen['argv']
     assert seen['argv'][seen['argv'].index('--features')+1:]==['area','vlm_shape']
     assert service.run_detail(job['id'])['route']=='both'

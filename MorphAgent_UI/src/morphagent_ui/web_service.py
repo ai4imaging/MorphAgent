@@ -679,13 +679,23 @@ class WorkspaceService:
         if not self._has_measurements(source_root):
             raise ValueError('The source run has no finite measurements.')
         chosen = selected_features(source_root, payload.get('featureNames'))
-        question = str(payload.get('question', '')).strip()
-        if not question:
-            raise ValueError('Enter a question for this computation.')
+        question = self._source_question(source, source_root)
         summary = scan_dataset(data['path'])
         if not summary.sample_count or not summary.primary_image_count or summary.empty_samples:
             raise ValueError('Target dataset must contain a primary image in each sample folder.')
         return source, data, chosen, question, summary
+
+    @staticmethod
+    def _source_question(source, source_root):
+        """Computation replays a fixed feature set, so it asks nothing new.
+
+        VLM features are still rescored against an image, and that prompt needs
+        the biological context the feature was written for, which is the source
+        run's own question.
+        """
+        manifest = read_json(source_root / 'ui_run_manifest.json', {}) if source_root.is_dir() else {}
+        question = str(source.get('question') or manifest.get('query') or '').strip()
+        return question or 'Apply the saved MorphAgent features to this dataset.'
 
     @staticmethod
     def _compute_route(chosen):

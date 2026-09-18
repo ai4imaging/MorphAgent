@@ -135,7 +135,7 @@ test('Attached knowledge and Deep Research can be combined',async()=>{
 test('Compute confirmation omits the execution explanation',async()=>{
   const app=await ui();
   await app.click('compute-source');await app.click('reuse-demo');
-  app.run("state.computeQuestion='Measure';state.config.apiKey='typed';state.config.baseUrl='https://test.invalid';state.config.model='model'");
+  app.run("state.config.apiKey='typed';state.config.baseUrl='https://test.invalid';state.config.model='model'");
   await app.click('prepare-compute');
   assert.ok(!app.run('runDialog()').includes('Uses the saved scripts unchanged'));
 });
@@ -261,7 +261,9 @@ test('Design and Compute omit the top bar and helper footers',async()=>{
   for(const text of ['class="topbar"','New analysis','Local runtime','Local workspace','sidebar-footnote','composer-hint','home-bottom','Enter to review configuration','Model &amp; analysis in Settings','Saved scripts run locally'])assert.ok(!html.includes(text),text);
   assert.match(app.run('header()'),/aria-label="Open sidebar"/);
   assert.match(html,/id="question"/);
-  assert.match(html,/id="compute-question"/);
+  // Compute replays a fixed feature set, so it offers attachments instead of a prompt.
+  assert.ok(!app.run('reusePage()').includes('<textarea'));
+  assert.match(html,/data-action="compute-source"/);
 });
 test('Analysis settings keep choices and loop counts without section explanations',async()=>{
   const app=await ui();app.run("state.settingsTab='analysis'");
@@ -290,7 +292,7 @@ test('Data submit waits for configuration confirmation, then launches only once'
 test('Compute displays all available code without selection controls',async()=>{
   const app=await ui();let html=app.run('reusePage()');
   assert.match(html,/Upload features/);
-  assert.match(html,/id="compute-question"/);
+  assert.ok(!html.includes('<textarea'));
   assert.ok(!html.includes('failed-run'));
   await app.click('compute-source');
   assert.equal(app.calls.find(c=>c.endpoint==='native-picker').initial,'/workspace/exports');
@@ -508,7 +510,7 @@ test('Compute blocks missing API, confirms all inputs, and stays on Compute afte
   const app=await ui();
   await app.click('compute-source');
   await app.click('reuse-demo');
-  app.run("state.computeQuestion='Compute cell area';state.question='Independent design question';");
+  app.run("state.question='Independent design question';");
   await app.click('prepare-compute');
   assert.match(app.run('runDialog()'),/API key required/);
   assert.ok(!app.calls.some(c=>c.endpoint==='compute'));
@@ -516,27 +518,26 @@ test('Compute blocks missing API, confirms all inputs, and stays on Compute afte
   app.run("Object.assign(state.config,{baseUrl:'https://test.invalid',model:'test',apiKey:'typed-secret'})");
   await app.click('prepare-compute');
   const confirmation=app.run('runDialog()');
-  for(const text of ['Compute cell area','Previous run','20260915_120000_000000','New dataset','area'])assert.ok(confirmation.includes(text));
+  // The question is inherited from the source run rather than asked for again.
+  for(const text of ['Historical question','Previous run','20260915_120000_000000','New dataset','area'])assert.ok(confirmation.includes(text));
   assert.ok(!confirmation.includes('typed-secret'));
   assert.ok(!app.calls.some(c=>c.endpoint==='compute'));
   await app.click('close-run-dialog');
-  assert.equal(app.run('state.computeQuestion'),'Compute cell area');
   await app.click('prepare-compute');
   await Promise.all([app.click('confirm-run'),app.click('confirm-run')]);
   assert.equal(app.calls.filter(c=>c.endpoint==='compute').length,1);
-  assert.equal(app.calls.find(c=>c.endpoint==='compute').body.question,'Compute cell area');
+  assert.equal(app.calls.find(c=>c.endpoint==='compute').body.question,undefined);
   assert.deepEqual(app.calls.find(c=>c.endpoint==='compute').body.featureNames,['area','visual']);
   assert.equal(app.run('state.page'),'compute');
   assert.match(app.run('reusePage()'),/submitted-question/);
   assert.match(app.run('reusePage()'),/Compute cell area/);
-  assert.ok(!app.run('reusePage()').includes('id="compute-question"'));
   assert.equal(app.run('state.question'),'Independent design question');
 });
 
 test('Filtering the read-only feature list still computes every reusable feature',async()=>{
   const app=await ui({additionalCode:true});
   await app.click('compute-source');await app.click('reuse-demo');
-  app.run("state.search='perimeter';state.computeQuestion='Compute morphology';Object.assign(state.config,{apiKey:'fixture',baseUrl:'https://test.invalid',model:'fixture'})");
+  app.run("state.search='perimeter';Object.assign(state.config,{apiKey:'fixture',baseUrl:'https://test.invalid',model:'fixture'})");
   assert.ok(!app.run('featureRows()').includes('Cell area'));
   assert.match(app.run('featureRows()'),/Cell perimeter/);
   await app.click('prepare-compute');
@@ -558,9 +559,8 @@ for(const historyKind of ['discovery','reuse'])test(`Leaving ${historyKind} hist
   assert.equal(app.run('state.dataset'),null);
   assert.equal(app.run('state.featureNumber'),'');
   await app.click('navigate',{page:'compute'});
-  assert.match(app.run('reusePage()'),/id="compute-question"/);
+  assert.match(app.run('reusePage()'),/Compute saved features/);
   assert.ok(!app.run('reusePage()').includes('submitted-question'));
-  assert.equal(app.run('state.computeQuestion'),'');
   assert.ok(!app.run('sidebar()').includes('history-entry active'));
   assert.ok(!app.calls.some(c=>c.endpoint.endsWith('/cancel')||c.endpoint.endsWith('/remove')));
 });
@@ -568,7 +568,7 @@ for(const historyKind of ['discovery','reuse'])test(`Leaving ${historyKind} hist
 test('History inspection preserves both unsubmitted drafts and Compute attachments',async()=>{
   const app=await ui({historyKind:'discovery'});
   await app.click('compute-source');await app.click('reuse-demo');
-  app.run("state.question='New design draft';state.featureNumber='8';state.dataset={id:'draft',name:'Draft images',summary:{sample_count:2}};state.computeQuestion='Compute draft'");
+  app.run("state.question='New design draft';state.featureNumber='8';state.dataset={id:'draft',name:'Draft images',summary:{sample_count:2}}");
   await app.click('load-job',{id:'ok'});
   await app.click('navigate',{page:'data'});
   assert.match(app.run('home()'),/id="question"/);
@@ -576,7 +576,6 @@ test('History inspection preserves both unsubmitted drafts and Compute attachmen
   assert.equal(app.run('state.dataset.id'),'draft');
   assert.equal(app.run('state.featureNumber'),'8');
   await app.click('navigate',{page:'compute'});
-  assert.match(app.run('reusePage()'),/Compute draft/);
   assert.match(app.run('reusePage()'),/Previous run attached/);
   assert.match(app.run('reusePage()'),/Data attached/);
 });
@@ -591,7 +590,7 @@ test('Design navigation returns to its active run after inspecting history witho
   assert.match(app.run('home()'),/Estimated remaining/);
   assert.ok(!app.run('home()').includes('Historical question'));
   await app.click('navigate',{page:'compute'});
-  assert.match(app.run('reusePage()'),/id="compute-question"/);
+  assert.match(app.run('reusePage()'),/Compute saved features/);
   await app.click('navigate',{page:'data'});
   assert.match(app.run('home()'),/Estimated remaining/);
   assert.equal(app.calls.filter(c=>c.endpoint==='runs').length,1);
@@ -601,9 +600,8 @@ test('Design navigation returns to its active run after inspecting history witho
 test('Compute navigation restores its active run without consuming the Design draft',async()=>{
   const app=await ui({historyKind:'discovery'});
   await app.click('compute-source');await app.click('reuse-demo');
-  app.run("state.question='Unsubmitted design';state.featureNumber='9';state.computeQuestion='Compute cell area';Object.assign(state.config,{apiKey:'fixture',baseUrl:'https://test.invalid',model:'fixture'})");
+  app.run("state.question='Unsubmitted design';state.featureNumber='9';Object.assign(state.config,{apiKey:'fixture',baseUrl:'https://test.invalid',model:'fixture'})");
   await app.click('prepare-compute');await app.click('confirm-run');
-  assert.equal(app.run('state.computeQuestion'),'');
   assert.equal(app.run('state.question'),'Unsubmitted design');
   await app.click('load-job',{id:'ok'});
   await app.click('navigate',{page:'compute'});

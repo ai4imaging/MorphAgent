@@ -109,7 +109,8 @@ Desktop startup never kills another launcher or overwrites its history.
   to preview extracted text, download originals, add or remove files. Removing
   the last attachment restores the upload label; past run inputs are preserved.
 - **Compute** → **Upload features** → choose a run's `feature/` folder → **Add data**
-  for a new target dataset → enter a question → submit → **Confirm and run**.
+  for a new target dataset → submit → **Confirm and run**. The features to extract
+  are already fixed by the previous run, so Compute asks no question.
   The previous-run picker starts at `.web_workspace/exports/`. Both exported
   `feature/` folders and older raw run folders are accepted. Cancel
   keeps your current attachments. Click the feature count to inspect the read-only
@@ -117,8 +118,9 @@ Desktop startup never kills another launcher or overwrites its history.
   VLM-only definitions are shown as unavailable for standalone computation.
   Missing API settings open the same blocking dialog as Design. Execution
   uses the saved scripts unchanged, without model calls or feature redesign; the
-  question is recorded as run context. Use trusted scripts and compatible images
-  and masks. The question, progress, approximate ETA, and logs stay on Compute.
+  source run's question is inherited as run context for VLM rescoring. Use trusted
+  scripts and compatible images and masks. Progress, approximate ETA, and logs
+  stay on Compute.
 - Completed runs automatically save their timestamped folder and ZIP under
   `.web_workspace/exports/`. **Download results (.zip)** appears directly in
   Design or Compute and opens a native Save dialog, without silently overwriting a

@@ -238,8 +238,8 @@
   reusePage = function() {
     if(live.job?.kind==='reuse' && !live.computeDraft)return runPage();
     const d=live.reuseData, source=live.reuseSource;
-    return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>What would you like to compute?</h1><p>Apply the features saved by a previous run to a new dataset.</p></div>
-      <div class="composer"><textarea id="compute-question" aria-label="Compute question" placeholder="Describe what you want to measure on this dataset…">${esc(state.computeQuestion)}</textarea>
+    return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>Compute saved features</h1><p>Apply the features a previous run saved to a new dataset. The feature set is already fixed, so there is nothing to describe.</p></div>
+      <div class="composer composer-tools-only">
       <div class="composer-footer"><div class="composer-tools">
       <button class="composer-chip ${source?'filled':''}" data-action="compute-source">${icon('history')}<span>${source?'Previous run attached':'Upload features'}</span></button>
       <button class="composer-chip ${d?'filled':''}" data-action="reuse-upload">${icon(d?'folder':'plus')}<span>${d?'Data attached':'Add data'}</span></button>
@@ -323,7 +323,7 @@
       const compute=dialog.workflow==='compute';
       const j=await post(compute?'compute':'runs',dialog.request);
       // Only consume the draft that was submitted; the other workflow stays intact.
-      if(compute){live.computeDraft=false;state.computeQuestion='';live.reuseSource=null;live.reuseData=null;}
+      if(compute){live.computeDraft=false;live.reuseSource=null;live.reuseData=null;}
       else {live.designDraft=false;state.question='';state.featureNumber='';state.dataset=null;}
       // Clear the reviewed request immediately: retrying a click cannot start it twice.
       state.runDialog=null;live.job=j;live.logs=[];render();window.scrollTo(0,0);
@@ -334,12 +334,11 @@
     }
   }
   prepareRun = () => task(reviewAnalysis);
-  function computePayload() {return {sourceRunId:live.reuseSource?.id,datasetId:live.reuseData?.id,featureNames:computeFeatures().map(f=>f.name),question:state.computeQuestion.trim()};}
+  function computePayload() {return {sourceRunId:live.reuseSource?.id,datasetId:live.reuseData?.id,featureNames:computeFeatures().map(f=>f.name)};}
   async function reviewCompute() {
     if(state.runDialog)return;
     if(!live.reuseSource)return showRunIssue({title:'Feature folder required',message:'Upload the feature folder from a saved run.',label:'Choose feature folder'});
     if(!live.reuseData)return showRunIssue({title:'Dataset required',message:'Add a new target dataset before continuing.',label:'Add data'});
-    if(!state.computeQuestion.trim())return showRunIssue({title:'Question required',message:'Describe what you want to measure on this dataset.',target:'compute-question',label:'Enter your question'});
     if(!computeFeatures().length)return showRunIssue({title:'No reusable features',message:'This run saved neither standalone feature code nor VLM feature definitions. Load another previous run.',label:'Review previous run'});
     const issue=apiConnectionIssue('code');if(issue)return showRunIssue(issue);
     try {
@@ -351,7 +350,7 @@
       if(JSON.stringify(request)!==JSON.stringify(computePayload()))return showRunIssue({title:'Inputs changed',message:'Submit again to review your updated inputs.'});
       const d=live.reuseData, source=live.reuseSource;
       state.runDialog={kind:'confirm',workflow:'compute',launching:false,request:JSON.parse(JSON.stringify(request)),summary:{
-        question:request.question,source:{name:source.name,path:source.resultsDir},features:[...request.featureNames],
+        source:{name:source.name,path:source.resultsDir,question:source.question||''},features:[...request.featureNames],
         dataset:{name:d.name,path:d.path,samples:d.summary.sample_count,images:d.summary.primary_image_count}
       }};render();
     } catch(e) {showRunIssue({title:'Configuration needs attention',message:e.message,label:'Review inputs'});}
@@ -387,7 +386,7 @@
       else if(action==='delete-history')await reviewHistoryRemoval(b.dataset.id);
       else if(action==='confirm-delete-history')await confirmHistoryRemoval();
       else if(action==='load-path'){const path=window.prompt('Paste the local results folder path (contains features.csv):');if(path){const j=await post('runs/load',{path});await refreshHistory();if(state.page==='compute')await selectReuseSource(j.id);else await loadJob(j.id,'visualize');}}
-      else if(action==='live-library'||action==='new-compute'){live.computeDraft=true;state.historyOpen=false;state.computeQuestion='';navigate('compute');}
+      else if(action==='live-library'||action==='new-compute'){live.computeDraft=true;state.historyOpen=false;navigate('compute');}
       else if(action==='compute-source'){
         const path=window.prompt('Choose the feature folder from a saved run:',live.exportsDirectory);
         if(path){try{const j=await post('runs/load',{path});await refreshHistory();await selectReuseSource(j.id);}catch(e){showRunIssue({title:'Unable to load previous run',message:e.message,label:'Choose another folder'});}}
@@ -419,10 +418,6 @@
       else if(action==='confirm-run')await launchConfirmedAnalysis();
     });
   },true);
-  app.addEventListener('input',event=>{if(event.target.id==='compute-question')state.computeQuestion=event.target.value;});
-  app.addEventListener('keydown',event=>{
-    if(event.target.id==='compute-question' && event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();task(reviewCompute);}
-  });
   addDocs=async function(files) {
     const selected=[...files]; if(!selected.length)return;
     await task(async()=>{

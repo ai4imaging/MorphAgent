@@ -130,6 +130,10 @@ h1, h2, h3, p { margin: 0; }
 .composer:focus-within { border-color: #a9ad9f; box-shadow: 0 3px 13px #24251d08; }
 .composer textarea { width: 100%; min-height: 129px; border: none; padding: 22px 22px 12px; background: transparent; resize: vertical; font-size: 14px; line-height: 1.7; border-radius: 18px; }
 .composer-footer { padding: 10px 13px 13px 16px; display: flex; align-items: flex-end; gap: 8px; }
+/* Compute has no text input, so the chip row alone has to carry the card. */
+.composer-tools-only .composer-footer { padding: 14px 13px 14px 16px; align-items: center; }
+.composer-tools-only .composer-tools { gap: 7px; }
+.composer-tools-only .composer-chip { padding: 9px 11px; font-size: 13px; }
 .composer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; flex: 1; min-width: 0; }
 .composer-chip { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: 7px; color: #73766b; font-size: 12px; white-space: nowrap; }
 .composer-chip:hover { color: var(--ink); background: #f5f5f2; }

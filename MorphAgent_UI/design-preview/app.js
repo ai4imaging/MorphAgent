@@ -59,7 +59,7 @@ const features = [
 const state = {
   page: 'data', previousPage: 'data', settingsTab: 'api', sidebarOpen: false,
   question: '', featureNumber: '', dataset: null, historyOpen: false, runDialog: null,
-  computeQuestion: '', computeFeaturesOpen: false,
+  computeFeaturesOpen: false,
   config: { route: 'both', mode: 'ultra', baseUrl: '', apiKey: '', model: '', sameConnection: true, vlmBaseUrl: '', vlmApiKey: '', vlmModel: '', knowledgeEnabled: true },
   docs: [], selectedFeatures: new Set(), search: '', vizFeature: 0, sample: 'wt',
   knowledge: {open:false, uploading:false, error:'', progress:'', preview:null},
@@ -198,7 +198,7 @@ function closeRunDialog(resolve=false) {
   state.runDialog=null;
   if(resolve && dialog.target==='api'){showSettings('api');return;}
   render();
-  const field=resolve && ['question','feature-number','compute-question'].includes(dialog.target) ? document.getElementById(dialog.target) : app.querySelector(state.page==='compute'?'[data-action="prepare-compute"]':'[data-action="prepare-run"]');
+  const field=resolve && ['question','feature-number'].includes(dialog.target) ? document.getElementById(dialog.target) : app.querySelector(state.page==='compute'?'[data-action="prepare-compute"]':'[data-action="prepare-run"]');
   field?.focus();
 }
 function runDialog() {
@@ -208,8 +208,9 @@ function runDialog() {
   const row=(label,value)=>`<div class="run-review-row"><dt>${label}</dt><dd>${value}</dd></div>`;
   let details='';
   if(!alert) {
-    details=row('Biological question',`<p class="review-question">${escapeHTML(s.question)}</p>`);
-    details+=compute ? row('Mode','Compute · saved features')+row('Previous run',`<strong>${escapeHTML(s.source.name)}</strong><span class="review-path">${escapeHTML(s.source.path)}</span>`) : `<div class="run-review-pair">${row('Mode',escapeHTML(modes[s.mode].name)+' · '+modes[s.mode].loops+' loops')}${row('Analysis route',escapeHTML(routes[s.route].name))}</div>`;
+    // Compute replays a fixed feature set, so there is no question to review;
+    // the previous run's question is shown as the context VLM rescoring inherits.
+    details=compute ? row('Mode','Compute · saved features')+row('Previous run',`<strong>${escapeHTML(s.source.name)}</strong>${s.source.question?`<small>${escapeHTML(s.source.question)}</small>`:''}<span class="review-path">${escapeHTML(s.source.path)}</span>`) : row('Biological question',`<p class="review-question">${escapeHTML(s.question)}</p>`)+`<div class="run-review-pair">${row('Mode',escapeHTML(modes[s.mode].name)+' · '+modes[s.mode].loops+' loops')}${row('Analysis route',escapeHTML(routes[s.route].name))}</div>`;
     details+=row('Data',`<strong>${escapeHTML(s.dataset.name)}</strong>${s.dataset.samples!=null?`<small>${s.dataset.samples} samples${s.dataset.images!=null?' · '+s.dataset.images+' images':''}</small>`:''}${s.dataset.path?`<span class="review-path">${escapeHTML(s.dataset.path)}</span>`:''}`);
     if(compute) details+=row('Selected features',`<strong class="review-count">${s.features.length}</strong><ul>${s.features.map(n=>'<li>'+escapeHTML(n)+'</li>').join('')}</ul>`);
     else details+=row('Knowledge',`${s.knowledge.length?`<ul>${s.knowledge.map(name=>`<li>${icon('book')}${escapeHTML(name)}</li>`).join('')}</ul>`:''}<label class="deep-research-option"><input id="deep-research-checkbox" type="checkbox" ${d.request.deepResearch?'checked':''}> Use Deep Research to prepare background knowledge</label>${s.knowledge.length?'<small>Deep Research is added alongside your uploaded files.</small>':''}`)+row('Feature number',`<strong class="review-count">${s.featureNumber}</strong><small>Target count · retained results may vary after validation.</small>`);
@@ -250,7 +251,7 @@ function featureRows() {
   return features.filter(f => `${f.name} ${f.route} ${f.category}`.toLowerCase().includes(query)).map(f => `<label class="feature-row"><input type="checkbox" data-feature="${f.id}" ${state.selectedFeatures.has(f.id) ? 'checked' : ''} /><div><strong>${f.name}</strong><small>${f.description}</small></div><span class="route-tag">${f.route}</span><span>${f.category}</span></label>`).join('') || '<div class="empty">No features match your search.</div>';
 }
 function reusePage() {
-  return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>What would you like to compute?</h1><p>Apply the features saved by a previous run to a new dataset.</p></div><div class="composer"><textarea id="compute-question" aria-label="Compute question" placeholder="Describe what you want to measure on this dataset…">${escapeHTML(state.computeQuestion)}</textarea><div class="composer-footer"><div class="composer-tools"><button class="composer-chip" data-action="compute-source">${icon('history')}Upload features</button><button class="composer-chip" data-action="reuse-upload">${icon('plus')}Add data</button></div><button class="submit" data-action="prepare-compute" aria-label="Review and compute">${icon('arrow')}</button></div></div><p class="compute-note">Launch the desktop workspace to load saved scripts and compute real measurements.</p></section>`;
+  return `<section class="home compute-home fade-in"><div class="home-heading">${mark('discovery-mark')}<h1>Compute saved features</h1><p>Apply the features a previous run saved to a new dataset. The feature set is already fixed, so there is nothing to describe.</p></div><div class="composer composer-tools-only"><div class="composer-footer"><div class="composer-tools"><button class="composer-chip" data-action="compute-source">${icon('history')}Upload features</button><button class="composer-chip" data-action="reuse-upload">${icon('plus')}Add data</button></div><button class="submit" data-action="prepare-compute" aria-label="Review and compute">${icon('arrow')}</button></div></div><p class="compute-note">Launch the desktop workspace to load saved scripts and compute real measurements.</p></section>`;
 }
 function visualizePage() {
   const f = features[state.vizFeature];
@@ -336,7 +337,6 @@ function exportFeatures() {
 app.addEventListener('input',e => {
   if (e.target.id === 'question') state.question = e.target.value;
   if (e.target.id === 'help-question') state.help.draft = e.target.value;
-  if (e.target.id === 'compute-question') state.computeQuestion = e.target.value;
   if (e.target.id === 'feature-number') state.featureNumber = e.target.value;
   if (e.target.dataset.config) state.config[e.target.dataset.config] = e.target.value;
   if (e.target.id === 'feature-search') { state.search = e.target.value; document.getElementById('feature-list').innerHTML = featureRows(); }
