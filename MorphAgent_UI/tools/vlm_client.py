@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 import json
 import re
+import threading
 import time
 from PIL import Image
 import numpy as np
@@ -30,6 +31,79 @@ _multi_gpu_clients: Dict[int, "VLMClient"] = {}
 
 # Online API VLM client singleton (used when provider=online)
 _global_online_vlm_client: Optional["OnlineVLMClient"] = None
+
+# One client is shared by every scoring thread, so the singletons above must be
+# created exactly once even when several threads reach them simultaneously.
+_client_lock = threading.Lock()
+
+# Local weights are one GPU model shared by the whole process: concurrent
+# generate() calls on it are not safe, so the local path serialises scoring.
+_local_generate_lock = threading.RLock()
+
+
+def _cleans_up_scratch(method):
+    """Remove this thread's scratch image directories however the call ends.
+
+    Pool threads are reused across samples, so a directory left behind by a
+    failed request would sit in the temp dir for the rest of the run, and at
+    concurrency 8 those add up.
+    """
+    import functools
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            if self._temp_dirs:
+                self.cleanup_temp_files()
+
+    return wrapper
+
+
+def _can_arm_sigalrm() -> bool:
+    """SIGALRM exists only on Unix and can only be armed from the main thread.
+
+    Calling it from a worker raises ValueError, so the local-weights path drops
+    its watchdog rather than crashing when it is reached off the main thread.
+    """
+    import signal as _signal
+
+    return hasattr(_signal, "SIGALRM") and threading.current_thread() is threading.main_thread()
+
+
+def _is_rate_limit_error(exc: Optional[Exception]) -> bool:
+    """Recognise provider throttling across the shapes different gateways use."""
+    if exc is None:
+        return False
+    if getattr(getattr(exc, "response", None), "status_code", None) == 429:
+        return True
+    if getattr(exc, "status_code", None) == 429:
+        return True
+    message = str(exc).lower()
+    return "429" in message or "rate limit" in message or "too many requests" in message
+
+
+def _retry_delay_seconds(exc: Optional[Exception], attempt: int) -> float:
+    """Back off before the next attempt, honouring the provider's own guidance.
+
+    Several threads are throttled at the same instant, so a fixed schedule makes
+    them all retry together and trip the limit again. The jitter spreads them.
+    """
+    import random
+
+    from config import _get_retry_after_seconds
+
+    delay = min(60.0, 5.0 * (2 ** (attempt - 1)))
+    if _is_rate_limit_error(exc):
+        delay = min(60.0, max(delay, 10.0 * attempt))
+        try:
+            retry_after = _get_retry_after_seconds(exc)
+        except Exception:
+            retry_after = None
+        if retry_after:
+            delay = min(60.0, max(delay, float(retry_after)))
+    return delay * (1.0 + random.random() * 0.25)
 
 
 def _repro_vlm_model_name() -> str:
@@ -109,37 +183,40 @@ def get_vlm_client(model_path: Optional[str] = None, device: Optional[str] = Non
     """
     from config import settings
     global _global_vlm_client, _multi_gpu_clients, _global_online_vlm_client
-    
-    # Online API mode (OpenAI-compatible multimodal): do not load any local model, ignore gpu_id, use a singleton
-    if getattr(settings, "vlm_api_provider", "qwen") == "online":
-        if _global_online_vlm_client is None:
-            _global_online_vlm_client = OnlineVLMClient()
-        return _global_online_vlm_client
-    
-    # Multi-GPU mode: create a separate client for each GPU
-    if gpu_id is not None:
-        if gpu_id not in _multi_gpu_clients:
-            model_path = model_path or settings.vlm_model_path
-            # Build the device string, e.g. "cuda:0", "cuda:1"
-            if device is None:
-                device = f"cuda:{gpu_id}"
-            else:
-                # If a device is provided, make sure the correct GPU ID is used
-                if "cuda" in device.lower():
+
+    # Concurrent scoring threads all land here; without the lock two of them can
+    # both see "None" and build (or load weights for) a second client.
+    with _client_lock:
+        # Online API mode (OpenAI-compatible multimodal): do not load any local model, ignore gpu_id, use a singleton
+        if getattr(settings, "vlm_api_provider", "qwen") == "online":
+            if _global_online_vlm_client is None:
+                _global_online_vlm_client = OnlineVLMClient()
+            return _global_online_vlm_client
+
+        # Multi-GPU mode: create a separate client for each GPU
+        if gpu_id is not None:
+            if gpu_id not in _multi_gpu_clients:
+                model_path = model_path or settings.vlm_model_path
+                # Build the device string, e.g. "cuda:0", "cuda:1"
+                if device is None:
                     device = f"cuda:{gpu_id}"
-            _multi_gpu_clients[gpu_id] = VLMClient(model_path=model_path, device=device, gpu_id=gpu_id)
+                else:
+                    # If a device is provided, make sure the correct GPU ID is used
+                    if "cuda" in device.lower():
+                        device = f"cuda:{gpu_id}"
+                _multi_gpu_clients[gpu_id] = VLMClient(model_path=model_path, device=device, gpu_id=gpu_id)
+                # Load the model immediately
+                _multi_gpu_clients[gpu_id]._load_model()
+            return _multi_gpu_clients[gpu_id]
+
+        # Single-GPU mode: use the global singleton
+        if _global_vlm_client is None:
+            model_path = model_path or settings.vlm_model_path
+            device = device or settings.vlm_device
+            _global_vlm_client = VLMClient(model_path=model_path, device=device)
             # Load the model immediately
-            _multi_gpu_clients[gpu_id]._load_model()
-        return _multi_gpu_clients[gpu_id]
-    
-    # Single-GPU mode: use the global singleton
-    if _global_vlm_client is None:
-        model_path = model_path or settings.vlm_model_path
-        device = device or settings.vlm_device
-        _global_vlm_client = VLMClient(model_path=model_path, device=device)
-        # Load the model immediately
-        _global_vlm_client._load_model()
-    return _global_vlm_client
+            _global_vlm_client._load_model()
+        return _global_vlm_client
 
 
 class VLMClient:
@@ -159,8 +236,29 @@ class VLMClient:
         self.gpu_id = gpu_id
         self._model = None
         self._processor = None
+        self._load_lock = threading.Lock()
+        self._temp_dir_store = threading.local()
         self._temp_dirs = []  # Track temporary directories, used for cleanup
-    
+
+    @property
+    def _temp_dirs(self) -> List[str]:
+        """Scratch directories created for the calling thread only.
+
+        One client instance is shared by every scoring thread, and
+        ``cleanup_temp_files`` deletes everything it finds. Keeping the list per
+        thread stops a finishing thread from deleting the images another thread
+        is still uploading.
+        """
+        store = self._temp_dir_store
+        if not hasattr(store, "dirs"):
+            store.dirs = []
+        return store.dirs
+
+    @_temp_dirs.setter
+    def _temp_dirs(self, value: Optional[List[str]]) -> None:
+        self._temp_dir_store.dirs = list(value or [])
+
+
     def _load_model(self):
         """Lazily load the local model (to avoid loading it at import time).
 
@@ -169,6 +267,14 @@ class VLMClient:
         (--vlm-api-provider qwen), in which case ``modelscope`` and a GPU build of
         ``torch`` must be installed manually.
         """
+        if self._model is not None:
+            return
+        # Two threads reaching this together would otherwise load the weights twice.
+        with self._load_lock:
+            if self._model is None:
+                self._load_model_locked()
+
+    def _load_model_locked(self):
         if self._model is None:
             try:
                 from modelscope import Qwen3VLForConditionalGeneration, AutoProcessor
@@ -205,6 +311,7 @@ class VLMClient:
             )
             print(f"[VLM] Model loading completed{gpu_info}")
     
+    @_cleans_up_scratch
     def score_feature(
         self,
         feature_def: Dict[str, Any],
@@ -340,11 +447,13 @@ class VLMClient:
         
         try:
             # Set the timeout (only supported on Unix systems)
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(timeout_seconds)
             
-            with torch.no_grad():
+            # One set of weights is shared process-wide; concurrent generate()
+            # calls on it are not safe, so local scoring is serialised.
+            with _local_generate_lock, torch.no_grad():
                 generated_ids = self._model.generate(
                     **device_inputs, 
                     max_new_tokens=settings.vlm_max_tokens,  # Read the token limit from config
@@ -353,7 +462,7 @@ class VLMClient:
                 )
             
             # Cancel the timeout
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.alarm(0)
             
             elapsed = time.time() - start_time
@@ -396,7 +505,7 @@ class VLMClient:
             raise
         finally:
             # Ensure the timeout is cancelled
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.alarm(0)
         
         # Extract the generated text
@@ -439,6 +548,7 @@ class VLMClient:
         )
         return score, full_response
     
+    @_cleans_up_scratch
     def score_features_batch(
         self,
         features: List[Dict[str, Any]],
@@ -566,11 +676,13 @@ class VLMClient:
         
         try:
             # Set the timeout (only supported on Unix systems)
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(timeout_seconds)
             
-            with torch.no_grad():
+            # One set of weights is shared process-wide; concurrent generate()
+            # calls on it are not safe, so local scoring is serialised.
+            with _local_generate_lock, torch.no_grad():
                 generated_ids = self._model.generate(
                     **device_inputs, 
                     max_new_tokens=settings.vlm_max_tokens,
@@ -579,7 +691,7 @@ class VLMClient:
                 )
             
             # Cancel the timeout
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.alarm(0)
             
             elapsed = time.time() - start_time
@@ -622,7 +734,7 @@ class VLMClient:
             raise
         finally:
             # Ensure the timeout is cancelled
-            if hasattr(signal, 'SIGALRM'):
+            if _can_arm_sigalrm():
                 signal.alarm(0)
         
         # Extract the generated text
@@ -1036,7 +1148,7 @@ class VLMClient:
         return processed_paths
     
     def cleanup_temp_files(self):
-        """Clean up all temporary file directories"""
+        """Clean up the temporary directories this thread created."""
         import shutil
         for temp_dir in self._temp_dirs:
             if temp_dir and Path(temp_dir).exists():
@@ -1069,6 +1181,10 @@ class OnlineVLMClient(VLMClient):
         self.model = model or settings.vlm_online_model
         self.default_headers = default_headers if default_headers is not None else settings.vlm_online_default_headers
         self.gpu_id = None
+        # Every scoring thread shares this instance, so the endpoint adaptations
+        # below (which rebuild the client) are applied under one lock.
+        self._load_lock = threading.Lock()
+        self._temp_dir_store = threading.local()
         self._temp_dirs = []
         self._client = None
         self._v1_fallback_tried = False
@@ -1076,7 +1192,11 @@ class OnlineVLMClient(VLMClient):
 
     def _load_model(self):
         """Online mode does not need to load a local model; lazily create the OpenAI client."""
-        if self._client is None:
+        if self._client is not None:
+            return
+        with self._load_lock:
+            if self._client is not None:
+                return
             from openai import OpenAI
             kwargs = {"base_url": self.base_url, "api_key": self.api_key}
             if self.default_headers:
@@ -1087,20 +1207,25 @@ class OnlineVLMClient(VLMClient):
     def _maybe_switch_to_v1_base_url(self, exc: Exception, log_fn) -> bool:
         from utils_modules.openai_base_url import is_http_404_error, with_v1_suffix
 
-        if self._v1_fallback_tried or not is_http_404_error(exc):
+        if not is_http_404_error(exc):
             return False
-        candidate = with_v1_suffix(str(self.base_url or ""))
-        if not candidate:
-            return False
-        self._v1_fallback_tried = True
-        self.base_url = candidate
-        self._client = None
-        log_fn(f"[VLM-Online] API returned 404; retrying with base_url={candidate}")
-        try:
-            from config import settings as _settings
-            _settings.vlm_online_base_url = candidate
-        except Exception:
-            pass
+        with self._load_lock:
+            # Concurrent threads all hit the same 404; only the first switches,
+            # and the rest simply retry against the endpoint it installed.
+            if self._v1_fallback_tried:
+                return False
+            candidate = with_v1_suffix(str(self.base_url or ""))
+            if not candidate:
+                return False
+            self._v1_fallback_tried = True
+            self.base_url = candidate
+            self._client = None
+            log_fn(f"[VLM-Online] API returned 404; retrying with base_url={candidate}")
+            try:
+                from config import settings as _settings
+                _settings.vlm_online_base_url = candidate
+            except Exception:
+                pass
         self._load_model()
         return True
 
@@ -1109,9 +1234,12 @@ class OnlineVLMClient(VLMClient):
 
         from config import _is_temperature_unsupported_error
 
-        if self._omit_temperature or not _is_temperature_unsupported_error(exc):
+        if not _is_temperature_unsupported_error(exc):
             return False
-        self._omit_temperature = True
+        with self._load_lock:
+            if self._omit_temperature:
+                return False
+            self._omit_temperature = True
         log_fn("[VLM-Online] Adjusted sampling settings for model compatibility.")
         return True
 
@@ -1190,7 +1318,13 @@ class OnlineVLMClient(VLMClient):
                 req_kwargs["temperature"] = get_vlm_temperature()
             if _settings.reproduce_mode:
                 req_kwargs["seed"] = _settings.reproduce_seed
-            resp = self._client.chat.completions.create(**req_kwargs)
+            # Read the client once: another thread may be swapping it while
+            # adapting the endpoint, and a half-read attribute would crash here.
+            client = self._client
+            if client is None:
+                self._load_model()
+                client = self._client
+            resp = client.chat.completions.create(**req_kwargs)
             return resp.choices[0].message.content or ""
 
         def _log(msg: str) -> None:
@@ -1243,9 +1377,10 @@ class OnlineVLMClient(VLMClient):
                             f"{type(retry_exc).__name__}: {retry_exc}"
                         )
             if attempt < max_attempts:
-                time.sleep(min(60, 5 * (2 ** (attempt - 1))))
+                time.sleep(_retry_delay_seconds(last_exc, attempt))
         raise last_exc if last_exc else RuntimeError("[VLM-Online] Unknown error")
 
+    @_cleans_up_scratch
     def score_feature(
         self,
         feature_def: Dict[str, Any],
@@ -1290,6 +1425,7 @@ class OnlineVLMClient(VLMClient):
         )
         return score, full_response
 
+    @_cleans_up_scratch
     def score_features_batch(
         self,
         features: List[Dict[str, Any]],

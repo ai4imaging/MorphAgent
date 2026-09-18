@@ -174,6 +174,13 @@ def _find_conda_python(conda_env: str) -> Optional[Path]:
     return None
 
 
+def _sandbox_install_lock_path() -> str:
+    """The mutex the sandbox subprocesses share with this process's fix scripts."""
+    from tools.concurrency import SANDBOX_INSTALL_LOCK_PATH
+
+    return SANDBOX_INSTALL_LOCK_PATH
+
+
 def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentation: bool = False, conda_env: Optional[str] = None) -> str:
     """Create a wrapper script used to execute the extract function in the sandbox
     
@@ -373,6 +380,33 @@ def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentat
         "    }",
         "    def _norm_pkg(name):",
         "        return (name or '').strip().lower().replace('_', '-')",
+        "    # Parallel feature workers run as separate sandbox processes that share",
+        "    # one environment, so installs are serialised with a cross-process",
+        "    # mutex. It yields after a deadline rather than ever stalling a run.",
+        "    import time as _time",
+        f"    _INSTALL_LOCK = {repr(_sandbox_install_lock_path())}",
+        "    def _acquire_install_lock(timeout=120):",
+        "        deadline = _time.time() + timeout",
+        "        while _time.time() < deadline:",
+        "            try:",
+        "                os.mkdir(_INSTALL_LOCK)",
+        "                return True",
+        "            except FileExistsError:",
+        "                try:",
+        "                    if _time.time() - os.path.getmtime(_INSTALL_LOCK) > 300:",
+        "                        os.rmdir(_INSTALL_LOCK)  # owner died holding it",
+        "                        continue",
+        "                except Exception:",
+        "                    pass",
+        "                _time.sleep(0.5)",
+        "            except Exception:",
+        "                return False",
+        "        return False",
+        "    def _release_install_lock():",
+        "        try:",
+        "            os.rmdir(_INSTALL_LOCK)",
+        "        except Exception:",
+        "            pass",
         "    def _is_core_pkg(name):",
         "        top = (name or '').split('.')[0]",
         "        return _norm_pkg(name) in {_norm_pkg(p) for p in _CORE_SCIENCE} or top.lower() in _CORE_SCIENCE",
@@ -399,7 +433,12 @@ def _create_wrapper_script(extract_py_path: Path, data_root: Path, has_segmentat
         f"                cmd = ['conda', 'run', '-n', conda_env, 'pip', 'install', name]",
         "            else:",
         "                cmd = [sys.executable, '-m', 'pip', 'install', name]",
-        "            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)",
+        "            _held = _acquire_install_lock()",
+        "            try:",
+        "                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)",
+        "            finally:",
+        "                if _held:",
+        "                    _release_install_lock()",
         "            if result.returncode == 0:",
         "                return True",
         "            return False",
@@ -1189,8 +1228,14 @@ INSTALL_EOF
         script_path.write_text(script + "\n", encoding="utf-8")
         script_path.chmod(0o755)
         
+        from tools.concurrency import sandbox_install_mutex
+
         try:
-            subprocess.run(["bash", str(script_path)], check=True, timeout=60)
+            # Parallel features share one sandbox environment, and two pip runs
+            # installing into it at once can leave it half-written. The same
+            # mutex is taken by the sandbox subprocesses' own auto-install.
+            with sandbox_install_mutex():
+                subprocess.run(["bash", str(script_path)], check=True, timeout=60)
             print(f"    [OK] Fix script executed successfully (in environment '{target_env}')")
         except subprocess.CalledProcessError as exc:
             print(f"    [WARN]  Fix script execution failed: {exc}")
@@ -1349,56 +1394,16 @@ Please analyze the image and provide your evaluation."""
                     vlm_client.cleanup_temp_files()
                 return _parse_critic_response(generated_text)
 
-            # Local Qwen path: retain the original processor/model call logic
-            processed_image_paths = vlm_client._preprocess_images(image_paths, None)
-            image_paths_abs = [str(Path(p).resolve()) for p in processed_image_paths]
+            # Local Qwen path: retain the original processor/model call logic.
+            # Concurrent feature workers share these weights, and a single GPU
+            # model cannot serve two generate() calls at once.
+            from tools.concurrency import CRITIC_LOCK
 
-            messages = [{
-                "role": "user",
-                "content": [
-                    *[{"type": "image", "image": path} for path in image_paths_abs],
-                    {"type": "text", "text": critic_prompt},
-                ],
-            }]
-
-            inputs = vlm_client._processor.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_dict=True,
-                return_tensors="pt"
-            )
-
-            import torch
-            device = next(vlm_client._model.parameters()).device
-            device_inputs = {
-                k: v.to(device) if isinstance(v, torch.Tensor) else v
-                for k, v in inputs.items()
-            }
-
-            del inputs
-
-            with torch.no_grad():
-                generated_ids = vlm_client._model.generate(
-                    **device_inputs,
-                    max_new_tokens=512,
-                    do_sample=False,
-                    temperature=__import__("config").get_vlm_temperature()
+            with CRITIC_LOCK:
+                return _critic_via_local_weights(
+                    vlm_client, image_paths, critic_prompt, _parse_critic_response
                 )
 
-            generated_ids_trimmed = [
-                out_ids[len(in_ids):]
-                for in_ids, out_ids in zip(device_inputs["input_ids"], generated_ids)
-            ]
-
-            generated_text = vlm_client._processor.batch_decode(
-                generated_ids_trimmed,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False
-            )[0]
-
-            return _parse_critic_response(generated_text)
-                
         except Exception as e:
             print(f"      [WARN]  Critic evaluation error (VLM request failed); skipping — NOT counted as a pass: {e}")
             import traceback
@@ -1407,7 +1412,7 @@ Please analyze the image and provide your evaluation."""
             # falsely print "Critic evaluation passed", and do not burn
             # regenerate cycles on a broken VLM call.
             return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
-            
+
     except ImportError:
         print(f"      [WARN]  VLM client is not available; skipping critic evaluation")
         return True, ""
@@ -1416,6 +1421,60 @@ Please analyze the image and provide your evaluation."""
         import traceback
         traceback.print_exc()
         return True, f"[CRITIC_SKIPPED_VLM_ERROR] {e}"
+
+
+def _critic_via_local_weights(vlm_client, image_paths, critic_prompt, parse_response):
+    """Score a critic prompt with locally hosted weights. Caller holds CRITIC_LOCK."""
+    from pathlib import Path
+
+    processed_image_paths = vlm_client._preprocess_images(image_paths, None)
+    image_paths_abs = [str(Path(p).resolve()) for p in processed_image_paths]
+
+    messages = [{
+        "role": "user",
+        "content": [
+            *[{"type": "image", "image": path} for path in image_paths_abs],
+            {"type": "text", "text": critic_prompt},
+        ],
+    }]
+
+    inputs = vlm_client._processor.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_dict=True,
+        return_tensors="pt"
+    )
+
+    import torch
+    device = next(vlm_client._model.parameters()).device
+    device_inputs = {
+        k: v.to(device) if isinstance(v, torch.Tensor) else v
+        for k, v in inputs.items()
+    }
+
+    del inputs
+
+    with torch.no_grad():
+        generated_ids = vlm_client._model.generate(
+            **device_inputs,
+            max_new_tokens=512,
+            do_sample=False,
+            temperature=__import__("config").get_vlm_temperature()
+        )
+
+    generated_ids_trimmed = [
+        out_ids[len(in_ids):]
+        for in_ids, out_ids in zip(device_inputs["input_ids"], generated_ids)
+    ]
+
+    generated_text = vlm_client._processor.batch_decode(
+        generated_ids_trimmed,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False
+    )[0]
+
+    return parse_response(generated_text)
 
 
 def run_code_generation_test_only(

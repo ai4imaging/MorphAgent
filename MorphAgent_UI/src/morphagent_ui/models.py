@@ -161,7 +161,11 @@ class RunConfig:
     code_vlm_ratio: float = field(default_factory=lambda: _environment_ratio("CODE_VLM_RATIO", 0.5))
     knowledge_dependency: float = field(default_factory=lambda: _environment_ratio("KNOWLEDGE_DEPENDENCY", 0.5))
     code_parallel_workers: int = field(default_factory=lambda: _environment_int("CODE_PARALLEL_WORKERS", 1))
-    vlm_online_concurrency: int = field(default_factory=lambda: _environment_int("VLM_ONLINE_CONCURRENCY", 1))
+    # API concurrency. VLM scoring is a network round trip per sample, so it
+    # takes the wider setting; code generation drives a sandbox test per feature
+    # alongside its LLM calls, so it stays narrow.
+    vlm_online_concurrency: int = field(default_factory=lambda: _environment_int("VLM_ONLINE_CONCURRENCY", 8))
+    code_gen_workers: int = field(default_factory=lambda: _environment_int("CODE_GEN_WORKERS", 2))
     multigpu: bool = False
     api_provider: str = "default"
     vlm_api_provider: str = "online"
@@ -190,7 +194,6 @@ class RunConfig:
         self.temperature = 0.0
         self.reproduce = True
         self.code_parallel_workers = 1
-        self.vlm_online_concurrency = 1
 
     def apply_reference_demo(self) -> Path:
         """Load the Tau demo dataset and enable precomputed knowledge summaries."""
@@ -408,6 +411,7 @@ class RunConfig:
             "--knowledge-dependency", str(self.knowledge_dependency),
             "--code-parallel-workers", str(self.code_parallel_workers),
             "--vlm-online-concurrency", str(self.vlm_online_concurrency),
+            "--code-gen-workers", str(self.code_gen_workers),
             "--api-provider", self.api_provider,
             "--vlm-api-provider", self.vlm_api_provider,
         ])

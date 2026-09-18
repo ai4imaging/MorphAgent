@@ -1369,6 +1369,11 @@ def process_dataset_level_analysis(
     }
 
 
+def _flag_was_given(flag: str) -> bool:
+    """Whether the caller spelled out this flag, as opposed to inheriting its default."""
+    return any(arg == flag or arg.startswith(f"{flag}=") for arg in sys.argv[1:])
+
+
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(
@@ -1437,8 +1442,10 @@ Examples:
                         help="Enable multi-GPU parallel processing of VLM features (one independent process per GPU card)")
     parser.add_argument("--code-parallel-workers", type=int, default=1,
                         help="Number of parallel processes for code feature extraction (default 1, i.e. serial processing; use parallel processing when set greater than 1)")
-    parser.add_argument("--vlm-online-concurrency", type=int, default=1,
-                        help="Number of concurrent threads for the online VLM API (effective when vlm-api-provider=online, default 1=serial; the API is I/O bound, so setting 8-16 can significantly speed things up)")
+    parser.add_argument("--vlm-online-concurrency", type=int, default=8,
+                        help="Number of concurrent requests to the online VLM API (effective when vlm-api-provider=online, default 8; the API is I/O bound, so concurrency is mostly waiting on the network. Set 1 for strictly serial calls)")
+    parser.add_argument("--code-gen-workers", type=int, default=2,
+                        help="Number of features whose extraction code is generated concurrently (default 2). Each worker drives its own LLM conversation and sandbox test; set 1 for strictly serial generation")
     
     # Illumination Correction parameters
     parser.add_argument("--enable-illumination-correction", action="store_true", default=None,
@@ -1519,9 +1526,20 @@ Examples:
         if args.code_parallel_workers > 1:
             print(f"  [reproduce] code-parallel-workers {args.code_parallel_workers} -> 1 (deterministic)")
             args.code_parallel_workers = 1
-        if getattr(args, "vlm_online_concurrency", 1) > 1:
-            print(f"  [reproduce] vlm-online-concurrency {args.vlm_online_concurrency} -> 1 (deterministic)")
-            args.vlm_online_concurrency = 1
+        # API concurrency is kept when it was asked for explicitly: each request
+        # carries its own seed and results are reordered by feature/sample before
+        # anything downstream sees them, so concurrency does not change the
+        # numbers. Left implicit, it still yields to strict determinism.
+        for flag, attribute in (("--vlm-online-concurrency", "vlm_online_concurrency"),
+                                ("--code-gen-workers", "code_gen_workers")):
+            value = int(getattr(args, attribute, 1) or 1)
+            if value <= 1:
+                continue
+            if _flag_was_given(flag):
+                print(f"  [reproduce] keeping {flag} {value} (explicitly requested; per-request seeds retained)")
+            else:
+                print(f"  [reproduce] {flag} {value} -> 1 (deterministic)")
+                setattr(args, attribute, 1)
         apply_reproduce_mode(args.reproduce_seed)
         print(f"  [reproduce] Enabled: temperature=0, seed={args.reproduce_seed}, VLM caching on")
     
@@ -2198,15 +2216,34 @@ Examples:
                     concurrency = max(1, int(getattr(args, "vlm_online_concurrency", 8)))
                     needs_segmentation = (any(f.get("needs_segmentation", False) for f in vlm_features) and args.enable_segmentation)
 
-                    batch_log_file = None
+                    from tools.concurrency import append_log
+                    from tools.vlm_client import _retry_delay_seconds
+
+                    batch_log_dir = None
+                    summary_log_file = None
                     if round_results_dir:
                         batch_log_dir = round_results_dir / "features" / "vlm_batch"
                         batch_log_dir.mkdir(parents=True, exist_ok=True)
-                        batch_log_file = batch_log_dir / "execution_log.txt"
-                    log_lock = threading.Lock()
+                        summary_log_file = batch_log_dir / "execution_log.txt"
+
+                    def sample_log_file(sample_id):
+                        """One log per sample: concurrent scoring would otherwise
+                        interleave the traces of samples into an unreadable file."""
+                        if batch_log_dir is None:
+                            return None
+                        safe = re.sub(r"[^A-Za-z0-9._-]", "_", str(sample_id))
+                        return batch_log_dir / f"execution_log_{safe}.txt"
+
                     results_lock = threading.Lock()
 
                     def _process_one_vlm_sample(sample_id):
+                        """Never raises: one unreadable sample must not abort the round."""
+                        try:
+                            return _score_one_vlm_sample(sample_id)
+                        except Exception as e:
+                            return sample_id, None, f"{type(e).__name__}: {e}"
+
+                    def _score_one_vlm_sample(sample_id):
                         sample_dir = data_root / sample_id
                         if not sample_dir.exists():
                             return sample_id, None, "Sample directory does not exist"
@@ -2232,13 +2269,14 @@ Examples:
                             "features_list": [{"name": f.get("name", ""), "description": f.get("description", ""), "category": f.get("category", "")} for f in vlm_features],
                             "num_features": len(vlm_features),
                         }
+                        log_file = sample_log_file(sample_id)
                         max_attempts = 3
                         for attempt in range(1, max_attempts + 1):
                             try:
                                 batch_results = _execute_vlm_features_batch(
                                     vlm_features, image_paths, state,
                                     segmentation_mask=sample_seg_mask if (needs_segmentation and sample_seg_mask is not None) else None,
-                                    log_file=str(batch_log_file) if batch_log_file else None,
+                                    log_file=str(log_file) if log_file else None,
                                 )
                                 if batch_results and any(v is not None for v in batch_results.values()):
                                     return sample_id, batch_results, None
@@ -2248,7 +2286,10 @@ Examples:
                             except Exception as e:
                                 if attempt >= max_attempts:
                                     return sample_id, None, f"{type(e).__name__}: {e}"
-                                _time.sleep(1)
+                                # Concurrent samples get throttled together, so
+                                # back off on the provider's terms with jitter
+                                # rather than retrying in lockstep after 1s.
+                                _time.sleep(_retry_delay_seconds(e, attempt))
                         return sample_id, None, "Unknown error"
 
                     print(f"  [INFO] Online API concurrency mode: {concurrency} concurrent threads, processing {len(sample_ids)} samples")
@@ -2267,10 +2308,8 @@ Examples:
                                                 all_results[sample_id] = {feat_name: value}
                                     elif sample_id not in all_results:
                                         all_results[sample_id] = {}
-                                if err and batch_log_file:
-                                    with log_lock:
-                                        with open(batch_log_file, 'a', encoding='utf-8') as _lf:
-                                            _lf.write(f"{sample_id}: [WARN]  {err}\n")
+                                if err:
+                                    append_log(summary_log_file, f"{sample_id}: [WARN]  {err}\n")
                                 completed += 1
                                 pbar.update(1)
                     print(f"  [OK] Online concurrent processing complete: {completed}/{len(sample_ids)} samples")
@@ -2627,17 +2666,30 @@ Examples:
                 # Step 1: Generate and test code for each feature (do not run all samples)
                 from tools.code_executor import run_code_generation_test_only
                 from state import AgentState
-                
+                from tools.concurrency import collected_output, run_ordered, thread_grouped_stdout
+
                 successful_features = []
                 successful_code_paths = []
                 failed_features = []
-                
-                for i, feature in enumerate(code_features, 1):
-                    original_feature_name = feature.get('name', f'feature_{i}')
-                    print(f"\n  Feature [{i}/{len(code_features)}]: {original_feature_name}")
-                    print(f"    Method: code (generate and test)")
-                    
-                    # Build AgentState
+
+                # Get the data path selector
+                from tools.data_path_selector import get_data_path_selector
+                selector = get_data_path_selector(verbose=False)
+
+                def find_code_data_sources(sample_dir, _):
+                    temp_feature = {"method": "code"}
+                    result = selector.select_data_paths(
+                        Path(sample_dir),
+                        temp_feature,
+                        dataset_description,
+                        method="code"
+                    )
+                    if isinstance(result, dict):
+                        return result.get("image_paths", [])
+                    else:
+                        return result if isinstance(result, list) else []
+
+                def build_feature_state(feature) -> "AgentState":
                     state: AgentState = {
                         "messages": [],
                         "user_query": "",
@@ -2658,9 +2710,8 @@ Examples:
                         "feature_description": feature.get("description", ""),
                         "feature_category": feature.get("category", ""),
                     }
-                    
+
                     # Try to read mask order information from the segmentation summary
-                    segmentation_mask_order = ""
                     try:
                         if round_results_dir:
                             segmentation_summary_path = round_results_dir / "segmentation_summary.json"
@@ -2668,50 +2719,87 @@ Examples:
                                 import json
                                 with open(segmentation_summary_path, 'r', encoding='utf-8') as f:
                                     summary = json.load(f)
-                                    segmentation_mask_order = summary.get("mask_order_description", "")
-                                    state["segmentation_mask_order"] = segmentation_mask_order
+                                    state["segmentation_mask_order"] = summary.get("mask_order_description", "")
                     except Exception:
                         pass
-                    
-                    # Get the data path selector
-                    from tools.data_path_selector import get_data_path_selector
-                    selector = get_data_path_selector(verbose=False)
-                    
-                    def find_code_data_sources(sample_dir, _):
-                        temp_feature = {"method": "code"}
-                        result = selector.select_data_paths(
-                            Path(sample_dir),
-                            temp_feature,
-                            dataset_description,
-                            method="code"
-                        )
-                        if isinstance(result, dict):
-                            return result.get("image_paths", [])
+                    return state
+
+                def generate_one_code_feature(index, feature):
+                    """Generate and test one feature. Never raises: a crash here must
+                    cost one feature, not the whole round."""
+                    original_feature_name = feature.get('name', f'feature_{index}')
+                    state = build_feature_state(feature)
+                    with collected_output() as output:
+                        print(f"\n  Feature [{index}/{len(code_features)}]: {original_feature_name}")
+                        print(f"    Method: code (generate and test)")
+                        try:
+                            # Generate and test the code (test only the first sample)
+                            extract_py_path, _ = run_code_generation_test_only(
+                                feature,
+                                state,
+                                sample_ids,
+                                data_root,
+                                find_code_data_sources,
+                                round_results_dir,
+                                conda_env=None,
+                                max_cycles=None,
+                                segmentation_mask_path=None,
+                                enable_critic=settings.enable_critic_agent  # pass the critic agent enabled state
+                            )
+                        except Exception as exc:
+                            import traceback
+                            print(f"    [ERROR] Code generation raised {type(exc).__name__}: {exc}")
+                            traceback.print_exc(file=sys.stdout)
+                            extract_py_path = None
+
+                        if extract_py_path and extract_py_path.exists():
+                            print(f"    [OK] Code generation and test succeeded: {extract_py_path}")
                         else:
-                            return result if isinstance(result, list) else []
-                    
-                    # Generate and test the code (test only the first sample)
-                    extract_py_path, code_result = run_code_generation_test_only(
-                        feature,
-                        state,
-                        sample_ids,
-                        data_root,
-                        find_code_data_sources,
-                        round_results_dir,
-                        conda_env=None,
-                        max_cycles=None,
-                        segmentation_mask_path=None,
-                        enable_critic=settings.enable_critic_agent  # pass the critic agent enabled state
+                            print(f"    [ERROR] Code generation or test failed, skipping this feature")
+                            extract_py_path = None
+                    return index, feature, extract_py_path, state, output[0]
+
+                indexed_features = list(enumerate(code_features, 1))
+                code_gen_workers = max(1, min(int(args.code_gen_workers), len(code_features)))
+
+                # Features share a working directory named after them, so two
+                # features with one name would overwrite each other's code.
+                duplicate_names = len({f.get("name") for f in code_features}) != len(code_features)
+                if code_gen_workers > 1 and duplicate_names:
+                    print("  [WARN]  Duplicate feature names found; generating serially to keep their code separate")
+                    code_gen_workers = 1
+
+                if code_gen_workers > 1:
+                    print(
+                        f"  [INFO] Generating feature code on {code_gen_workers} threads "
+                        f"({len(code_features)} features)"
                     )
-                    
-                    if extract_py_path and extract_py_path.exists():
-                        print(f"    [OK] Code generation and test succeeded: {extract_py_path}")
+
+                def report_feature(outcome):
+                    feature_log = outcome[4]
+                    if feature_log:
+                        print(feature_log, end="", flush=True)
+
+                with thread_grouped_stdout():
+                    outcomes = run_ordered(
+                        indexed_features,
+                        lambda item: generate_one_code_feature(*item),
+                        code_gen_workers,
+                        on_result=report_feature,
+                    )
+
+                # run_ordered replays in planned order, so merging and the CSV
+                # columns downstream cannot depend on which thread finished first.
+                state = None
+                for _, feature, extract_py_path, feature_state, _ in outcomes:
+                    state = feature_state
+                    if extract_py_path is not None:
                         successful_features.append(feature)
                         successful_code_paths.append(extract_py_path)
                     else:
-                        print(f"    [ERROR] Code generation or test failed, skipping this feature")
                         failed_features.append(feature)
-                
+
+
                 # Step 2: If there are successful features, merge the code and execute
                 if successful_features:
                     print(f"\n  Step 2: Merging the code of {len(successful_features)} features...")

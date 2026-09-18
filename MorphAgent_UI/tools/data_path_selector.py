@@ -325,11 +325,17 @@ Please select the most appropriate file (return only the file name):"""
         
         try:
             from langchain_core.messages import HumanMessage, SystemMessage
-            response = self.llm.invoke([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
-            ])
-            
+            from tools.concurrency import PATH_SELECTOR_LOCK
+
+            # Every thread is handed this same selector, and with it the one LLM
+            # client built in __init__, whose retry path rewrites shared settings.
+            with PATH_SELECTOR_LOCK:
+                response = self.llm.invoke([
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)
+                ])
+
+
             selected_name = response.content.strip()
             
             # Find the matching file
@@ -354,13 +360,18 @@ def get_data_path_selector(verbose: bool = False) -> DataPathSelector:
     Args:
         verbose: whether to print detailed information (default False; recommended off for batch processing)
     """
+    from tools.concurrency import PATH_SELECTOR_LOCK
+
     global _global_selector
-    if _global_selector is None:
-        _global_selector = DataPathSelector(verbose=verbose)
-    else:
-        # Update the verbose setting
-        _global_selector.verbose = verbose
-    return _global_selector
+    # Concurrent feature workers reach this together; building the selector twice
+    # would also build a second LLM client and discard one of them.
+    with PATH_SELECTOR_LOCK:
+        if _global_selector is None:
+            _global_selector = DataPathSelector(verbose=verbose)
+        else:
+            # Update the verbose setting
+            _global_selector.verbose = verbose
+        return _global_selector
 
 
 @tool

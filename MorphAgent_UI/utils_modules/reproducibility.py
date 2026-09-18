@@ -120,4 +120,13 @@ def vlm_cache_set(
     payload: Dict[str, Any] = {"score": score, "response": response}
     if batch_scores is not None:
         payload["batch_scores"] = batch_scores
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Write through a temporary file so an interrupted or concurrent write can
+    # never leave a half-written entry for a later run to read back as truth.
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
