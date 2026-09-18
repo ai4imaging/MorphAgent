@@ -150,6 +150,9 @@ class RunConfig:
     enable_background_knowledge_in_planning: bool = True
     enable_segmentation: bool = True
     segmentation_skip_if_present: bool = True
+    # No Cellpose/Allen in Lite: when a dataset ships no masks the LLM writes a
+    # classical segmentation and the VLM checks it, so mask-based features survive.
+    enable_auto_segmentation: bool = True
     enable_feature_analysis: bool = False
     reproduce: bool = True
     reproduce_seed: int = 42
@@ -232,6 +235,7 @@ class RunConfig:
         self.enable_feature_analysis = bool(self.metadata_path)
         self.enable_segmentation = True
         self.segmentation_skip_if_present = True
+        self.enable_auto_segmentation = True
         self.resume = False
         return precomputed / "rag_knowledge_summary.txt"
 
@@ -366,12 +370,20 @@ class RunConfig:
         if self.method in {"code", "both"}:
             issues.append(ValidationIssue(Severity.WARNING, "generated_code", "Generated feature code executes in the configured Conda environment.", "Use trusted data and review the audit/code artifacts after the run."))
         if self.enable_segmentation and dataset is not None and dataset.mask_count < dataset.sample_count:
-            issues.append(ValidationIssue(
-                Severity.INFO,
-                "segmentation_optional",
-                "Some samples have no masks; Lite will skip auto-segmentation (no Allen).",
-                "Optional: add masks under each sample's segmentation/ folder to use them.",
-            ))
+            if self.enable_auto_segmentation and dataset.mask_count == 0:
+                issues.append(ValidationIssue(
+                    Severity.INFO,
+                    "segmentation_optional",
+                    "No masks found; the agent will write a classical segmentation and check it with the VLM.",
+                    "Optional: add your own masks under each sample's segmentation/ folder to use them instead.",
+                ))
+            else:
+                issues.append(ValidationIssue(
+                    Severity.INFO,
+                    "segmentation_optional",
+                    "Some samples have no masks; those samples run without masks.",
+                    "Optional: add masks under each sample's segmentation/ folder to use them.",
+                ))
         if self.data_root.strip():
             issues.append(ValidationIssue(Severity.INFO, "input_writes", "Preparation may add slices/ and segmentation/ artifacts to the dataset.", "Work on a backed-up or writable dataset."))
         return issues
@@ -416,8 +428,10 @@ class RunConfig:
         if self.enable_deep_research and self.deep_research_from_question:
             command.append("--deep-research-from-question")
         command.append("--enable-segmentation" if self.enable_segmentation else "--disable-segmentation")
-        # Reuse user masks when present; SEGMENTATION_BACKEND=none skips auto-seg.
+        # Reuse user masks when present; SEGMENTATION_BACKEND=none skips Cellpose/Allen.
         command.append("--segmentation-skip-if-present")
+        if not self.enable_auto_segmentation:
+            command.append("--disable-auto-segmentation")
         # Lite never auto-generates deep research or pulls PubMed literature.
 
         if self.reproduce:

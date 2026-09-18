@@ -29,7 +29,7 @@ class StageSpec:
 
 STAGES = (
     StageSpec("inspect", "Inspect", "Understand samples and biological context", 8),
-    StageSpec("prepare", "Prepare", "Reuse available masks; skip missing masks in Lite", 24),
+    StageSpec("prepare", "Prepare", "Reuse available masks, or write and check new ones", 24),
     StageSpec("plan", "Plan", "Propose biologically grounded feature cards", 40),
     StageSpec("quantify", "Quantify", "Run generated code and/or semantic scoring", 60),
     StageSpec("validate", "Validate", "Screen variation, redundancy, and evidence", 82),

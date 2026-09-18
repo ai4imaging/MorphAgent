@@ -237,7 +237,7 @@ function downloadDoc(id) {
 function runPage() {
   const mode = modes[state.config.mode];
   const steps = [
-    ['folder','Prepare images','Inspect the dataset and available masks.'],
+    ['folder','Prepare images','Inspect the dataset, reusing masks or writing them when absent.'],
     ['spark','Plan features','Connect the biological question with visual hypotheses.'],
     ['both','Quantify features','Apply the selected code and VLM analysis routes.'],
     ['check','Validate and refine',`Review candidates across ${mode.loops} ${mode.loops === 1 ? 'loop' : 'loops'}.`],

@@ -65,7 +65,12 @@ new PDF support. TXT/Markdown and DOCX extraction need no extra packages.
    originals remain recoverable under `.web_workspace/references/`.
 4. In **Design**, enter the biological question and choose the Tau demo or import
    your folder. Use `dataset/<sample>/image.tif`, one folder per sample. Existing
-   `segmentation/` masks are reused; this Lite runtime does not generate new masks.
+   `segmentation/` masks are always reused as-is. When a dataset ships none, the
+   agent decides which masks the question needs, writes a classical
+   (threshold/morphology) segmentation, has the VLM check the outlines against the
+   raw image for up to three rounds, and applies the result to every sample, so
+   mask-based features stay available without Cellpose-SAM or Allen. Artifacts land
+   in `auto_segmentation/` inside the run results.
    Fill in **Feature number** beside the other composer controls. It starts blank
    and is required: enter a whole number from 1 to 500 (the existing UI target
    range). This becomes `--target-feature-count`; candidates per round are

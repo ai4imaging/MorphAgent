@@ -1478,6 +1478,16 @@ Examples:
                         help="Skip cellpose if the sample already has any segmentation file (user uploads take priority, enabled by default)")
     parser.add_argument("--segmentation-run-even-if-present", action="store_false", dest="segmentation_skip_if_present",
                         help="Run Cellpose for every sample and overwrite generated cyto/nuclei/cytoplasm masks even when segmentation files already exist")
+    parser.add_argument("--enable-auto-segmentation", action="store_true", default=True,
+                        dest="enable_auto_segmentation",
+                        help="When a dataset has no masks and no Cellpose/Allen backend is installed, let the LLM write a "
+                             "classical segmentation and have the VLM check it (enabled by default)")
+    parser.add_argument("--disable-auto-segmentation", action="store_false", dest="enable_auto_segmentation",
+                        help="Do not fall back to LLM-written segmentation; run without masks when none are present")
+    parser.add_argument("--auto-segmentation-rounds", type=int, default=3,
+                        dest="auto_segmentation_rounds",
+                        help="Maximum LLM write / VLM check rounds for the fallback segmentation (default 3). "
+                             "The last runnable code is applied even if no round passes the check")
     
     parser.add_argument("--api-provider", type=str, default="default",
                         help="LLM endpoint preset name (key in API_PROVIDER_PRESETS of config.py, case-insensitive). "
@@ -1714,6 +1724,8 @@ Examples:
     print(f"\nStep 2.4: Data segmentation ({'running' if args.enable_segmentation else 'disabled, seg is None during coding'})")
     segmentation_mask_order = ""
     segmentation_results = {}
+    auto_segmentation_summary = None
+    auto_segmentation_semantics = {}
     
     if args.enable_segmentation:
         from tools.segmentation import segment_all_samples, list_segmentation_files
@@ -1756,6 +1768,26 @@ Examples:
             f"{skipped_count} skipped/reused, {unavailable} unavailable (warnings only; run continues)"
         )
         
+        # Nothing anywhere: no user uploads, and Cellpose/Allen is absent or failed.
+        # Rather than dropping every mask-dependent feature, have the LLM write a
+        # classical segmentation and let the VLM check it against the raw image.
+        if getattr(args, "enable_auto_segmentation", True):
+            from tools.auto_segmentation import dataset_has_segmentation, run_auto_segmentation
+
+            if not dataset_has_segmentation(sample_ids, data_root):
+                auto_outcome = run_auto_segmentation(
+                    sample_ids=sample_ids,
+                    data_root=data_root,
+                    user_query=args.user_query,
+                    dataset_description=dataset_description,
+                    results_dir=results_dir,
+                    max_rounds=getattr(args, "auto_segmentation_rounds", 3),
+                )
+                auto_segmentation_summary = auto_outcome.summary()
+                if auto_outcome.applied:
+                    segmentation_results.update(auto_outcome.results)
+                    auto_segmentation_semantics = auto_outcome.semantics
+        
         # Get the mask order from the first sample that has any segmentation file (consistent with data_path_selector, including user uploads)
         first_sample_with_seg = None
         for sample_id in sample_ids:
@@ -1772,7 +1804,13 @@ Examples:
                 if path.exists():
                     seg_files_info.append({"index": idx, "name": name, "stem": path.stem})
             if seg_files_info:
-                segmentation_mask_order = _generate_mask_order_description(seg_files_info)
+                # Auto-segmentation records each mask's meaning; pass it through so the
+                # planning and coding prompts describe the masks semantically rather
+                # than as "segmentation mask from mask_x.tif".
+                segmentation_mask_order = _generate_mask_order_description(
+                    seg_files_info,
+                    semantics_override=auto_segmentation_semantics or None,
+                )
                 print(f"  [OK] Generated mask order description (based on sample {first_sample_with_seg}, {len(seg_files_info)} files total)")
     else:
         # Segmentation not enabled: record everything as "not run"; during coding data_path_selector will not return seg, i.e. seg is None/empty
@@ -1787,16 +1825,19 @@ Examples:
     failed_count = len(sample_ids) - success_count - skipped_count
     # Defensively create the directory: avoid the results directory momentarily missing due to external cleanup/concurrency
     segmentation_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    segmentation_summary_payload = {
+        "total_samples": len(sample_ids),
+        "successful": success_count,
+        "skipped_user_seg": skipped_count,
+        "failed": failed_count,
+        "results": segmentation_results,
+        "mask_order_description": segmentation_mask_order,
+        "segmentation_enabled": args.enable_segmentation
+    }
+    if auto_segmentation_summary is not None:
+        segmentation_summary_payload["auto_segmentation"] = auto_segmentation_summary
     with open(segmentation_summary_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            "total_samples": len(sample_ids),
-            "successful": success_count,
-            "skipped_user_seg": skipped_count,
-            "failed": failed_count,
-            "results": segmentation_results,
-            "mask_order_description": segmentation_mask_order,
-            "segmentation_enabled": args.enable_segmentation
-        }, f, indent=2, ensure_ascii=False)
+        json.dump(segmentation_summary_payload, f, indent=2, ensure_ascii=False)
     print(f"  Segmentation results summary saved: {segmentation_summary_path}")
     
     # Step 2.5: Save and visualize each channel of the first sample

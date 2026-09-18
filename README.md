@@ -63,6 +63,7 @@ INPUT/
 
 - Sample ID = subdirectory name. Recommend ≥5 samples.
 - Primary files sit directly in the sample folder. `segmentation/` masks are keyed by filename stem (`seg["mask_cell"]`).
+- Masks are optional. Provide them and they are used verbatim; provide none and the agent writes a classical segmentation for the compartments your question needs, verifies it with the VLM, and applies it to every sample.
 - A short `dataset_index.txt` (or README) under `dataset/` describing channels and dimensions helps planning.
 
 ## Compute: which feature folder to select
