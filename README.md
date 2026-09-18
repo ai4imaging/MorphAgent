@@ -31,7 +31,9 @@ Setup creates the `morphagent_lite` conda environment, pip-installs the science 
 
 Open **Settings** in the UI and enter your own OpenAI-compatible Base URL, key, and model. Credentials stay in memory for the current session only and are never written to disk.
 
-Already installed? Launch without a browser:
+### Launch on a machine with a display
+
+On Windows, macOS, or a Linux desktop, open the window directly once MorphAgent is installed:
 
 ```bash
 cd MorphAgent_UI
@@ -39,18 +41,33 @@ conda activate morphagent_lite
 python launch_desktop_ui.py
 ```
 
-**Working on a server?** Use the browser workspace instead of the desktop window. Install MorphAgent on the server exactly as above, start the service there, forward the port, and drive it from the browser on your own machine — nothing else to configure:
+### Launch on a server with no display
+
+A remote Linux server normally has no desktop session and no browser, so the desktop window cannot open there. Use the browser workspace instead: the service runs on the server, and only the interface travels to your own machine over an SSH tunnel.
+
+Install MorphAgent on the server exactly as above, then start the service there. `--no-browser` is required, because there is no browser on that machine for it to open:
 
 ```bash
 # on the server
-cd MorphAgent_UI && conda activate morphagent_lite
-python launch_web_ui.py --no-browser
+cd MorphAgent_UI
+conda activate morphagent_lite
+python launch_web_ui.py --no-browser --port 8766
+```
 
+Leave that terminal running. From a second terminal on your own machine, forward the port:
+
+```bash
 # on your own machine
 ssh -N -L 8766:127.0.0.1:8766 <user>@<server>
 ```
 
-Then open http://127.0.0.1:8766 locally. Datasets, runs, history, and results stay on the server and are identical to the desktop workspace. Keep the same port number on both ends of the tunnel: the service binds to loopback only and rejects a mismatched `Host` header, so `--port 8899` on the server needs `-L 8899:127.0.0.1:8899` locally.
+Now open **http://127.0.0.1:8766** in your local browser yourself — nothing opens automatically. Datasets, runs, history, and results all stay on the server, and the workspace is identical to the desktop one.
+
+Three details catch people out:
+
+- **Use the same port on both ends.** The service rejects a mismatched `Host` header, so `--port 8899` on the server needs `-L 8899:127.0.0.1:8899` locally.
+- **Forward to `127.0.0.1`, not `localhost`.** That address is resolved on the server, where the service listens on IPv4 loopback only; a server that resolves `localhost` to IPv6 would refuse the connection.
+- **Keep the service's terminal alive.** Closing it stops the service and its running analysis, so start it under `tmux`, `screen`, or `nohup` if it needs to survive a disconnect. Closing the tunnel is harmless — the analysis keeps running and reappears when you reopen it.
 
 Detailed UI notes: [`MorphAgent_UI/README.md`](MorphAgent_UI/README.md) (desktop), [`MorphAgent_UI/README_WEB.md`](MorphAgent_UI/README_WEB.md) (browser workflow and data formats).
 

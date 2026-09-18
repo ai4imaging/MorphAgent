@@ -75,7 +75,10 @@ disconnect.
 Keep the same port number on both ends of the tunnel. The service binds to
 `127.0.0.1` and rejects any request whose `Host` header is not
 `127.0.0.1:<port>` or `localhost:<port>`, so `--port 8899` on the server needs
-`-L 8899:127.0.0.1:8899` locally. There is no `--host` option: publishing the
+`-L 8899:127.0.0.1:8899` locally. Forward to `127.0.0.1` rather than
+`localhost`: that address is resolved on the server, and a server that resolves
+`localhost` to IPv6 refuses the connection because the service listens on IPv4
+loopback only. There is no `--host` option: publishing the
 port on a public interface is not supported, and the SSH tunnel is what keeps
 the single-user security model intact.
 
