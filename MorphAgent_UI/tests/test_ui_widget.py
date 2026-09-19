@@ -14,6 +14,7 @@ from qtpy.QtWidgets import QApplication, QCheckBox, QComboBox, QFormLayout, QFra
 
 from launch_ui import build_parser, create_standalone_window
 from morphagent_ui.demo_api import FREE_DEMO_CANDIDATES, FREE_DEMO_ROUNDS, FREE_DEMO_TARGET
+from morphagent_ui.environment import RUN_SCALE_ENV_KEYS
 from morphagent_ui.main import MorphAgentWidget
 from morphagent_ui.models import FeatureCard
 from morphagent_ui.theme import STYLESHEET, apply_theme
@@ -25,6 +26,28 @@ class WidgetSmokeTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         apply_theme(cls.app)
+
+    def setUp(self) -> None:
+        # Configure loads its run scale from the repository `.env`, and saving it
+        # exports the same keys to the process. Left alone, whichever settings a
+        # developer last saved would decide what these tests observe.
+        self._saved_environment = {
+            name: os.environ.pop(name, None) for name in RUN_SCALE_ENV_KEYS
+        }
+        self.addCleanup(self._restore_environment)
+        patcher = mock.patch(
+            "morphagent_ui.widgets.configure.read_run_scale_environment",
+            return_value={name: "" for name in RUN_SCALE_ENV_KEYS},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _restore_environment(self) -> None:
+        for name, value in self._saved_environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
     def test_five_destinations_with_split_features_and_evidence(self) -> None:
         widget = MorphAgentWidget()

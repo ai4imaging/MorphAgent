@@ -141,6 +141,40 @@ def test_selected_reuse_failure_is_not_complete(saved, tmp_path):
     assert result['errors']
 
 
+def test_a_broken_feature_does_not_take_its_neighbours_down(saved, tmp_path):
+    """Features share one sandbox now, so one bad function must not lose the rest."""
+    import numpy as np
+    import tifffile
+    from tools.selected_reuse import run_selected_reuse
+    dataset=tmp_path/'data/dataset/s1';dataset.mkdir(parents=True)
+    tifffile.imwrite(dataset/'image.tif',np.ones((4,4),dtype=np.uint8))
+    result=run_selected_reuse(saved,dataset.parent.parent,tmp_path/'mixed',['area','intensity'])
+    assert not result['complete']
+    assert 'UNSELECTED CODE EXECUTED' in result['errors']['intensity']['s1']
+    assert 'area' not in result['errors']
+    assert list(csv.DictReader((tmp_path/'mixed/features.csv').open()))==[
+        {'sample_id':'s1','area':'16.0','intensity':''}]
+
+
+def test_compute_spends_one_sandbox_per_sample(saved, tmp_path, monkeypatch):
+    """Cost must scale with samples, not with features times samples."""
+    import subprocess
+    import numpy as np
+    import tifffile
+    from tools.selected_reuse import run_selected_reuse
+    for name in ('s1','s2','s3'):
+        sample=tmp_path/'data/dataset'/name;sample.mkdir(parents=True)
+        tifffile.imwrite(sample/'image.tif',np.ones((4,4),dtype=np.uint8))
+    calls=[]
+    original=subprocess.run
+    def counted(*args,**kwargs):
+        calls.append(args)
+        return original(*args,**kwargs)
+    monkeypatch.setattr(subprocess,'run',counted)
+    run_selected_reuse(saved,tmp_path/'data',tmp_path/'counted',['area','intensity'])
+    assert len(calls)==3
+
+
 def test_portable_export_can_compute_without_original_run(saved, tmp_path):
     import numpy as np
     import tifffile

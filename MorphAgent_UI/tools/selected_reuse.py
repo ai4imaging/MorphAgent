@@ -1,6 +1,7 @@
 """Execute only explicitly selected historical feature extractors.
 
-Code features replay their saved standalone script. VLM features have no script, so
+Code features replay their saved standalone script, dispatched from one mechanically
+merged module so a sample costs a single sandbox. VLM features have no script, so
 they are rescored against the new images with the same batched call the original run
 used; the saved description is the only thing carried over. No planning or validation
 runs on this path, and the standalone code functions may differ from a historical
@@ -37,6 +38,44 @@ def _write_values(output, names, rows):
     with (output/'features.csv').open('w', newline='', encoding='utf-8') as stream:
         writer = csv.DictWriter(stream, fieldnames=['sample_id', *names])
         writer.writeheader();writer.writerows(rows)
+
+
+_MERGED_TEMPLATE = '''"""Mechanically merged from the saved per-feature extractors.
+
+Compute may not call an LLM, so rather than asking one to fuse the round the way
+a discovery run does, every saved function is loaded exactly as it was written
+and dispatched in turn. One sandbox per sample then replaces one per feature and
+sample, and the image is decoded once instead of once per feature.
+"""
+_SOURCES = __SOURCES__
+_EXTRACTORS = []
+_UNAVAILABLE = {}
+
+for _name, _path in _SOURCES:
+    _namespace = {}
+    try:
+        with open(_path, encoding="utf-8") as _handle:
+            exec(compile(_handle.read(), _path, "exec"), _namespace)
+        _EXTRACTORS.append((_name, _namespace["extract"]))
+    except Exception as _exc:
+        _UNAVAILABLE[_name] = "{}: {}".format(type(_exc).__name__, _exc)
+
+
+def extract_all(img, seg):
+    results = dict(_UNAVAILABLE)
+    for _name, _extract in _EXTRACTORS:
+        try:
+            results[_name] = _extract(img, seg)
+        except Exception as _exc:
+            results[_name] = "{}: {}".format(type(_exc).__name__, _exc)
+    return results
+'''
+
+
+def _merged_extractor_source(names, scripts):
+    """Build one `extract_all(img, seg)` that calls every saved extractor."""
+    sources = [(name, str(Path(script).resolve())) for name, script in zip(names, scripts)]
+    return _MERGED_TEMPLATE.replace('__SOURCES__', repr(sources))
 
 
 def _registry_entry(item, method, status, source):
@@ -132,26 +171,46 @@ def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, 
 
     print(f'[Reuse] Selected {len(names)} feature(s) on {len(samples)} target sample(s).', flush=True)
     executor = CodeExecutor(dataset, conda_env=conda_env)
-    for item in code_items:
-        name = item['name']
-        round_number = item['round_number'] or 1
-        feature_dir = output/f'round_{round_number}'/'features'/name
-        feature_dir.mkdir(parents=True, exist_ok=True)
-        script = feature_dir/'extract.py'
-        shutil.copy2(source/item['codePath'], script)
-        plans.setdefault(round_number, []).append({
-            'name':name, 'method':'code', 'description':item['description'], 'category':item['category']})
-        for row in rows:
+    if code_items:
+        code_names, scripts = [], []
+        for item in code_items:
+            name = item['name']
+            round_number = item['round_number'] or 1
+            feature_dir = output/f'round_{round_number}'/'features'/name
+            feature_dir.mkdir(parents=True, exist_ok=True)
+            script = feature_dir/'extract.py'
+            shutil.copy2(source/item['codePath'], script)
+            code_names.append(name)
+            scripts.append(script)
+            plans.setdefault(round_number, []).append({
+                'name':name, 'method':'code', 'description':item['description'],
+                'category':item['category']})
+        merged_dir = output/'merged_features'
+        merged_dir.mkdir(parents=True, exist_ok=True)
+        merged = merged_dir/'extract_all.py'
+        merged.write_text(_merged_extractor_source(code_names, scripts), encoding='utf-8')
+        print(f'[Reuse] Replaying {len(code_names)} code feature(s), one sandbox per sample.', flush=True)
+        for index, row in enumerate(rows, 1):
             sample = row['sample_id']
-            print(f'[Reuse] {name} · {sample}', flush=True)
             image = Path(find_primary_image_paths(dataset/sample)[0])
-            ok, value, error = executor.execute_single_sample(script, image, find_segmentation_paths(dataset/sample))
-            number = _finite(value) if ok else None
-            row[name] = number if number is not None else ''
-            if number is None:
-                errors.setdefault(name, {})[sample] = error or 'No finite scalar value returned.'
-                print(f'[Reuse] [ERROR] {name} · {sample}: {errors[name][sample]}', flush=True)
-            advance()
+            ok, values, error = executor.execute_single_sample(
+                merged, image, find_segmentation_paths(dataset/sample))
+            if not ok or not isinstance(values, dict):
+                # The sandbox itself failed, so every feature of this sample is lost.
+                error = error or 'Merged extractor did not return a feature mapping.'
+                values = {}
+            for name in code_names:
+                raw = values.get(name)
+                number = _finite(raw)
+                row[name] = number if number is not None else ''
+                if number is None:
+                    reason = raw if isinstance(raw, str) and raw else (
+                        error or 'No finite scalar value returned.')
+                    errors.setdefault(name, {})[sample] = reason
+                    print(f'[Reuse] [ERROR] {name} · {sample}: {reason}', flush=True)
+            advance(len(code_names))
+            if index % 25 == 0:
+                _write_values(output, names, rows)
         _write_values(output, names, rows)
 
     if vlm_items:

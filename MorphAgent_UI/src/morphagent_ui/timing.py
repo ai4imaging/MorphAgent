@@ -11,9 +11,9 @@ PREPARE_SECONDS_PER_IMAGE = 0.05
 AUTHOR_SECONDS_PER_FEATURE = 35.0
 MERGE_SECONDS_PER_ROUND = 30.0
 EXTRACT_SECONDS_PER_FEATURE_IMAGE = 0.05
-# Replaying saved code spawns one sandbox per feature and sample instead of
-# merging the round into a single pass, so it cannot amortise image loading.
-REPLAY_SECONDS_PER_FEATURE_IMAGE = 0.6
+# Replaying saved code merges the selection into one sandbox per sample, so each
+# sample pays for a process start and an image decode on top of the features.
+REPLAY_SECONDS_PER_SAMPLE = 0.6
 VLM_SECONDS_PER_SAMPLE = 6.0
 VLM_SECONDS_PER_SAMPLE_FEATURE = 0.28
 # Planners have split "both" runs from 6% VLM (BBBC021) to 21% (Tau).
@@ -86,7 +86,13 @@ def estimate_reuse_seconds(code_features: int, vlm_features: int, samples: int,
     """
 
     samples = max(0, int(samples))
-    seconds = 20.0 + samples * max(0, int(code_features)) * REPLAY_SECONDS_PER_FEATURE_IMAGE
+    code_features = max(0, int(code_features))
+    seconds = 20.0
+    if code_features:
+        seconds += samples * (
+            REPLAY_SECONDS_PER_SAMPLE
+            + code_features * EXTRACT_SECONDS_PER_FEATURE_IMAGE
+        )
     if vlm_features > 0:
         per_sample = (
             VLM_SECONDS_PER_SAMPLE + VLM_SECONDS_PER_SAMPLE_FEATURE * int(vlm_features)
