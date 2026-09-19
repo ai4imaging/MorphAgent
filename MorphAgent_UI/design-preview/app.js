@@ -104,6 +104,7 @@ function home() {
     <div class="composer"><textarea id="question" aria-label="Biological question" placeholder="Describe your biological question…">${escapeHTML(state.question)}</textarea>
       <div class="composer-footer"><div class="composer-tools">
         <button class="composer-chip ${state.dataset ? 'filled' : ''}" data-action="pick-data">${icon(state.dataset ? 'folder' : 'plus')}<span>${state.dataset ? 'Data attached' : 'Add data'}</span></button>
+        <button class="composer-chip" data-action="data-path" title="Read a dataset folder in place, without copying it">${icon('folder')}<span>Use folder path</span></button>
         ${knowledgeChip()}<span class="composer-divider"></span>
         <button class="composer-chip route-chip" data-action="settings" data-tab="analysis">${icon(routes[state.config.route].icon)}${routes[state.config.route].name}</button>
         <button class="composer-chip" data-action="settings" data-tab="analysis">${icon(mode.icon)}${mode.name}<span>· ${mode.loops} ${mode.loops === 1 ? 'loop' : 'loops'}</span>${icon('down')}</button>
@@ -371,6 +372,10 @@ app.addEventListener('click',e => {
   else if (action === 'demo') { useDemo(); render(); toast('Tau demo added. Edit the question, then review your configuration.'); }
   else if (action === 'history') { useDemo(); state.historyOpen = true; navigate('visualize'); }
   else if (action === 'pick-data') document.getElementById('dataset-input').click();
+  else if (action === 'data-path') {
+    const path = window.prompt('Paste the dataset folder path (contains dataset/):');
+    if (path) { state.dataset = {name:path.split(/[\\/]/).filter(Boolean).pop() || path,count:0,demo:false}; render(); toast('Folder path selected. Nothing was copied.'); }
+  }
   else if (action === 'manage-knowledge') openKnowledge();
   else if (action === 'close-knowledge') closeKnowledge();
   else if (action === 'knowledge-list') { state.knowledge.preview=null; render(); }

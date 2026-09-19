@@ -542,6 +542,57 @@ def test_http_token_origin_and_static_isolation(workspace):
         server.shutdown();server.server_close()
 
 
+def test_importing_many_files_reuses_one_connection(workspace):
+    """Each dataset file is its own request; a socket per file exhausts the port range."""
+    import http.client
+    import threading
+    from morphagent_ui.web_http import create_server
+    (workspace/'design-preview').mkdir(parents=True)
+    server=create_server(make_service(workspace),port=0)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    connection=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=10)
+    headers={'Host':f'127.0.0.1:{server.server_port}','X-MorphAgent-Token':server.token}
+
+    def call(method,path,body=b''):
+        connection.request(method,path,body=body,headers=headers)
+        response=connection.getresponse()
+        return response.status,response.read()
+
+    try:
+        status,body=call('POST','/api/imports')
+        assert status==200
+        key=json.loads(body)['id']
+        for index in range(25):
+            status,_=call('PUT',f'/api/imports/{key}?name=dataset/sample_{index}/image.tif',b'fake-tiff')
+            assert status==200
+        # Still the same socket: nothing was left in TIME_WAIT along the way.
+        assert not connection.sock._closed
+        status,body=call('POST',f'/api/imports/{key}/finish')
+        assert status==200 and json.loads(body)['summary']['sample_count']==25
+    finally:
+        connection.close();server.shutdown();server.server_close()
+
+
+def test_a_rejected_request_does_not_leave_its_body_for_the_next_one(workspace):
+    """Replying before reading the body would make the body parse as a new request."""
+    import http.client
+    import threading
+    from morphagent_ui.web_http import create_server
+    (workspace/'design-preview').mkdir(parents=True)
+    server=create_server(make_service(workspace),port=0)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    connection=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=10)
+    try:
+        connection.request('POST','/api/settings',body=b'{"route":"code"}',
+                           headers={'Host':f'127.0.0.1:{server.server_port}','X-MorphAgent-Token':'wrong'})
+        response=connection.getresponse()
+        assert response.status==403
+        response.read()
+        assert response.will_close
+    finally:
+        connection.close();server.shutdown();server.server_close()
+
+
 def test_compute_inherits_the_source_question_and_never_passes_api_to_saved_code(workspace):
     (workspace/'.env').write_text('')
     previous=workspace/'old-results';previous.mkdir()

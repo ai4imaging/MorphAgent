@@ -46,6 +46,9 @@ async function ui({failDocumentName='',additionalCode=false,historyKind='reuse',
       if(endpoint==='compute/preflight')data={ready:true,issues:[],features:1,samples:2};
       if(endpoint==='runs/load')data={id:'ok'};
       if(endpoint==='datasets/demo')data={id:'target',name:'New dataset',summary:{sample_count:2,primary_image_count:2}};
+      if(endpoint==='datasets')data={id:'by-path',name:'picked',path:body.path,summary:{sample_count:4,primary_image_count:4,mask_count:0}};
+      if(endpoint==='imports')data={id:'up1'};
+      if(endpoint==='imports/up1/finish')data={id:'uploaded',name:'copied',path:'/workspace/.web_workspace/imports/up1',summary:{sample_count:1,primary_image_count:1,mask_count:0}};
       if(endpoint==='compute'){data={id:'computed',kind:'reuse',status:'running',question:body.question};runs.push(data);}
       if(endpoint==='runs/computed')data={id:'computed',kind:'reuse',status:'running',question:'Compute cell area',name:'computed',features:[],artifacts:[],startedAt:Date.now()/1000,eta:{remainingSeconds:30},selectedFeatures:['area']};
       if(endpoint==='runs'){data={id:'new',kind:'discovery',status:'running',question:body.question};runs.push(data);}
@@ -70,7 +73,14 @@ async function ui({failDocumentName='',additionalCode=false,historyKind='reuse',
     for(let i=0;i<8;i++)await flush();
   }
   function change(id,checked){for(const h of element('app').handlers.filter(h=>h.type==='change'))h.fn({target:{id,checked,dataset:{}}});}
-  return {context,calls,element,click,change,run:code=>vm.runInContext(code,context)};
+  async function pickFolder(id,files){
+    let stopped=false;
+    const event={target:{files,value:''},preventDefault(){},stopImmediatePropagation(){stopped=true;}};
+    const handlers=element(id).handlers.filter(h=>h.type==='change').sort((a,b)=>Number(!!b.capture)-Number(!!a.capture));
+    for(const h of handlers){h.fn(event);if(stopped)break;}
+    for(let i=0;i<8;i++)await flush();
+  }
+  return {context,calls,element,click,change,pickFolder,run:code=>vm.runInContext(code,context)};
 }
 
 test('Visualize opens an independent CSV upload page and shows retained features by source',async()=>{
@@ -615,4 +625,44 @@ test('Compute navigation restores its active run without consuming the Design dr
   assert.match(app.run('reusePage()'),/Estimated remaining/);
   assert.equal(app.calls.filter(c=>c.endpoint==='compute').length,1);
   assert.ok(!app.calls.some(c=>c.endpoint.endsWith('/cancel')));
+});
+
+const fakeFiles = (count,size=1024) => Array.from({length:count},(_,i)=>(
+  {name:'image.tif',size,webkitRelativePath:`dataset/sample_${i}/image.tif`}));
+
+test('A dataset too large to copy is refused with the alternative named',async()=>{
+  const app=await ui();
+  await app.pickFolder('dataset-input',fakeFiles(5000));
+  const shown=app.run('home()');
+  assert.match(shown,/5,000 files/);
+  assert.match(shown,/Use &quot;Paste folder path&quot; instead/);
+  // Nothing may be copied before the refusal.
+  assert.ok(!app.calls.some(c=>c.endpoint.startsWith('imports')));
+  assert.equal(app.run('state.dataset === null'),true);
+});
+
+test('A dataset folder is read in place instead of being copied',async()=>{
+  const app=await ui();
+  assert.match(app.run('home()'),/data-action="data-path"/);
+  await app.click('data-path');
+  assert.equal(app.calls.find(c=>c.endpoint==='datasets').body.path,'/workspace/exports/20260915_120000_000000');
+  assert.equal(app.run('state.dataset.path'),'/workspace/exports/20260915_120000_000000');
+  assert.ok(!app.calls.some(c=>c.endpoint.startsWith('imports')));
+});
+
+test('Compute offers the same in-place folder route for its target dataset',async()=>{
+  const app=await ui();await app.click('navigate',{page:'compute'});
+  assert.match(app.run('reusePage()'),/data-action="reuse-path"/);
+  await app.click('reuse-path');
+  assert.equal(app.calls.find(c=>c.endpoint==='datasets').body.path,'/workspace/exports/20260915_120000_000000');
+  assert.ok(!app.calls.some(c=>c.endpoint.startsWith('imports')));
+});
+
+test('A small folder still uploads, reporting progress without a toast per file',async()=>{
+  const app=await ui();
+  await app.pickFolder('dataset-input',fakeFiles(3));
+  const puts=app.calls.filter(c=>c.endpoint.startsWith('imports/up1?name='));
+  assert.equal(puts.length,3);
+  assert.equal(app.run('state.dataset.path'),'/workspace/.web_workspace/imports/up1');
+  assert.ok(!app.run('home()').includes('too many to copy'));
 });

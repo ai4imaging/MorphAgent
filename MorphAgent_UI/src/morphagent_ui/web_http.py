@@ -25,6 +25,13 @@ def json_bytes(value):
 
 def create_server(service: WorkspaceService, port=8766):
     class Handler(BaseHTTPRequestHandler):
+        # Importing a dataset sends one request per file. Without keep-alive each
+        # one needs its own socket, and a few thousand files exhaust the ephemeral
+        # port range while the closed sockets sit in TIME_WAIT.
+        protocol_version = 'HTTP/1.1'
+        timeout = 60
+        body_read = False
+
         def log_message(self, format, *args):
             # Never log request headers, posted settings, uploaded text, or tokens.
             pass
@@ -32,7 +39,13 @@ def create_server(service: WorkspaceService, port=8766):
         def reply(self, status, data, content_type='application/json', filename=None):
             if not isinstance(data, bytes):
                 data = json_bytes(data)
+            # A reply that skipped the request body leaves it queued on the
+            # socket, where it would be parsed as the next request.
+            unread_body = self.pending_body() and not self.body_read
             self.send_response(status)
+            if unread_body:
+                # Sending the header is what also sets close_connection.
+                self.send_header('Connection', 'close')
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'no-store')
@@ -45,7 +58,14 @@ def create_server(service: WorkspaceService, port=8766):
             self.end_headers()
             self.wfile.write(data)
 
+        def pending_body(self):
+            try:
+                return int(self.headers.get('Content-Length', '0')) > 0
+            except ValueError:
+                return True
+
         def dispatch(self):
+            self.body_read = False
             try:
                 parsed = urlsplit(self.path)
                 path = unquote(parsed.path)
@@ -75,6 +95,7 @@ def create_server(service: WorkspaceService, port=8766):
                 if length < 0 or length > 128 * 1024 * 1024:
                     return self.reply(413, {'error': 'Request too large.'})
                 raw = self.rfile.read(length) if length else b''
+                self.body_read = True
                 body = json.loads(raw) if raw and self.headers.get('Content-Type', '').startswith('application/json') else {}
                 if not isinstance(body, dict):
                     raise ValueError('Expected a JSON object.')

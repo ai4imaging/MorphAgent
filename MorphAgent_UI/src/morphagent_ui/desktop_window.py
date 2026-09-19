@@ -1,4 +1,5 @@
 """Qt6 shell for the existing workspace, without importing the legacy Qt5 UI."""
+import json
 from pathlib import Path
 import sys
 import threading
@@ -6,7 +7,7 @@ import threading
 if 'PyQt5.QtCore' in sys.modules or 'PyQt6.QtCore' in sys.modules:
     raise RuntimeError('Start the desktop workspace in a fresh process; do not mix Qt bindings.')
 
-from PySide6.QtCore import Qt, QUrl, QStandardPaths, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, QUrl, QStandardPaths, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtNetwork import QNetworkProxy
 from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox
@@ -34,6 +35,7 @@ class WorkspacePage(QWebEnginePage):
         'Choose the feature folder from a saved run:':'Choose a saved feature folder',
         'Paste the local results folder path (contains features.csv):': 'Choose saved results',
         'Paste the new dataset folder path (contains dataset/):': 'Choose target dataset',
+        'Paste the dataset folder path (contains dataset/):': 'Choose dataset folder',
     }
 
     def __init__(self, profile, origin, parent=None):
@@ -52,8 +54,18 @@ class WorkspacePage(QWebEnginePage):
         if mode == self.FileSelectionMode.FileSelectUploadFolder:
             folder = QFileDialog.getExistingDirectory(self.view(), 'Choose dataset folder',
                                                       old_files[0] if old_files else '')
-            return [folder] if folder else []
+            # Hand the page the path and no files. Returning the folder would make
+            # the renderer enumerate every file and upload it over loopback HTTP,
+            # which copies the whole dataset and stops scaling in the thousands.
+            if folder:
+                self.deliver_folder(folder)
+            return []
         return super().chooseFiles(mode, old_files, accepted_mime_types)
+
+    def deliver_folder(self, folder):
+        script = 'window.morphagentFolderChosen && window.morphagentFolderChosen(%s)' % json.dumps(folder)
+        # chooseFiles runs while the renderer waits; defer so it is not reentrant.
+        QTimer.singleShot(0, lambda: self.runJavaScript(script))
 
     def view(self):
         return QWebEngineView.forPage(self)

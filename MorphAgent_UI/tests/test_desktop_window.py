@@ -186,13 +186,34 @@ class DesktopWindowTests(unittest.TestCase):
         self.js("document.querySelector('[data-page=data]').click()")
         self.wait_js("document.querySelector('#question') !== null && state.sidebarOpen === false")
 
-    def test_native_dataset_picker_and_cancel(self):
+    def sample_dataset(self, name='picked', samples=3):
+        root=self.repo/name
+        for index in range(samples):
+            sample=root/'dataset'/f'sample_{index}'
+            sample.mkdir(parents=True)
+            (sample/'image.tif').write_bytes(b'fake-tiff')
+        return root
+
+    def test_native_dataset_picker_imports_by_path_without_uploading(self):
+        # Returning the folder would make the renderer enumerate and upload every
+        # file, which is what stops scaling on datasets of a few thousand samples.
         from PySide6.QtWebEngineCore import QWebEnginePage
         mode=QWebEnginePage.FileSelectionMode.FileSelectUploadFolder
-        with patch('morphagent_ui.desktop_window.QFileDialog.getExistingDirectory', return_value=str(self.repo)):
-            self.assertEqual(self.window.page.chooseFiles(mode,[],[]),[str(self.repo)])
+        dataset=self.sample_dataset()
+        with patch('morphagent_ui.desktop_window.QFileDialog.getExistingDirectory', return_value=str(dataset)):
+            self.assertEqual(self.window.page.chooseFiles(mode,[],[]),[])
+        self.wait_js("state.dataset !== null && state.dataset.summary !== undefined")
+        self.assertEqual(self.js("state.dataset.path"),str(dataset))
+        self.assertEqual(self.js("state.dataset.summary.sample_count"),3)
+        imports=self.runtime.service.root/'imports'
+        self.assertFalse(imports.exists() and any(imports.iterdir()),'the dataset was copied instead of read in place')
+
+    def test_cancelling_the_native_picker_changes_nothing(self):
+        from PySide6.QtWebEngineCore import QWebEnginePage
+        mode=QWebEnginePage.FileSelectionMode.FileSelectUploadFolder
         with patch('morphagent_ui.desktop_window.QFileDialog.getExistingDirectory', return_value=''):
             self.assertEqual(self.window.page.chooseFiles(mode,[],[]),[])
+        self.assertTrue(self.js("state.dataset === null"))
 
     def test_applied_api_keys_stay_masked_and_are_not_resubmitted(self):
         from PySide6.QtTest import QTest
@@ -303,7 +324,7 @@ class DesktopWindowTests(unittest.TestCase):
         self.js("showSettings('api')")
         self.assertTrue(self.js("document.querySelector('[data-tab=knowledge]') === null"))
 
-    def test_folder_upload_through_real_webengine(self):
+    def test_folder_choice_through_real_webengine(self):
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         sample=self.repo/'incoming/dataset/sample_1'
@@ -314,9 +335,12 @@ class DesktopWindowTests(unittest.TestCase):
             QTest.mouseClick(self.window.view.focusProxy() or self.window.view,Qt.MouseButton.LeftButton,pos=QPoint(int(rect[0]),int(rect[1])))
             self.wait(lambda:picker.called)
             self.wait_js('state.dataset?.summary?.sample_count === 1')
-        path=self.js('state.dataset.path')
-        self.assertTrue(Path(path).is_relative_to(self.repo/'.web_workspace/imports'))
-        self.assertTrue(list(Path(path).rglob('image.tif')))
+        # The run reads the chosen folder; copying it into the workspace does not
+        # scale past a few thousand files and doubles the disk the dataset needs.
+        self.assertEqual(self.js('state.dataset.path'),str(self.repo/'incoming'))
+        self.assertTrue(list((self.repo/'incoming').rglob('image.tif')))
+        imports=self.repo/'.web_workspace/imports'
+        self.assertFalse(imports.exists() and any(imports.iterdir()))
 
     def test_data_submit_and_export_in_desktop_without_external_api(self):
         # Fixture CLI proves the UI plumbing only; it is not a scientific run.

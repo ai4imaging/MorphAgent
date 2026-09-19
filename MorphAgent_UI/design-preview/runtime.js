@@ -243,6 +243,7 @@
       <div class="composer-footer"><div class="composer-tools">
       <button class="composer-chip ${source?'filled':''}" data-action="compute-source">${icon('history')}<span>${source?'Previous run attached':'Upload features'}</span></button>
       <button class="composer-chip ${d?'filled':''}" data-action="reuse-upload">${icon(d?'folder':'plus')}<span>${d?'Data attached':'Add data'}</span></button>
+      <button class="composer-chip" data-action="reuse-path" title="Read a dataset folder in place, without copying it">${icon('folder')}<span>Use folder path</span></button>
       ${source?`<button class="composer-chip" data-action="compute-features" aria-expanded="${state.computeFeaturesOpen}">${icon('code')}<span>${computeFeatures().length} features available</span>${icon(state.computeFeaturesOpen?'down':'chevron')}</button>`:''}
       </div><button class="submit" data-action="prepare-compute" aria-label="Review and compute">${icon('arrow')}</button></div></div>
       <div class="compute-attachments">
@@ -356,14 +357,39 @@
     } catch(e) {showRunIssue({title:'Configuration needs attention',message:e.message,label:'Review inputs'});}
   }
   async function selectReuseSource(id) {live.reuseSource=await get('runs/'+id);live.computeDraft=true;state.historyOpen=false;state.search='';state.computeFeaturesOpen=false;navigate('compute');}
+  // Uploading copies every file through the API. Past these limits the copy
+  // costs more time and disk than the dataset is worth, so ask for the folder
+  // path instead, which the workspace reads in place.
+  const UPLOAD_FILE_LIMIT=4000, UPLOAD_BYTE_LIMIT=2*1024*1024*1024;
   async function importDataset(files) {
     const valid=files.filter(f=>/\.(tiff?|png|jpe?g|mrc|csv|json|txt|md)$/i.test(f.name)&&!(f.webkitRelativePath||'').split('/').some(p=>p.startsWith('.')||p==='results'));
     if(!valid.length)throw new Error('No supported microscopy files found.');
+    const bytes=valid.reduce((sum,f)=>sum+f.size,0);
+    if(valid.length>UPLOAD_FILE_LIMIT||bytes>UPLOAD_BYTE_LIMIT)
+      throw new Error(`This folder holds ${valid.length.toLocaleString()} files (${(bytes/1073741824).toFixed(1)} GB), too many to copy into the workspace. Use "Paste folder path" instead: the dataset is read where it already is, with nothing copied.`);
     const upload=await post('imports');
-    for(let i=0;i<valid.length;i++){const f=valid[i];toast(`Importing ${i+1}/${valid.length}: ${f.name}`);await api(`imports/${upload.id}?name=${encodeURIComponent(f.webkitRelativePath||f.name)}`,{method:'PUT',body:f});}
+    let done=0, shown=0;
+    for(const f of valid){
+      await api(`imports/${upload.id}?name=${encodeURIComponent(f.webkitRelativePath||f.name)}`,{method:'PUT',body:f});
+      done++;
+      // One toast per file spends more time on the DOM than on the transfer.
+      if(done===valid.length||Date.now()-shown>250){shown=Date.now();toast(`Importing ${done}/${valid.length} files`);}
+    }
     return post(`imports/${upload.id}/finish`);
   }
-  const intercepted=new Set(['new','live-new','demo','history','live-library','live-example','load-job','load-path','save-settings','prepare-run','confirm-run','live-stop','stop-preview','view-features','live-feature','live-viz','preview-artifact','download-artifact','live-reuse','navigate','remove-doc','reuse-source','reuse-upload','reuse-path','reuse-demo','save-bundle','download-bundle']);
+  // The desktop shell resolves the native folder dialog to a path and sends it
+  // here, so a picked folder never turns into thousands of uploads.
+  let folderTarget='dataset';
+  window.morphagentFolderChosen=path=>{
+    if(!path)return;
+    const target=folderTarget;
+    task(async()=>{
+      const dataset=await post('datasets',{path});
+      if(target==='reuse'){live.reuseData=dataset;render();toast('Target dataset ready. Review your inputs to compute.');}
+      else{state.dataset=dataset;render();toast(`${dataset.summary.sample_count} samples ready. Submit your question to start.`);}
+    });
+  };
+  const intercepted=new Set(['new','live-new','demo','history','live-library','live-example','load-job','load-path','save-settings','prepare-run','confirm-run','live-stop','stop-preview','view-features','live-feature','live-viz','preview-artifact','download-artifact','live-reuse','navigate','remove-doc','reuse-source','reuse-upload','reuse-path','reuse-demo','save-bundle','download-bundle','data-path']);
   ['compute-source','compute-features','prepare-compute','new-compute','delete-history','confirm-delete-history','visualize-upload','visualize-filter','help-send','help-clear'].forEach(a=>intercepted.add(a));
   app.addEventListener('click',event=>{
     const b=event.target.closest('[data-action]');if(!b||b.disabled||!intercepted.has(b.dataset.action))return;
@@ -407,7 +433,8 @@
       else if(action==='reuse-source')await selectReuseSource(b.dataset.id);
       else if(action==='reuse-upload')document.getElementById('reuse-dataset-input').click();
       else if(action==='reuse-demo'){live.reuseData=await post('datasets/demo');render();}
-      else if(action==='reuse-path'){const path=window.prompt('Paste the new dataset folder path (contains dataset/):');if(path){live.reuseData=await post('datasets',{path});render();}}
+      else if(action==='reuse-path'){const path=window.prompt('Paste the new dataset folder path (contains dataset/):');if(path){live.reuseData=await post('datasets',{path});render();toast('Target dataset ready. Review your inputs to compute.');}}
+      else if(action==='data-path'){const path=window.prompt('Paste the dataset folder path (contains dataset/):');if(path){state.dataset=await post('datasets',{path});render();toast(`${state.dataset.summary.sample_count} samples ready. Submit your question to start.`);}}
       else if(action==='save-bundle'){b.disabled=true;b.textContent='Saving…';const id=live.job.id;await post(`runs/${id}/export`);if(live.job?.id===id)live.job=await get('runs/'+id);render();toast('Result bundle saved.');}
       else if(action==='download-bundle'){
         const response=await api(`runs/${live.job.id}/export`);
@@ -437,6 +464,10 @@
       toast(failures.length ? `${added} files attached. Check the upload errors.` : 'Knowledge attached. Ready for your next run.');
     });
   };
+  // The click, not the action, identifies the target: either input can be opened
+  // from more than one place.
+  document.getElementById('dataset-input').addEventListener('click',()=>{folderTarget='dataset';},true);
+  document.getElementById('reuse-dataset-input').addEventListener('click',()=>{folderTarget='reuse';},true);
   document.getElementById('dataset-input').addEventListener('change',event=>{
     event.stopImmediatePropagation();const files=[...event.target.files];event.target.value='';if(!files.length)return;
     task(async()=>{
