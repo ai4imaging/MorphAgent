@@ -1,11 +1,11 @@
-﻿# MorphAgent UI Lite Windows launcher.
+# MorphAgent UI Lite Windows web launcher.
 param()
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 $EnvName = if ($env:MORPHAGENT_ENV_NAME) { $env:MORPHAGENT_ENV_NAME } else { "morphagent_lite" }
-$Launch = Join-Path $RepoRoot "launch_desktop_ui.py"
+$Launch = Join-Path $RepoRoot "launch_web_ui.py"
 
 . (Join-Path $ScriptDir "conda_windows.ps1")
 Ensure-CondaUtf8Env
@@ -26,7 +26,7 @@ try {
     if (-not (Test-PathSafe $Launch)) {
         throw "Missing $Launch"
     }
-    Write-Host "[OK] Launching UI via env $EnvName"
+    Write-Host "[OK] Launching web UI via env $EnvName"
     & $script:CondaExe run --no-capture-output -n $EnvName python $Launch @args
     exit $LASTEXITCODE
 } catch {

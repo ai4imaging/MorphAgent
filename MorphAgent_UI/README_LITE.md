@@ -107,6 +107,17 @@ Or from Anaconda Prompt / PowerShell inside `MorphAgent_UI\`:
 .\scripts\start_ui_windows.bat
 ```
 
+Setup locates conda on its own: it reads `CONDA_ROOT` / `CONDA_EXE` / `CONDA_PREFIX`,
+then `conda` on PATH, then the registry, then the usual install folders on every
+drive. Custom locations such as `D:\Anaconda` are fine. If it still reports
+`No conda installation found`, run `where conda` in an Anaconda Prompt and point
+setup at the folder it prints:
+
+```powershell
+$env:CONDA_ROOT = "D:\Anaconda"
+.\scripts\setup_windows.bat
+```
+
 Already installed? Run the same setup command once to add the desktop packages
 to your existing `morphagent_lite` environment. **Do not recreate it for this
 upgrade.** Setup does not delete experiment history or results.
@@ -151,6 +162,9 @@ If pip PyQt fails, setup retries `pip install PyQt5` (not `conda install` from c
 | `CONDA_NO_PLUGINS` + `CONDA_SOLVER=classic` always on | Removed as default; classic is fallback for create only |
 | SSL / `CondaSSLError` while fetching indexes | Create uses defaults; science packages come from pip (`--retries 5`) |
 | `conda.exe` exit `0xc0000005` during solve | Avoided by not solving PyQt+numpy+… through conda |
+| conda installed under a non-standard name (`D:\Anaconda`, `C:\tools\conda`) | Found via PATH, the registry, and a `*conda*` folder scan |
+| conda just installed, but a double-clicked `.bat` still cannot see it | Explorer holds a stale PATH; setup reads the stored PATH from the registry |
+| Only `condabin\conda.bat` exists, no `conda.exe` | The shim is accepted as the launcher |
 
 Recommended: Miniconda **≥ 23.9** (libmamba default). If create still fails, upgrade conda or retry on a stable network.
 

@@ -1,4 +1,4 @@
-﻿# MorphAgent UI Lite Windows setup — single env morphagent_lite.
+﻿# MorphAgent UI Lite Windows setup: single env morphagent_lite.
 # ASCII-only. Dot-sources conda_windows.ps1 for conda discovery.
 #
 # Avoids classic+conda-forge mega-solves that crash old conda.exe (0xc0000005).
@@ -26,14 +26,17 @@ function Write-Status([string]$Text) {
 Ensure-CondaUtf8Env
 
 function Find-CondaExe {
-    $root = Find-CondaRootOnDisk
-    if (-not $root) { return $false }
+    $root = Find-CondaRoot
+    if (-not $root) {
+        Write-CondaNotFoundHelp
+        return $false
+    }
     return [bool](Use-CondaRoot $root)
 }
 
 try {
     if (-not (Find-CondaExe)) {
-        throw "conda.exe not found. Install Miniconda/Anaconda, then re-run setup_windows.bat."
+        throw "conda not found. Install Miniconda/Anaconda, or set CONDA_ROOT to an existing install, then re-run setup_windows.bat."
     }
     if (-not (Test-PathSafe $ReqFile)) {
         throw "Missing requirements: $ReqFile"

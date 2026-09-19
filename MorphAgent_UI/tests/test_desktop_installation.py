@@ -42,6 +42,45 @@ def test_windows_default_launcher_selects_new_desktop():
     assert "verify_install.py" in installer
 
 
+WINDOWS_SCRIPTS = sorted(
+    path
+    for pattern in ("scripts/*windows*.ps1", "scripts/*windows*.bat")
+    for path in UI.glob(pattern)
+)
+
+
+@pytest.mark.parametrize("script", WINDOWS_SCRIPTS, ids=lambda path: path.name)
+def test_windows_scripts_stay_ascii(script):
+    # A GBK console mangles non-ASCII bytes, which has broken these scripts before.
+    body = script.read_text(encoding="utf-8-sig")
+    offenders = sorted({character for character in body if ord(character) > 127})
+    assert not offenders, f"{script.name} contains {offenders}"
+
+
+@pytest.mark.parametrize("script", WINDOWS_SCRIPTS, ids=lambda path: path.name)
+def test_every_windows_entry_point_discovers_conda(script):
+    # A bare `conda` call only works when the install is already on PATH, which
+    # is what broke setup on a machine with conda under D:\Anaconda.
+    body = script.read_text(encoding="utf-8-sig")
+    if script.suffix == ".bat":
+        assert "\nconda " not in body, f"{script.name} calls conda without discovery"
+    elif "CondaExe" in body:
+        assert "Find-CondaRoot" in body
+        assert "Write-CondaNotFoundHelp" in body
+
+
+def powershell():
+    return shutil.which("pwsh") or shutil.which("powershell")
+
+
+@pytest.mark.skipif(powershell() is None, reason="conda discovery tests need PowerShell")
+def test_windows_conda_discovery():
+    script = UI / "tests/test_conda_windows.ps1"
+    result = subprocess.run([powershell(), "-NoLogo", "-NoProfile", "-File", str(script)],
+                            text=True, capture_output=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="Bash setup requires bash")
 @pytest.mark.parametrize("fail_install", [False, True])
 def test_setup_reuses_environment_and_stops_on_install_error(tmp_path, fail_install):
