@@ -28,7 +28,7 @@ from .models import RunConfig, Severity, load_feature_cards, scan_dataset
 from .feature_outputs import feature_catalog, selected_features, export_run, feature_distribution
 from .reviewer_chat import ReviewerChatClient, ReviewerKnowledgeBase
 from .web_documents import extract_document
-from .timing import DynamicEta, estimate_run_seconds
+from .timing import DynamicEta, estimate_reuse_seconds, estimate_run_seconds
 
 MODES = {'ultra': 1, 'fast': 5, 'detailed': 20}
 MODEL_FIELDS = {'baseUrl': 'LLM_BASE_URL', 'apiKey': 'LLM_API_KEY', 'model': 'LLM_MODEL',
@@ -750,9 +750,9 @@ class WorkspaceService:
                    'startedAt':time.time(), 'resultsDir':str(results), 'stage':'quantify', 'route':route,
                    'question':question, 'datasetId':data['id'], 'rounds':0, 'exitCode':None,
                    # Code runs per feature and sample; VLM features share one call per sample.
-                   'initialEstimateSeconds':max(30, 12 * len(chosen_code) * summary.sample_count + 25 * math.ceil(
-                       (summary.sample_count if len(chosen) > len(chosen_code) else 0)
-                       / max(1, config.vlm_online_concurrency))),
+                   'initialEstimateSeconds':estimate_reuse_seconds(
+                       len(chosen_code), len(chosen) - len(chosen_code),
+                       summary.sample_count, config.vlm_online_concurrency),
                    'etaProgress':5, 'totalMeasurements':len(chosen) * summary.sample_count, 'completedMeasurements':0}
             self.jobs[key]=job
             self._persist()

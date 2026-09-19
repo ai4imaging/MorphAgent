@@ -16,6 +16,7 @@ from morphagent_ui.controller import (
     estimate_run_seconds,
 )
 from morphagent_ui.models import RunConfig, scan_dataset
+from morphagent_ui.timing import estimate_reuse_seconds
 
 
 class StageDetectorTests(unittest.TestCase):
@@ -80,6 +81,49 @@ class RunEstimateTests(unittest.TestCase):
         self.assertGreater(
             estimate_run_seconds(large, self._dataset(12)),
             estimate_run_seconds(small, self._dataset(3)),
+        )
+
+    def test_authoring_cost_stays_flat_as_the_dataset_grows(self) -> None:
+        """Feature code is written once and tested on one sample, so a hundred
+        times the images must not cost anything close to a hundred times as long."""
+        config = RunConfig(
+            num_rounds=2,
+            features_per_iteration=20,
+            method="code",
+            code_parallel_workers=1,
+        )
+        few = estimate_run_seconds(config, self._dataset(10))
+        many = estimate_run_seconds(config, self._dataset(1000))
+        self.assertGreater(many, few)
+        self.assertLess(many, few * 25)
+
+    def test_batched_vision_calls_are_not_counted_per_feature(self) -> None:
+        """One call per sample covers the whole round, so doubling the features
+        must not double the vision cost."""
+        images = self._dataset(200)
+        lean = RunConfig(num_rounds=1, features_per_iteration=10, method="vlm",
+                         vlm_online_concurrency=1)
+        rich = RunConfig(num_rounds=1, features_per_iteration=20, method="vlm",
+                         vlm_online_concurrency=1)
+        self.assertLess(
+            estimate_run_seconds(rich, images),
+            estimate_run_seconds(lean, images) * 1.5,
+        )
+
+    def test_replaying_saved_code_costs_a_sandbox_not_a_round_trip(self) -> None:
+        """Compute authors nothing: each measurement is a local sandbox call, so
+        it must be priced in fractions of a second, not in LLM latency."""
+        measurements = 30 * 200
+        replay = estimate_reuse_seconds(30, 0, 200, 1)
+        self.assertGreater(replay, 0)
+        self.assertLess(replay, measurements * 2)
+
+    def test_replaying_scales_with_samples_but_not_with_concurrency_alone(self) -> None:
+        replay = estimate_reuse_seconds(10, 0, 100, 1)
+        self.assertLess(replay, estimate_reuse_seconds(10, 0, 400, 1))
+        self.assertLess(
+            estimate_reuse_seconds(10, 5, 100, 8),
+            estimate_reuse_seconds(10, 5, 100, 1),
         )
 
     def test_dynamic_eta_uses_stage_and_completed_rounds(self) -> None:

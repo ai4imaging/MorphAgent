@@ -192,8 +192,9 @@
     const seconds=j.eta?.remainingSeconds ?? (active(j)?j.initialEstimateSeconds:null);
     if(seconds==null)return 'Estimating…';
     if(seconds<60)return 'About 1 min';
-    const minutes=Math.ceil(seconds/60);
-    return 'About '+minutes+' min';
+    if(seconds<5400)return 'About '+Math.ceil(seconds/60)+' min';
+    if(seconds<172800)return 'About '+Math.round(seconds/3600)+' h';
+    return 'About '+Math.round(seconds/86400)+' d';
   }
   function savedResults(j) {
     if(j.exportStatus==='saving')return '<div class="automatic-results" role="status">'+icon('spinner','spinner')+'<div><strong>Saving results…</strong><p>Your timestamped folder and download will be ready shortly.</p></div></div>';
