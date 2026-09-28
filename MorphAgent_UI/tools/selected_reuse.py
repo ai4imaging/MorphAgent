@@ -9,7 +9,6 @@ LLM-merged function, so the UI records the per-feature scripts as the reused sou
 """
 from __future__ import annotations
 
-import csv
 import json
 import math
 import shutil
@@ -19,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from morphagent_ui.feature_outputs import selected_features
+from tools.checkpoint import save_when_stopped, write_csv_atomically
 from tools.code_executor import CodeExecutor
 from tools.code_reuse import (find_primary_image_paths, find_segmentation_paths,
                              list_sample_ids, resolve_dataset_root)
@@ -35,9 +35,8 @@ def _finite(value):
 
 
 def _write_values(output, names, rows):
-    with (output/'features.csv').open('w', newline='', encoding='utf-8') as stream:
-        writer = csv.DictWriter(stream, fieldnames=['sample_id', *names])
-        writer.writeheader();writer.writerows(rows)
+    # Rewritten after every sample, so it has to survive a kill mid-write.
+    write_csv_atomically(output/'features.csv', ['sample_id', *names], rows)
 
 
 _MERGED_TEMPLATE = '''"""Mechanically merged from the saved per-feature extractors.
@@ -87,7 +86,8 @@ def _registry_entry(item, method, status, source):
             'decision_history':[{'reason_codes':['reused_without_revalidation'], 'validation_score':None}]}
 
 
-def _score_vlm_features(dataset, samples, items, rows, errors, output, question, concurrency, progress):
+def _score_vlm_features(dataset, samples, items, rows, errors, output, question, concurrency,
+                        progress, save):
     """Batch every selected VLM feature per sample, mirroring the discovery run."""
     from config import apply_vlm_provider
     from nodes.execution import _execute_vlm_features_batch
@@ -140,6 +140,8 @@ def _score_vlm_features(dataset, samples, items, rows, errors, output, question,
                     errors.setdefault(name, {})[sample] = reason
                     print(f'[Reuse] [ERROR] {name} · {sample}: {reason}', flush=True)
             progress(len(items))
+            # Vision scores cost API calls; never make a stopped run pay twice.
+            save()
 
 
 def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, conda_env=None,
@@ -156,7 +158,7 @@ def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     rows = [{'sample_id':s} for s in samples]
-    errors, plans, entries = {}, {}, []
+    errors, plans = {}, {}
     names = [f['name'] for f in chosen]
     code_items = [f for f in chosen if f['method'] != 'vlm']
     vlm_items = [f for f in chosen if f['method'] == 'vlm']
@@ -169,6 +171,35 @@ def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, 
             counter['done'] += step
             print(f'[Compute] Progress {counter["done"]}/{total}', flush=True)
 
+    for item in chosen:
+        plans.setdefault(item['round_number'] or 1, []).append({
+            'name':item['name'], 'method':'vlm' if item['method'] == 'vlm' else 'code',
+            'description':item['description'], 'category':item['category']})
+
+    def persist(finished):
+        """Describe whatever has been measured so far, so a stopped run is readable."""
+        _write_values(output, names, rows)
+        for number, definitions in plans.items():
+            plan_path = output/f'round_{number}'/'feature_plan.json'
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(json.dumps({'features':definitions, 'reuse':True}, indent=2),
+                                 encoding='utf-8')
+        entries = [_registry_entry(item, 'vlm' if item['method'] == 'vlm' else 'code',
+                                   'dropped' if item['name'] in errors else 'retained',
+                                   str(source/item['codePath']) if item['method'] != 'vlm' else str(source))
+                   for item in chosen]
+        (output/'feature_registry.json').write_text(
+            json.dumps({'entries':entries, 'reuse':True}, indent=2), encoding='utf-8')
+        summary = {'complete':finished and not errors, 'stopped_early':not finished,
+                   'selected_features':names, 'sample_ids':samples, 'errors':errors,
+                   'measurements_done':counter['done'], 'measurements_total':total,
+                   'llm_calls':False, 'vlm_calls':bool(vlm_items), 'source_results':str(source),
+                   'code_source':'individual_feature_extractors', 'validation':'not_revalidated'}
+        (output/'reuse_manifest.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
+        return summary
+
+    persist(False)
+    save_when_stopped(lambda: persist(False))
     print(f'[Reuse] Selected {len(names)} feature(s) on {len(samples)} target sample(s).', flush=True)
     executor = CodeExecutor(dataset, conda_env=conda_env)
     if code_items:
@@ -182,9 +213,6 @@ def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, 
             shutil.copy2(source/item['codePath'], script)
             code_names.append(name)
             scripts.append(script)
-            plans.setdefault(round_number, []).append({
-                'name':name, 'method':'code', 'description':item['description'],
-                'category':item['category']})
         merged_dir = output/'merged_features'
         merged_dir.mkdir(parents=True, exist_ok=True)
         merged = merged_dir/'extract_all.py'
@@ -209,32 +237,14 @@ def run_selected_reuse(source_results, data_root, output_dir, feature_names, *, 
                     errors.setdefault(name, {})[sample] = reason
                     print(f'[Reuse] [ERROR] {name} · {sample}: {reason}', flush=True)
             advance(len(code_names))
-            if index % 25 == 0:
-                _write_values(output, names, rows)
-        _write_values(output, names, rows)
+            # Every sample lands on disk: a stopped run keeps what it measured.
+            _write_values(output, names, rows)
 
     if vlm_items:
-        for item in vlm_items:
-            plans.setdefault(item['round_number'] or 1, []).append({
-                'name':item['name'], 'method':'vlm', 'description':item['description'],
-                'category':item['category']})
         _score_vlm_features(dataset, samples, vlm_items, rows, errors, output, question,
-                            vlm_concurrency, advance)
-        _write_values(output, names, rows)
+                            vlm_concurrency, advance,
+                            lambda: _write_values(output, names, rows))
 
-    for item in chosen:
-        method = 'vlm' if item['method'] == 'vlm' else 'code'
-        status = 'retained' if item['name'] not in errors else 'dropped'
-        origin = str(source/item['codePath']) if method == 'code' else str(source)
-        entries.append(_registry_entry(item, method, status, origin))
-    for number, definitions in plans.items():
-        (output/f'round_{number}'/'feature_plan.json').parent.mkdir(parents=True, exist_ok=True)
-        (output/f'round_{number}'/'feature_plan.json').write_text(
-            json.dumps({'features':definitions, 'reuse':True}, indent=2), encoding='utf-8')
-    (output/'feature_registry.json').write_text(json.dumps({'entries':entries, 'reuse':True}, indent=2), encoding='utf-8')
-    result = {'complete':not errors, 'selected_features':names, 'sample_ids':samples, 'errors':errors,
-              'llm_calls':False, 'vlm_calls':bool(vlm_items), 'source_results':str(source),
-              'code_source':'individual_feature_extractors', 'validation':'not_revalidated'}
-    (output/'reuse_manifest.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-    print(f'[Reuse] {"[DONE]" if not errors else "[PARTIAL]"} Saved {len(names)} feature columns.', flush=True)
+    result = persist(True)
+    print(f'[Reuse] {"[DONE]" if result["complete"] else "[PARTIAL]"} Saved {len(names)} feature columns.', flush=True)
     return result

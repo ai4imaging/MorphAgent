@@ -2003,7 +2003,8 @@ def execute_merged_code(
     results_dir: Optional[Path] = None,
     conda_env: Optional[str] = None,
     segmentation_mask_path: Optional[Path] = None,
-    num_workers: int = 1
+    num_workers: int = 1,
+    on_sample=None
 ) -> ExtractionResult:
     """Execute the merged code, processing all samples and extracting all features
     
@@ -2016,6 +2017,8 @@ def execute_merged_code(
         results_dir: directory to save results (optional)
         conda_env: conda environment name (defaults to reading from config)
         num_workers: number of parallel processes (default 1, i.e. serial processing)
+        on_sample: optional callback(sample_id, values) run as each sample finishes,
+            so a stopped run keeps the samples it already measured
         
     Returns:
         ExtractionResult object containing all feature values for all samples (in the original order)
@@ -2028,14 +2031,16 @@ def execute_merged_code(
         print(f"\n[Code Execution] Executing merged code (serial mode), processing {len(sample_ids)} samples, extracting {len(feature_names)} features...")
         return _execute_merged_code_serial(
             merged_code, feature_names, sample_ids, data_root, 
-            find_image_paths_func, results_dir, conda_env, segmentation_mask_path
+            find_image_paths_func, results_dir, conda_env, segmentation_mask_path,
+            on_sample
         )
     else:
         # Parallel processing
         print(f"\n[Code Execution] Executing merged code (parallel mode, {num_workers} processes), processing {len(sample_ids)} samples, extracting {len(feature_names)} features...")
         return _execute_merged_code_parallel(
             merged_code, feature_names, sample_ids, data_root,
-            find_image_paths_func, results_dir, conda_env, segmentation_mask_path, num_workers
+            find_image_paths_func, results_dir, conda_env, segmentation_mask_path, num_workers,
+            on_sample
         )
 
 
@@ -2047,7 +2052,8 @@ def _execute_merged_code_serial(
     find_image_paths_func,
     results_dir: Optional[Path] = None,
     conda_env: Optional[str] = None,
-    segmentation_mask_path: Optional[Path] = None
+    segmentation_mask_path: Optional[Path] = None,
+    on_sample=None
 ) -> ExtractionResult:
     """Serially execute the merged code (original logic)"""
     from config import settings
@@ -2148,6 +2154,8 @@ def _execute_merged_code_serial(
                 
                 if log_fp:
                     log_fp.write(f"{sample_id}: [OK] {all_values[sample_id]}\n")
+                if on_sample:
+                    on_sample(sample_id, all_values[sample_id])
             else:
                 all_errors[sample_id] = error_msg or "Unknown error"
                 if log_fp:
@@ -2257,7 +2265,8 @@ def _execute_merged_code_parallel(
     results_dir: Optional[Path] = None,
     conda_env: Optional[str] = None,
     segmentation_mask_path: Optional[Path] = None,
-    num_workers: int = 8
+    num_workers: int = 8,
+    on_sample=None
 ) -> ExtractionResult:
     """Execute the merged code in parallel (multi-process processing)
     
@@ -2334,7 +2343,14 @@ def _execute_merged_code_parallel(
                     try:
                         chunk_results = future.result()
                         completed_results[chunk_index] = chunk_results
-                        
+
+                        if on_sample:
+                            # Ordering is settled below; this only needs the values on disk.
+                            for index in sorted(chunk_results):
+                                sample_id, result, is_success = chunk_results[index]
+                                if is_success and isinstance(result, dict):
+                                    on_sample(sample_id, result)
+
                         # Update the progress bar
                         pbar.update(len(chunk_results))
                     except Exception as e:

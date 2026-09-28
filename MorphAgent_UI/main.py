@@ -48,6 +48,7 @@ from knowledge.dataset_understanding import understand_dataset, get_dataset_desc
 from knowledge.expert_knowledge import extract_expert_knowledge
 from knowledge.deep_research import extract_deep_research
 from knowledge.rag import extract_rag_knowledge
+from tools.checkpoint import FeatureTableCheckpoint, save_when_stopped
 from validation import ValidationExecutor
 
 
@@ -1889,6 +1890,20 @@ Examples:
     retained_features_csv_path = results_dir / "retained_features.csv"
     feature_registry_path = results_dir / "feature_registry.json"
 
+    # Stopping a run should not throw away the round that was in flight: the
+    # workspace sends SIGTERM and kills a few seconds later, so the round's
+    # snapshot is folded into the cumulative table from the signal handler.
+    stop_checkpoint: Dict[str, Any] = {"current": None}
+
+    def _keep_partial_round():
+        checkpoint = stop_checkpoint.get("current")
+        if checkpoint is None:
+            return
+        checkpoint.save()
+        checkpoint.merge_into(features_csv_path)
+
+    save_when_stopped(_keep_partial_round)
+
     # Resume run: scan the completed rounds (round_results.json being written marks completion) and continue from max+1
     start_round = 1
     if args.resume:
@@ -2171,6 +2186,14 @@ Examples:
                 features_df.to_csv(features_csv_path, index=False, encoding='utf-8')
                 print(f"  [OK] Initialized CSV file: {features_csv_path}")
             
+            # A stopped run must keep what this round already measured. The
+            # cumulative table cannot hold it yet - a feature whose column
+            # already has values gets renamed below - so the round keeps its own
+            # snapshot and only folds it in if the run is stopped.
+            round_checkpoint = FeatureTableCheckpoint(
+                round_results_dir / "partial_features.csv", sample_ids)
+            stop_checkpoint["current"] = round_checkpoint
+
             # Separate VLM features and code features
             vlm_features = [f for f in features if f.get("method", "code") == "vlm"]
             code_features = [f for f in features if f.get("method", "code") == "code"]
@@ -2310,6 +2333,9 @@ Examples:
                                         all_results[sample_id] = {}
                                 if err:
                                     append_log(summary_log_file, f"{sample_id}: [WARN]  {err}\n")
+                                if batch_results:
+                                    # Each score is a paid API call; land it now.
+                                    round_checkpoint.record(sample_id, batch_results)
                                 completed += 1
                                 pbar.update(1)
                     print(f"  [OK] Online concurrent processing complete: {completed}/{len(sample_ids)} samples")
@@ -2831,7 +2857,8 @@ Examples:
                             round_results_dir,
                             conda_env=None,
                             segmentation_mask_path=None,
-                            num_workers=args.code_parallel_workers
+                            num_workers=args.code_parallel_workers,
+                            on_sample=round_checkpoint.record
                         )
                         
                         # Step 4: Organize the results and save to CSV
