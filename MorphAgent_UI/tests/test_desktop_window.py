@@ -179,7 +179,13 @@ class DesktopWindowTests(unittest.TestCase):
             elif folder := os.environ.get('MORPHAGENT_COMPACT_SCREENSHOT_DIR'):
                 self.app.processEvents()
                 self.assertTrue(self.window.grab().save(str(Path(folder)/f'compact-{page}.png')))
-        self.window.view.setZoomFactor(3)
+        # Reach the 620px breakpoint from the window's own minimum width rather
+        # than from whatever the screen gave us: zoom alone tops out at 5x, which
+        # a wide monitor outruns.
+        self.window.showNormal()
+        self.window.resize(820, 700)
+        self.wait(lambda: self.window.view.width() <= 900)
+        self.window.view.setZoomFactor(2)
         self.wait_js("window.innerWidth <= 620 && getComputedStyle(document.querySelector('.mobile-menu')).display !== 'none'")
         self.js("document.querySelector('.mobile-menu').click()")
         self.wait_js("document.querySelector('.sidebar.open') !== null")
