@@ -102,8 +102,8 @@ def _feature_name_for_method(name: str, method: str) -> str:
 def _planning_method_instructions(method: str, features_per_round: int, code_vlm_ratio: float) -> str:
     """Build the per-round method guidance appended to the feature-planning prompt.
 
-    Planner-assigned methods are never rebalanced afterwards, so a mixed run has to
-    ask for the mix here. A split needs at least two features to be meaningful.
+    A mixed run always asks for at least one VLM feature, and for at least one code
+    feature whenever the round has room for both.
     """
     if method == "code":
         return "Important: you may only choose the 'code' method. All features must be implemented using code generation."
@@ -111,9 +111,12 @@ def _planning_method_instructions(method: str, features_per_round: int, code_vlm
         return "Important: you may only choose the 'vlm' method. All features must be implemented using VLM scoring."
     per_round = max(1, int(features_per_round))
     if per_round < 2:
-        return "None"
-    code_target = min(per_round - 1, max(1, round(per_round * code_vlm_ratio)))
-    vlm_target = per_round - code_target
+        return (
+            "Important: this round uses both methods but proposes a single feature, so that "
+            'feature must use "method": "vlm".'
+        )
+    vlm_target = min(per_round - 1, max(1, round(per_round * (1.0 - code_vlm_ratio))))
+    code_target = per_round - vlm_target
     return (
         f"Important: this round uses both methods, so the {per_round} features you propose "
         f"must not all share one method. Aim for roughly {code_target} feature(s) with "
@@ -122,6 +125,15 @@ def _planning_method_instructions(method: str, features_per_round: int, code_vlm
         "way, pick the method that moves the plan closer to this balance. An exact split is not "
         "required, but each method must appear at least once."
     )
+
+
+def _ensure_vlm_feature(features: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A mixed round must keep at least one VLM feature; otherwise move the last one to VLM."""
+    if not features or any(f.get("method") == "vlm" for f in features):
+        return features
+    last = features[-1]
+    print(f"  [NOTE] The plan had no VLM feature; scoring {last.get('name', '')} with VLM instead")
+    return features[:-1] + [{**last, "method": "vlm", "name": _feature_name_for_method(last.get("name", ""), "vlm")}]
 
 
 def _extract_explicit_feature_specs(user_query: str) -> List[Dict[str, str]]:
@@ -1463,8 +1475,8 @@ Examples:
                         help="Do not group by channel; compute ICF over all images together")
     
     # Feature extractor control parameters
-    parser.add_argument("--code-vlm-ratio", type=float, default=0.5,
-                        help="Ratio of Code to VLM features (float, should sum to 1.0, default 0.5 means 50%% each. For example: 0.7 means 70%% code, 30%% vlm)")
+    parser.add_argument("--code-vlm-ratio", type=float, default=0.9,
+                        help="Share of Code features when --method both (float, 0-1, default 0.9 means 90%% code, 10%% vlm). Every round keeps at least one VLM feature")
     parser.add_argument("--knowledge-dependency", type=float, default=0.5,
                         help="How much the feature extractor depends on existing knowledge (float, 0-1, default 0.5). 0=no dependence at all, freely exploring within the feature space; 1=fully dependent, no external expansion")
     parser.add_argument("--enable-background-knowledge-in-planning", action="store_true", default=True,
@@ -2160,7 +2172,8 @@ Examples:
             features = [{**f, "method": "vlm", "name": _feature_name_for_method(f.get("name", ""), "vlm")} for f in features]
             print(f"  [NOTE] Method restricted to vlm: all {len(features)} features are computed using VLM (the vlm_ prefix has been added to names)")
 
-        # Keep planner-assigned methods as-is (do not rebalance by code-vlm-ratio).
+        elif args.method == "both":
+            features = _ensure_vlm_feature(features)
 
         if not features:
             print("[WARN]  No features to extract")

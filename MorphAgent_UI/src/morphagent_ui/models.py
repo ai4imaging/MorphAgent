@@ -158,7 +158,7 @@ class RunConfig:
     reproduce_seed: int = 42
     resume: bool = False
     temperature: float = 0.0
-    code_vlm_ratio: float = field(default_factory=lambda: _environment_ratio("CODE_VLM_RATIO", 0.5))
+    code_vlm_ratio: float = field(default_factory=lambda: _environment_ratio("CODE_VLM_RATIO", 0.9))
     knowledge_dependency: float = field(default_factory=lambda: _environment_ratio("KNOWLEDGE_DEPENDENCY", 0.5))
     code_parallel_workers: int = field(default_factory=lambda: _environment_int("CODE_PARALLEL_WORKERS", 1))
     # API concurrency. VLM scoring is a network round trip per sample, so it

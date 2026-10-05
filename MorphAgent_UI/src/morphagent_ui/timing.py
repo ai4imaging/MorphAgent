@@ -16,8 +16,6 @@ EXTRACT_SECONDS_PER_FEATURE_IMAGE = 0.05
 REPLAY_SECONDS_PER_SAMPLE = 0.6
 VLM_SECONDS_PER_SAMPLE = 6.0
 VLM_SECONDS_PER_SAMPLE_FEATURE = 0.28
-# Planners have split "both" runs from 6% VLM (BBBC021) to 21% (Tau).
-VLM_SHARE_OF_BOTH = 0.25
 
 
 def estimate_run_seconds(config: RunConfig, dataset: DatasetSummary | None) -> int:
@@ -55,7 +53,10 @@ def estimate_run_seconds(config: RunConfig, dataset: DatasetSummary | None) -> i
     elif config.method == "vlm":
         vlm_features, code_features = float(features), 0.0
     else:
-        vlm_features = features * VLM_SHARE_OF_BOTH
+        # Mirrors the split the planner is asked for: at least one VLM feature.
+        vlm_features = float(max(1, round(features * (1.0 - float(config.code_vlm_ratio)))))
+        if features > 1:
+            vlm_features = min(vlm_features, features - 1.0)
         code_features = features - vlm_features
 
     per_round = 45.0 + 30.0 + features * 1.5  # planning + validation

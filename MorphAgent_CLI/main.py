@@ -1406,8 +1406,8 @@ Examples:
                         help="Do not group by channel; compute ICF over all images together")
     
     # Feature extractor control parameters
-    parser.add_argument("--code-vlm-ratio", type=float, default=0.5,
-                        help="Ratio of Code to VLM features (float, should sum to 1.0, default 0.5 means 50%% each. For example: 0.7 means 70%% code, 30%% vlm)")
+    parser.add_argument("--code-vlm-ratio", type=float, default=0.9,
+                        help="Share of Code features when --method both (float, 0-1, default 0.9 means 90%% code, 10%% vlm). Every round keeps at least one VLM feature")
     parser.add_argument("--knowledge-dependency", type=float, default=0.5,
                         help="How much the feature extractor depends on existing knowledge (float, 0-1, default 0.5). 0=no dependence at all, freely exploring within the feature space; 1=fully dependent, no external expansion")
     parser.add_argument("--enable-background-knowledge-in-planning", action="store_true", default=True,
@@ -2056,7 +2056,7 @@ Examples:
                 vlm_diff = target_vlm_count - current_vlm_count
                 
                 # If the difference is large, reallocate
-                if abs(code_diff) > 1 or abs(vlm_diff) > 1:
+                if abs(code_diff) > 1 or abs(vlm_diff) > 1 or (current_vlm_count == 0 and target_vlm_count > 0):
                     print(f"  📊 Adjusting feature allocation according to code-vlm-ratio ({code_ratio:.1%} code, {vlm_ratio:.1%} vlm)...")
                     print(f"     Current: {current_code_count} code, {current_vlm_count} vlm")
                     print(f"     Target: {target_code_count} code, {target_vlm_count} vlm")
